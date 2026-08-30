@@ -1,0 +1,23 @@
+# --- 文档 ---
+# PROJECT_PLAN.md   开发方案书（需求基线）
+# DEVELOPMENT.md   开发进度与已决策 / 不支持功能清单
+
+# --- Rust / Cargo ---
+/target/
+**/target/
+# 本地 cargo 缓存（如果使用项目内 CARGO_HOME）
+/.cargo-home/
+
+# --- 连接配置（含密码，勿提交） ---
+*.local.json
+
+# --- Node / 前端 ---
+node_modules/
+
+# --- 构建产物 ---
+dist/
+bin/
+
+# --- 配置 / 日志 ---
+*.log
+.DS_Store

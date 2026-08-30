@@ -1,0 +1,2144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>麦地缓存</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <style>
+        /* ========== CSS 变量 — 金黄色主题 ========== */
+        :root {
+            --bg-primary: #0d0b08;
+            --bg-secondary: #1a150e;
+            --bg-tertiary: #261f16;
+            --bg-hover: #33291e;
+            --bg-active: #403528;
+            --bg-input: #0d0b08;
+            --border-color: #4a3a2a;
+            --text-primary: #f5e6d3;
+            --text-secondary: #c4a88a;
+            --text-muted: #7a6550;
+            --accent: #f5b342;          /* 金黄色主色 */
+            --accent-hover: #d4902a;
+            --accent-dim: rgba(245, 179, 66, 0.18);
+            --green: #7cb84b;
+            --blue: #6a9fd8;
+            --yellow: #f5b342;
+            --purple: #b392d0;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            --sidebar-width: 240px;
+            --tree-width: 320px;
+            --terminal-height: 200px;
+            --header-height: 52px;
+        }
+
+        /* ========== 全局重置 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: var(--font);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .app-window {
+            width: 100vw;
+            height: 100vh;
+            background: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* ========== 标题栏 ========== */
+        .titlebar {
+            height: var(--header-height);
+            min-height: var(--header-height);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 18px;
+            gap: 16px;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .titlebar .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 17px;
+            color: var(--text-primary);
+        }
+        .titlebar .logo i {
+            color: var(--accent);
+            font-size: 22px;
+            text-shadow: 0 0 8px rgba(245, 179, 66, 0.3);
+        }
+        .titlebar .logo span {
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 700;
+            padding: 0 10px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(245, 179, 66, 0.2);
+        }
+        .titlebar .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 20px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .titlebar .connection-status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            display: inline-block;
+            animation: pulse-dot 2s infinite;
+        }
+        .titlebar .connection-status .dot.disconnected {
+            background: var(--text-muted);
+            animation: none;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .titlebar .spacer {
+            flex: 1;
+        }
+        .titlebar .actions {
+            display: flex;
+            gap: 6px;
+        }
+        .titlebar .actions button {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .titlebar .actions button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .titlebar .actions button.primary {
+            background: var(--accent);
+            color: #1a150e;
+            width: auto;
+            padding: 0 18px;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+        }
+        .titlebar .actions button.primary:hover {
+            background: var(--accent-hover);
+            color: #0d0b08;
+        }
+        .titlebar .window-controls {
+            display: flex;
+            gap: 4px;
+            margin-left: 12px;
+        }
+        .titlebar .window-controls span {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            display: block;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .titlebar .window-controls span:hover {
+            opacity: 0.7;
+        }
+        .titlebar .window-controls .close { background: #ff5f57; }
+        .titlebar .window-controls .min { background: #ffbd2e; }
+        .titlebar .window-controls .max { background: #28c840; }
+
+        /* ========== 主体布局 ========== */
+        .app-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* ========== 左侧边栏 ========== */
+        .sidebar {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .sidebar .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 14px 16px 8px;
+        }
+        .connection-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 8px 8px;
+        }
+        .connection-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .connection-list::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        .connection-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+        }
+        .connection-item:hover {
+            background: var(--bg-hover);
+        }
+        .connection-item.active {
+            background: var(--bg-active);
+            border-left: 3px solid var(--accent);
+        }
+        .connection-item .icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+        .connection-item .info {
+            flex: 1;
+            min-width: 0;
+        }
+        .connection-item .info .name {
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .connection-item .info .host {
+            font-size: 11px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .connection-item .badge {
+            font-size: 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 1px 8px;
+            border-radius: 10px;
+            flex-shrink: 0;
+        }
+        .connection-item .badge.online {
+            background: rgba(124, 184, 75, 0.2);
+            color: var(--green);
+        }
+        .connection-item .actions-menu {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .connection-item:hover .actions-menu {
+            opacity: 1;
+        }
+        .connection-item .actions-menu button {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .connection-item .actions-menu button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+
+        .add-connection {
+            margin: 0 12px 12px;
+            padding: 8px;
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius);
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .add-connection:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+
+        .sidebar-footer {
+            border-top: 1px solid var(--border-color);
+            padding: 12px 16px;
+            flex-shrink: 0;
+        }
+        .db-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .db-selector label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .db-selector select {
+            background: var(--bg-input);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            outline: none;
+            cursor: pointer;
+            flex: 1;
+        }
+        .db-selector select:focus {
+            border-color: var(--accent);
+        }
+        .server-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .server-stats .stat-item {
+            display: flex;
+            justify-content: space-between;
+        }
+        .server-stats .stat-item .val {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* ========== 主内容区 ========== */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .toolbar {
+            height: 44px;
+            min-height: 44px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .toolbar .search-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0 10px;
+            transition: border 0.2s;
+            max-width: 400px;
+        }
+        .toolbar .search-box:focus-within {
+            border-color: var(--accent);
+        }
+        .toolbar .search-box i {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .toolbar .search-box input {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            padding: 6px 10px;
+            font-size: 13px;
+            outline: none;
+            width: 100%;
+        }
+        .toolbar .search-box input::placeholder {
+            color: var(--text-muted);
+        }
+        .toolbar .search-box .sep-btn {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            color: var(--text-secondary);
+            padding: 2px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+            margin-right: 4px;
+            white-space: nowrap;
+        }
+        .toolbar .search-box .sep-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+        .toolbar .search-box .sep-btn code {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-weight: 700;
+            color: var(--accent);
+            font-size: 13px;
+        }
+        .toolbar .toolbar-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .toolbar .toolbar-actions button {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+        .toolbar .toolbar-actions button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .toolbar .toolbar-actions button.primary {
+            background: var(--accent);
+            color: #1a150e;
+        }
+        .toolbar .toolbar-actions button.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        /* ---- 数据浏览区 ---- */
+        .data-panel {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .key-tree {
+            width: var(--tree-width);
+            min-width: var(--tree-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            padding: 6px 0;
+            flex-shrink: 0;
+        }
+        .key-tree::-webkit-scrollbar {
+            width: 4px;
+        }
+        .key-tree::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        .tree-node {
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.1s;
+        }
+        .tree-node .node-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px 4px 8px;
+            font-size: 13px;
+            border-radius: 4px;
+            margin: 1px 6px;
+            transition: all 0.1s;
+            position: relative;
+        }
+        .tree-node .node-label:hover {
+            background: var(--bg-hover);
+        }
+        .tree-node .node-label .toggle {
+            width: 18px;
+            font-size: 10px;
+            color: var(--text-muted);
+            text-align: center;
+            flex-shrink: 0;
+            transition: transform 0.2s;
+        }
+        .tree-node .node-label .toggle.open {
+            transform: rotate(90deg);
+        }
+        .tree-node .node-label .icon-folder {
+            color: var(--yellow);
+            font-size: 14px;
+        }
+        .tree-node .node-label .icon-key {
+            color: var(--blue);
+            font-size: 12px;
+        }
+        .tree-node .node-label .key-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 400;
+        }
+        .tree-node .node-label .key-type {
+            font-size: 10px;
+            color: var(--text-muted);
+            background: var(--bg-tertiary);
+            padding: 0 6px;
+            border-radius: 3px;
+            flex-shrink: 0;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        .tree-node .node-label .key-type.string { color: var(--green); }
+        .tree-node .node-label .key-type.hash { color: var(--yellow); }
+        .tree-node .node-label .key-type.list { color: var(--blue); }
+        .tree-node .node-label .key-type.set { color: var(--purple); }
+        .tree-node .node-label .key-type.zset { color: #e8a94a; }
+        .tree-node .node-label .key-size {
+            font-size: 10px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .tree-node .node-label.active {
+            background: var(--bg-active);
+            border-left: 3px solid var(--accent);
+            margin-left: 3px;
+        }
+        .tree-node .children {
+            padding-left: 16px;
+            overflow: hidden;
+        }
+        .tree-node .children.collapsed {
+            display: none;
+        }
+
+        /* 右侧 Key 详情 */
+        .key-detail {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            background: var(--bg-primary);
+        }
+        .key-detail::-webkit-scrollbar {
+            width: 4px;
+        }
+        .key-detail::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        .detail-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .detail-header .key-title {
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .detail-header .key-title .type-badge {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 2px 14px;
+            border-radius: 12px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        .detail-header .key-title .type-badge.string { color: var(--green); background: rgba(124, 184, 75, 0.15); }
+        .detail-header .key-title .type-badge.hash { color: var(--yellow); background: rgba(245, 179, 66, 0.15); }
+        .detail-header .key-title .type-badge.list { color: var(--blue); background: rgba(106, 159, 216, 0.15); }
+        .detail-header .key-title .type-badge.set { color: var(--purple); background: rgba(179, 146, 208, 0.15); }
+        .detail-header .key-title .type-badge.zset { color: #e8a94a; background: rgba(232, 169, 74, 0.15); }
+        .detail-header .ttl {
+            font-size: 13px;
+            color: var(--text-secondary);
+            background: var(--bg-tertiary);
+            padding: 4px 14px;
+            border-radius: 12px;
+        }
+        .detail-header .ttl i {
+            margin-right: 4px;
+        }
+        .detail-header .detail-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 6px;
+        }
+        .detail-header .detail-actions button {
+            background: var(--bg-tertiary);
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s;
+        }
+        .detail-header .detail-actions button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .detail-header .detail-actions button.danger:hover {
+            background: rgba(245, 179, 66, 0.2);
+            color: var(--accent);
+        }
+        .detail-header .detail-actions button.primary {
+            background: var(--accent);
+            color: #1a150e;
+        }
+        .detail-header .detail-actions button.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .detail-body {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+        .detail-body .value-editor {
+            padding: 16px 20px;
+            min-height: 160px;
+        }
+        .detail-body .value-editor textarea {
+            width: 100%;
+            min-height: 120px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            padding: 12px;
+            font-size: 14px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            resize: vertical;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .detail-body .value-editor textarea:focus {
+            border-color: var(--accent);
+        }
+        .detail-body .value-editor .hash-view {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .detail-body .value-editor .hash-view .field {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-input);
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+        .detail-body .value-editor .hash-view .field .fkey {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .detail-body .value-editor .hash-view .field .fval {
+            color: var(--text-primary);
+        }
+        .detail-body .value-editor .list-view {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .detail-body .value-editor .list-view .item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-input);
+            padding: 4px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+        .detail-body .value-editor .list-view .item .idx {
+            color: var(--text-muted);
+            font-size: 11px;
+            width: 28px;
+            flex-shrink: 0;
+        }
+        .detail-body .value-editor .list-view .item .val {
+            color: var(--text-primary);
+        }
+        .detail-body .value-footer {
+            padding: 10px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .detail-body .value-footer .info {
+            display: flex;
+            gap: 16px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+        }
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+            color: var(--accent);
+        }
+        .empty-state h3 {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .empty-state p {
+            font-size: 13px;
+            max-width: 300px;
+        }
+
+        /* ========== 终端面板 ========== */
+        .terminal-panel {
+            height: var(--terminal-height);
+            min-height: var(--terminal-height);
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            transition: all 0.25s ease;
+            overflow: hidden;
+        }
+        .terminal-panel.collapsed {
+            height: 36px;
+            min-height: 36px;
+        }
+        .terminal-panel .terminal-header {
+            height: 36px;
+            min-height: 36px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 12px;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .terminal-panel .terminal-header .term-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .terminal-panel .terminal-header .term-label i {
+            color: var(--accent);
+        }
+        .terminal-panel .terminal-header .spacer {
+            flex: 1;
+        }
+        .terminal-panel .terminal-header .term-actions {
+            display: flex;
+            gap: 4px;
+        }
+        .terminal-panel .terminal-header .term-actions button {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: all 0.15s;
+        }
+        .terminal-panel .terminal-header .term-actions button:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .terminal-panel .terminal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 16px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            background: #0d0b08;
+            display: flex;
+            flex-direction: column;
+        }
+        .terminal-panel .terminal-body::-webkit-scrollbar {
+            width: 4px;
+        }
+        .terminal-panel .terminal-body::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        .terminal-panel .terminal-body .line {
+            padding: 2px 0;
+            display: flex;
+            gap: 12px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .terminal-panel .terminal-body .line .prompt {
+            color: var(--accent);
+            flex-shrink: 0;
+            font-weight: 500;
+        }
+        .terminal-panel .terminal-body .line .cmd {
+            color: var(--text-primary);
+        }
+        .terminal-panel .terminal-body .line .output {
+            color: var(--text-secondary);
+        }
+        .terminal-panel .terminal-body .line .output.error {
+            color: #e5734b;
+        }
+        .terminal-panel .terminal-body .line .output.ok {
+            color: var(--green);
+        }
+        .terminal-panel .terminal-input-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 16px 8px;
+            background: #0d0b08;
+            border-top: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .terminal-panel .terminal-input-row .prompt-label {
+            color: var(--accent);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 500;
+            flex-shrink: 0;
+        }
+        .terminal-panel .terminal-input-row input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            outline: none;
+            padding: 4px 0;
+        }
+        .terminal-panel .terminal-input-row input::placeholder {
+            color: var(--text-muted);
+        }
+        .terminal-panel .terminal-input-row button {
+            background: var(--accent);
+            border: none;
+            color: #1a150e;
+            padding: 4px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: background 0.15s;
+            flex-shrink: 0;
+        }
+        .terminal-panel .terminal-input-row button:hover {
+            background: var(--accent-hover);
+        }
+
+        /* ========== 连接对话框 ========== */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(4px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            animation: fadeIn 0.2s ease;
+        }
+        .modal-overlay.open {
+            display: flex;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 30px 34px;
+            width: 520px;
+            max-width: 94vw;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+        }
+        .modal .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal .modal-title i {
+            color: var(--accent);
+        }
+        .modal .form-group {
+            margin-bottom: 16px;
+        }
+        .modal .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .modal .form-group input[type="checkbox"] {
+            width: 14px !important;
+            height: 14px;
+            padding: 0;
+            margin: 0;
+            border: none;
+            flex: 0 0 auto;
+        }
+        .modal .form-group input,
+        .modal .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            transition: border 0.2s;
+        }
+        .modal .form-group input:focus,
+        .modal .form-group select:focus {
+            border-color: var(--accent);
+        }
+        .modal .form-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: nowrap;
+        }
+        .modal .form-row .form-group {
+            flex: 1;
+            min-width: 0;
+        }
+        .modal .form-row .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            color: var(--text-primary);
+            font-size: 14px;
+            user-select: none;
+        }
+        .modal .modal-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+        .modal .modal-actions button {
+            padding: 8px 24px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .modal .modal-actions button.secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        .modal .modal-actions button.secondary:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .modal .modal-actions button.primary {
+            background: var(--accent);
+            color: #1a150e;
+        }
+        .modal .modal-actions button.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        /* ========== 响应式微调 ========== */
+        @media (max-width: 1100px) {
+            :root {
+                --sidebar-width: 200px;
+                --tree-width: 260px;
+            }
+            .app-window {
+                max-width: 100vw;
+                max-height: 100vh;
+                border-radius: 0;
+                height: 100vh;
+            }
+        }
+        @media (max-width: 780px) {
+            :root {
+                --sidebar-width: 0px;
+                --tree-width: 0px;
+            }
+            .sidebar { display: none; }
+            .key-tree { display: none; }
+            .data-panel { flex-direction: column; }
+            .detail-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .detail-header .detail-actions {
+                margin-left: 0;
+                width: 100%;
+                flex-wrap: wrap;
+            }
+            .titlebar .connection-status {
+                display: none;
+            }
+        }
+
+        .highlight {
+            background: var(--accent-dim) !important;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Toast 提示（沿用金黄色的强调） */
+        .toast-notification {
+            border-left-color: var(--accent) !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== 主窗口 ===== -->
+    <div class="app-window">
+
+        <!-- ===== 标题栏 ===== -->
+        <header class="titlebar">
+            <div class="logo">
+                <i class="fas fa-crown"></i>
+                麦地缓存
+                <span>v2.0</span>
+            </div>
+            <div class="connection-status">
+                <span class="dot" id="statusDot"></span>
+                <span id="statusLabel">已连接 · localhost:6379</span>
+            </div>
+            <div class="spacer"></div>
+            <div class="actions">
+                <button title="刷新所有Key" id="btnRefresh"><i class="fas fa-sync-alt"></i></button>
+                <button title="清空当前数据库" id="btnFlush"><i class="fas fa-trash-alt"></i></button>
+                <button class="primary" id="btnNewConnection"><i class="fas fa-plus"></i> 新建连接</button>
+            </div>
+        </header>
+
+        <!-- ===== 主体 ===== -->
+        <div class="app-body">
+
+            <!-- ===== 左侧边栏 ===== -->
+            <aside class="sidebar">
+                <div class="section-title"><i class="fas fa-plug" style="margin-right:6px;"></i> 连接</div>
+                <div class="connection-list" id="connectionList">
+                    <!-- 由 JS 动态渲染 -->
+                </div>
+                <button class="add-connection" id="addConnectionBtn">
+                    <i class="fas fa-plus-circle"></i> 添加连接
+                </button>
+
+                <div class="sidebar-footer">
+                    <div class="db-selector">
+                        <label><i class="fas fa-database"></i> DB</label>
+                        <select id="dbSelect">
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="13">13</option>
+                            <option value="14">14</option>
+                            <option value="15">15</option>
+                        </select>
+                    </div>
+                    <div class="server-stats">
+                        <div class="stat-item"><span>CPU</span><span class="val" id="statCpu">2.4%</span></div>
+                        <div class="stat-item"><span>内存</span><span class="val" id="statMem">42.7MB</span></div>
+                        <div class="stat-item"><span>连接数</span><span class="val" id="statConn">12</span></div>
+                        <div class="stat-item"><span>Key 总数</span><span class="val" id="statKeys">1,284</span></div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ===== 主内容 ===== -->
+            <main class="main-content">
+
+                <!-- 工具栏 -->
+                <div class="toolbar">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="搜索 Key ... (支持 * 通配符)" id="keySearch" />
+                        <button class="sep-btn" id="btnSeparator" title="设置 Key 分隔符（文件夹折叠模式使用）"><i class="fas fa-slash"></i><span id="sepLabel">:</span></button>
+                    </div>
+                    <div class="toolbar-actions">
+                        <button id="btnAddKey"><i class="fas fa-plus"></i> 新增 Key</button>
+                        <button id="btnImport"><i class="fas fa-file-import"></i> 导入</button>
+                        <button id="btnExport"><i class="fas fa-file-export"></i> 导出</button>
+                    </div>
+                </div>
+
+                <!-- 数据面板 -->
+                <div class="data-panel">
+                    <!-- Key 树 -->
+                    <div class="key-tree" id="keyTree">
+                        <!-- 由 JS 动态渲染 -->
+                    </div>
+
+                    <!-- Key 详情 -->
+                    <div class="key-detail" id="keyDetail">
+                        <!-- 由 JS 动态渲染 -->
+                    </div>
+                </div>
+
+            </main>
+
+        </div>
+
+        <!-- ===== 终端面板 ===== -->
+        <div class="terminal-panel" id="terminalPanel">
+            <div class="terminal-header" id="terminalToggle">
+                <div class="term-label"><i class="fas fa-terminal"></i> 终端</div>
+                <div class="spacer"></div>
+                <div class="term-actions">
+                    <button id="termClear" title="清空终端"><i class="fas fa-eraser"></i></button>
+                    <button id="termToggleBtn" title="折叠/展开"><i class="fas fa-chevron-down" id="termChevron"></i></button>
+                </div>
+            </div>
+            <div class="terminal-body" id="terminalBody">
+                <div class="line"><span class="prompt">></span><span class="output ok">Redis 终端已就绪 (模拟)</span></div>
+                <div class="line"><span class="prompt">></span><span class="output">输入命令并按 Enter 执行</span></div>
+            </div>
+            <div class="terminal-input-row">
+                <span class="prompt-label">redis&gt;</span>
+                <input type="text" id="terminalInput" placeholder="输入 Redis 命令 ..." autofocus />
+                <button id="terminalSend">执行</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===== 连接对话框 ===== -->
+    <div class="modal-overlay" id="connectionModal">
+        <div class="modal">
+            <div class="modal-title"><i class="fas fa-crown"></i> <span id="modalTitle">新建连接</span></div>
+            <div class="form-group">
+                <label>连接名称</label>
+                <input type="text" id="connName" placeholder="例如: 本地开发" value="localhost" />
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>主机</label>
+                    <input type="text" id="connHost" placeholder="127.0.0.1" value="127.0.0.1" />
+                </div>
+                <div class="form-group">
+                    <label>端口</label>
+                    <input type="number" id="connPort" placeholder="6379" value="6379" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>用户名 (可选)</label>
+                    <input type="text" id="connUser" placeholder="default" />
+                </div>
+                <div class="form-group">
+                    <label>密码 (可选)</label>
+                    <input type="password" id="connPass" placeholder="••••••••" />
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="checkbox-label"><input type="checkbox" id="connReadonly" /><span>只读连接</span></label>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label"><input type="checkbox" id="connCluster" /><span>集群模式</span></label>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="connSeparator">Key 分隔符</label>
+                <input type="text" id="connSeparator" placeholder=":" maxlength="4" />
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" id="modalCancel">取消</button>
+                <button class="primary" id="modalSave">保存连接</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =====================================================================
+        //  JavaScript — 完整的交互逻辑 (与之前相同，但颜色已由 CSS 变量控制)
+        // =====================================================================
+
+        (function() {
+            'use strict';
+
+            // ---------- Tauri 后端调用封装 ----------
+            function invoke(cmd, args) {
+                if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                    return window.__TAURI_INTERNALS__.invoke(cmd, args);
+                }
+                return Promise.reject(new Error('Tauri 环境未就绪'));
+            }
+
+            // ---------- 连接列表（由后端从本地配置加载） ----------
+            let CONNECTIONS = [];
+
+            // 扁平化 Key 列表 (用于搜索)
+            function flattenKeys(obj, prefix = '') {
+                let result = [];
+                for (const [key, val] of Object.entries(obj)) {
+                    const fullKey = prefix + key;
+                    if (val.type === 'folder' && val.children) {
+                        result = result.concat(flattenKeys(val.children, fullKey));
+                    } else {
+                        result.push({ key: fullKey, ...val });
+                    }
+                }
+                return result;
+            }
+            function escapeHtml(str) {
+                if (!str) return '';
+                return String(str).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+            // Key 树数据：初始为空，连接后由后端返回的真实数据重建
+            let KEY_DATA = {};
+            let allKeys = [];
+
+            // ---------- 状态 ----------
+            let currentConn = CONNECTIONS[0];
+            let currentDb = 0;
+            let selectedKey = null; // 当前选中的 Key 全名
+            let expandedFolders = new Set(['user:', 'session:', 'cache:']);
+
+            // DOM 引用
+            const $ = (sel) => document.querySelector(sel);
+            const $$ = (sel) => document.querySelectorAll(sel);
+
+            const connectionListEl = $('#connectionList');
+            const keyTreeEl = $('#keyTree');
+            const keyDetailEl = $('#keyDetail');
+            const terminalBody = $('#terminalBody');
+            const terminalInput = $('#terminalInput');
+            const terminalSend = $('#terminalSend');
+            const termToggleBtn = $('#termToggleBtn');
+            const termChevron = $('#termChevron');
+            const terminalPanel = $('#terminalPanel');
+            const statusDot = $('#statusDot');
+            const statusLabel = $('#statusLabel');
+            const dbSelect = $('#dbSelect');
+            const keySearch = $('#keySearch');
+            const modal = $('#connectionModal');
+            const modalTitle = $('#modalTitle');
+
+            // ---------- 渲染：连接列表 ----------
+            function renderConnections() {
+                if (!CONNECTIONS || CONNECTIONS.length === 0) {
+                    connectionListEl.innerHTML = `
+                        <div style="padding:20px 12px;color:var(--text-muted);text-align:center;font-size:13px;">
+                            <i class="fas fa-plug" style="display:block;font-size:22px;margin-bottom:8px;opacity:.4;"></i>
+                            暂无连接<br/>点击右上角「新建连接」
+                        </div>`;
+                    return;
+                }
+                connectionListEl.innerHTML = CONNECTIONS.map(conn => {
+                    const isActive = currentConn && conn.id === currentConn.id;
+                    const isOnline = !!(currentConn && currentConn.id === conn.id && currentConn.online);
+                    return `
+                    <div class="connection-item ${isActive ? 'active' : ''}" data-id="${conn.id}">
+                        <div class="icon"><i class="fas fa-server"></i></div>
+                        <div class="info">
+                            <div class="name">${conn.name}</div>
+                            <div class="host">${conn.host}:${conn.port}</div>
+                        </div>
+                        <span class="badge ${isOnline ? 'online' : ''}">${isOnline ? '● 在线' : '○ 离线'}</span>
+                        <div class="actions-menu">
+                            <button class="edit-conn" data-id="${conn.id}" title="编辑"><i class="fas fa-edit"></i></button>
+                            <button class="del-conn" data-id="${conn.id}" title="删除"><i class="fas fa-times"></i></button>
+                        </div>
+                    </div>`;
+                }).join('');
+
+                // 事件绑定
+                connectionListEl.querySelectorAll('.connection-item').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        if (e.target.closest('.actions-menu')) return;
+                        const id = el.dataset.id;
+                        const conn = CONNECTIONS.find(c => c.id === id);
+                        if (conn) switchConnection(conn);
+                    });
+                });
+                connectionListEl.querySelectorAll('.edit-conn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = btn.dataset.id;
+                        const conn = CONNECTIONS.find(c => c.id === id);
+                        if (conn) openModal(conn);
+                    });
+                });
+                connectionListEl.querySelectorAll('.del-conn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const id = btn.dataset.id;
+                        if (confirm('确定要删除此连接吗？')) {
+                            invoke('delete_connection', { connId: id }).then(() => {
+                                if (currentConn && currentConn.id === id) {
+                                    currentConn = null;
+                                }
+                                return loadConnections();
+                            }).catch(err => {
+                                showToast('删除失败: ' + err, 'error');
+                            });
+                        }
+                    });
+                });
+            }
+
+            function connectTo(conn) {
+                if (!conn) return Promise.reject(new Error('无连接信息'));
+                appendTerminal(`正在连接 ${conn.name} (${conn.host}:${conn.port}) …`, '');
+                // 直接建立连接（connect 内部会替换连接池中同 id 的连接）
+                return invoke('connect', {
+                    conn: {
+                        id: conn.id,
+                        name: conn.name,
+                        host: conn.host,
+                        port: conn.port,
+                        type: conn.type || 'single',
+                        readonly: !!conn.readonly,
+                        separator: conn.separator || ':',
+                        password: conn.password || null,
+                    }
+                }).then(() => {
+                    currentConn = { ...conn, online: true };
+                    return invoke('get_server_info', { connId: conn.id });
+                }).then((info) => {
+                    currentConn.info = info;
+                    return info;
+                });
+            }
+
+            function switchConnection(conn) {
+                if (!conn) return;
+                currentConn = conn;
+                renderConnections();
+                updateStatus();
+                renderKeyTree();
+                renderDetail();
+                connectTo(conn).then((info) => {
+                    if (info) {
+                        renderServerInfo(info);
+                        // 更新连接状态为「已连接」并刷新底栏和左侧徽章
+                        currentConn.online = true;
+                        renderConnections();
+                        updateStatus();
+                        const mem = info.usedMemory ? formatAppBytes(Number(info.usedMemory)) : '-';
+                        const days = info.uptimeSeconds > 0 ? Math.floor(info.uptimeSeconds / 86400) : 0;
+                        const hrs = info.uptimeSeconds > 0 ? Math.floor((info.uptimeSeconds % 86400) / 3600) : 0;
+                        appendTerminal(
+                            `连接成功 · Redis ${info.redisVersion || ''} · 运行 ${days}天${hrs}时 · 内存 ${mem} · 连接 ${info.connectedClients || 0} · Keys ${info.dbKeys || 0}`,
+                            'ok'
+                        );
+                        // 连接成功后加载真实 key 列表
+                        loadKeys();
+                    }
+                }).catch(err => {
+                    if (currentConn) currentConn.online = false;
+                    renderConnections();
+                    updateStatus();
+                    appendTerminal(`连接失败: ${err}`, 'error');
+                    showToast('连接失败: ' + err, 'error');
+                });
+            }
+
+            function renderServerInfo(info) {
+                if (!info) return;
+                const setStat = (id, txt) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = txt;
+                };
+
+                // Key 总数
+                const keys = info.dbKeys !== undefined ? Number(info.dbKeys).toLocaleString() : '-';
+                setStat('statKeys', keys);
+
+                // 内存（B → 可读大小）
+                const mem = info.usedMemory !== undefined ? formatAppBytes(Number(info.usedMemory)) : '-';
+                setStat('statMem', mem);
+
+                // 连接数
+                setStat('statConn', info.connectedClients !== undefined ? String(info.connectedClients) : '-');
+            }
+
+            function formatAppBytes(bytes) {
+                if (!bytes) return '0B';
+                const u = ['B','KB','MB','GB'];
+                let i = 0, v = Number(bytes);
+                while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+                return (i === 0 ? v : v.toFixed(1)) + u[i];
+            }
+
+            function updateStatus() {
+                const online = currentConn && currentConn.online;
+                statusDot.className = 'dot' + (online ? '' : ' disconnected');
+                let suffix = '';
+                if (online && currentConn.readonly) suffix = ' (只读)';
+                statusLabel.textContent = online ?
+                    `已连接 · ${currentConn.host}:${currentConn.port}${suffix}` :
+                    `未连接 · ${currentConn ? currentConn.host : '无'}`;
+                updateReadonlyUI();
+            }
+
+            // 根据当前连接是否为只读，启用/禁用写操作入口
+            function updateReadonlyUI() {
+                const readonly = !!(currentConn && currentConn.online && currentConn.readonly);
+                const ids = ['btnAddKey', 'btnFlush'];
+                ids.forEach(id => {
+                    const btn = document.getElementById(id);
+                    if (btn) {
+                        btn.disabled = readonly;
+                        btn.title = readonly ? '只读连接，禁止写操作' : btn.getAttribute('data-orig-title') || '';
+                        btn.style.opacity = readonly ? '0.5' : '';
+                        btn.style.cursor = readonly ? 'not-allowed' : '';
+                    }
+                });
+            }
+
+// 从后端加载 key 列表并刷新树
+            function loadKeys() {
+                if (!currentConn || !currentConn.id) return Promise.resolve();
+                return invoke('list_keys', { connId: currentConn.id })
+                    .then((list) => {
+                        const items = list || [];
+                        const flat = {};
+                        const flatList = [];
+                        for (const it of items) {
+                            const ttl = it.ttl !== undefined ? it.ttl : -1;
+                            flat[it.key] = { type: it.type || 'string', ttl, value: '' };
+                            flatList.push({ key: it.key, type: it.type || 'string', ttl, value: '' });
+                        }
+                        KEY_DATA = flat;
+                        allKeys = flatList;
+                        renderKeyTree(keySearch ? keySearch.value : '');
+                        const keysEl = document.getElementById('statKeys');
+                        if (keysEl) keysEl.textContent = allKeys.length.toLocaleString();
+                        return allKeys;
+                    })
+                    .catch(err => {
+                        console.error('加载 Key 列表失败', err);
+                        return [];
+                    });
+            }
+
+            // ---------- 渲染：Key 列表（支持按分隔符折叠为文件夹） ----------
+            // 每个连接已展开的文件夹路径集合，Map<connId, Set<folderPath>>
+            let expandedCache = {};
+
+            function sepCacheKey() {
+                return (currentConn && currentConn.id) || 'default';
+            }
+
+            function getExpandedSet() {
+                const k = sepCacheKey();
+                if (!expandedCache[k]) expandedCache[k] = new Set();
+                return expandedCache[k];
+            }
+
+            function getSeparator() {
+                const sep = currentConn && currentConn.separator;
+                return (typeof sep === 'string' && sep.length > 0) ? sep : ':';
+            }
+
+            // 渲染叶子 key 行
+            function renderKeyRowHtml(key, depth) {
+                const item = KEY_DATA[key] || {};
+                const t = item.type || 'string';
+                return '<div class="tree-node">' +
+                    '<div class="node-label node-key-select' + (selectedKey === key ? ' active' : '') + '" data-key="' + escapeHtml(key) + '" title="' + escapeHtml(key) + '" style="padding-left:' + (8 + depth * 16) + 'px">' +
+                        '<span class="toggle" style="visibility:hidden;"><i class="fas fa-chevron-right"></i></span>' +
+                        '<i class="fas fa-key icon-key"></i>' +
+                        '<span class="key-name">' + escapeHtml(key) + '</span>' +
+                        '<span class="key-type ' + (item.type || 'string') + '">' + (item.type || 'string') + '</span>' +
+                    '</div></div>';
+            }
+
+            // 渲染文件夹行
+            function renderFolderRowHtml(label, path, isOpen, depth) {
+                return '<div class="tree-node"><div class="node-label node-folder-select' + (isOpen ? ' open' : '') + '" data-folder="' + escapeHtml(path) + '" style="padding-left:' + (8 + depth * 16) + 'px">' +
+                    '<span class="toggle"><i class="fas fa-chevron-right' + (isOpen ? ' open' : '') + '"></i></span>' +
+                    '<i class="fas fa-folder' + (isOpen ? '-open' : '') + ' icon-folder"></i>' +
+                    '<span class="key-name">' + escapeHtml(label) + '</span>' +
+                '</div></div>';
+            }
+
+            // 文件夹模式：keys 已过滤排序。按 sep 组织成目录树并递归渲染。
+            function renderFolders(keys, sep, expanded, depth, dirPath) {
+                const prefix = dirPath ? dirPath + sep : '';
+                const childDirs = new Set();
+                const leafKeys = [];
+                keys.forEach(function (k) {
+                    if (!k.startsWith(prefix)) return;
+                    const rest = k.slice(prefix.length);
+                    if (rest === '') return;
+                    const idx = rest.indexOf(sep);
+                    if (idx === -1) {
+                        leafKeys.push(k); // 直接子 key（完整路径）
+                    } else {
+                        childDirs.add(prefix + rest.slice(0, idx)); // 直接子目录
+                    }
+                });
+                let html = '';
+                // 先文件件（按路径），再 key
+                const dirList = Array.from(childDirs).sort();
+                for (let i = 0; i < dirList.length; i++) {
+                    const d = dirList[i];
+                    const label = d.split(sep).pop();
+                    const isOpen = expanded.has(d);
+                    html += renderFolderRowHtml(label, d, isOpen, depth);
+                    if (isOpen) {
+                        html += renderFolders(keys, sep, expanded, depth + 1, d);
+                    }
+                }
+                const leafList = leafKeys.sort();
+                for (let j = 0; j < leafList.length; j++) {
+                    html += renderKeyRowHtml(leafList[j], depth);
+                }
+                return html;
+            }
+
+            // 渲染 Key 列表（文件夹折叠模式）
+            function renderKeyTree(filter = '') {
+                const searchTerm = (filter || '').trim().toLowerCase();
+                const isConnected = currentConn && currentConn.online;
+
+                if (!isConnected) {
+                    keyTreeEl.innerHTML = '' +
+                        '<div style="padding:24px 16px;color:var(--text-muted);text-align:center;font-size:13px;">' +
+                            '<i class="fas fa-plug" style="font-size:22px;display:block;margin-bottom:8px;opacity:.4;"></i>' +
+                            '请先连接 Redis 服务器' +
+                        '</div>';
+                    return;
+                }
+
+                let list = Object.keys(KEY_DATA);
+                if (searchTerm) list = list.filter(k => k.toLowerCase().includes(searchTerm));
+                list = list.sort((a, b) => a.localeCompare(b));
+
+                if (list.length === 0) {
+                    keyTreeEl.innerHTML = '' +
+                        '<div style="padding:24px 16px;color:var(--text-muted);text-align:center;font-size:13px;">' +
+                            '<i class="fas fa-inbox" style="font-size:22px;display:block;margin-bottom:8px;opacity:.4;"></i>' +
+                            (searchTerm ? '没有匹配的 Key' : '暂无 Key\n点击「新增 Key」创建') +
+                        '</div>';
+                    return;
+                }
+
+                const sep = getSeparator();
+                const folderMode = !searchTerm && !!sep; // 搜索时不折叠文件夹
+                const expanded = getExpandedSet();
+
+                let html;
+                if (folderMode) {
+                    html = renderFolders(list, sep, expanded, 0, '');
+                } else {
+                    html = list.map(k => renderKeyRowHtml(k, 0)).join('');
+                }
+                keyTreeEl.innerHTML = html;
+
+                keyTreeEl.querySelectorAll('.node-key-select').forEach(el => {
+                    el.addEventListener('click', () => {
+                        selectedKey = el.dataset.key;
+                        renderKeyTree(keySearch.value);
+                        renderDetail();
+                    });
+                });
+                keyTreeEl.querySelectorAll('.node-folder-select').forEach(el => {
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const p = el.dataset.folder;
+                        const es = getExpandedSet();
+                        if (es.has(p)) es.delete(p); else es.add(p);
+                        renderKeyTree(keySearch.value);
+                    });
+                });
+            }
+
+            // ---------- 渲染：Key 详情 ----------
+            function renderDetail() {
+                if (!selectedKey) {
+                    keyDetailEl.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-crown"></i>
+                            <h3>选择一个 Key</h3>
+                            <p>从左侧树中点击任意 Key 查看详细内容和值</p>
+                        </div>
+                    `;
+                    return;
+                }
+                const item = allKeys.find(k => k.key === selectedKey);
+                if (!item) {
+                    keyDetailEl.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <h3>Key 不存在</h3>
+                            <p>该 Key 可能已被删除或不存在</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const typeClass = item.type || 'string';
+                const typeLabel = typeClass.toUpperCase();
+                const ttl = item.ttl !== undefined ? item.ttl : -1;
+
+                let valueHtml = '';
+                if (typeClass === 'string') {
+                    valueHtml = `
+                        <textarea id="valueEditor" placeholder="加载中…">${escapeHtml(item.value || '')}</textarea>
+                    `;
+                    // 从后端拉取真实值（异步）
+                    if (currentConn && currentConn.id) {
+                        const thisKey = selectedKey;
+                        invoke('get_string', { connId: currentConn.id, key: thisKey })
+                            .then(v => {
+                                if (v === null || v === undefined) {
+                                    v = '(nil)';
+                                }
+                                const editor = document.getElementById('valueEditor');
+                                if (editor && selectedKey === thisKey) {
+                                    editor.value = v;
+                                }
+                            })
+                            .catch(() => { /* 忽略 */ });
+                    }
+                } else if (typeClass === 'hash') {
+                    const obj = item.value || {};
+                    const fields = Object.entries(obj);
+                    valueHtml = `
+                        <div class="hash-view">
+                            ${fields.map(([k, v]) => `
+                                <div class="field">
+                                    <span class="fkey">${k}</span>
+                                    <span class="fval">${v}</span>
+                                </div>
+                            `).join('')}
+                            ${fields.length === 0 ? '<div style="color:var(--text-muted);grid-column:1/3;text-align:center;padding:12px;">空 Hash</div>' : ''}
+                        </div>
+                    `;
+                } else if (typeClass === 'list') {
+                    const arr = item.value || [];
+                    valueHtml = `
+                        <div class="list-view">
+                            ${arr.map((v, i) => `
+                                <div class="item">
+                                    <span class="idx">${i}</span>
+                                    <span class="val">${v}</span>
+                                </div>
+                            `).join('')}
+                            ${arr.length === 0 ? '<div style="color:var(--text-muted);text-align:center;padding:12px;">空 List</div>' : ''}
+                        </div>
+                    `;
+                } else if (typeClass === 'set') {
+                    const arr = item.value || [];
+                    valueHtml = `
+                        <div class="list-view">
+                            ${arr.map((v, i) => `
+                                <div class="item">
+                                    <span class="idx">${i + 1}</span>
+                                    <span class="val">${v}</span>
+                                </div>
+                            `).join('')}
+                            ${arr.length === 0 ? '<div style="color:var(--text-muted);text-align:center;padding:12px;">空 Set</div>' : ''}
+                        </div>
+                    `;
+                } else {
+                    valueHtml = `
+                        <div style="color:var(--text-muted);padding:12px;">暂不支持此类型</div>
+                    `;
+                }
+
+                const ttlDisplay = ttl === -1 ? '永不过期' : `${ttl}s`;
+
+                keyDetailEl.innerHTML = `
+                    <div class="detail-header">
+                        <div class="key-title">
+                            <span>${selectedKey}</span>
+                            <span class="type-badge ${typeClass}">${typeLabel}</span>
+                        </div>
+                        <span class="ttl"><i class="far fa-clock"></i> ${ttlDisplay}</span>
+                        <div class="detail-actions">
+                            <button class="primary" id="detailSave"><i class="fas fa-save"></i> 保存</button>
+                            <button id="detailRefresh"><i class="fas fa-sync-alt"></i> 刷新</button>
+                            <button class="danger" id="detailDelete"><i class="fas fa-trash-alt"></i> 删除</button>
+                        </div>
+                    </div>
+                    <div class="detail-body">
+                        <div class="value-editor">
+                            ${valueHtml}
+                        </div>
+                        <div class="value-footer">
+                            <div class="info">
+                                <span><i class="far fa-file"></i> 类型: ${typeLabel}</span>
+                                <span><i class="far fa-clock"></i> TTL: ${ttlDisplay}</span>
+                            </div>
+                            <span>大小: ${item.value ? JSON.stringify(item.value).length : 0} 字节</span>
+                        </div>
+                    </div>
+                `;
+
+                const saveBtn = document.getElementById('detailSave');
+                if (saveBtn) {
+                    saveBtn.addEventListener('click', () => {
+                        const editor = document.getElementById('valueEditor');
+                        if (editor) {
+                            appendTerminal(`保存 Key "${selectedKey}" 的值`, 'ok');
+                            showToast('Key 已保存', 'success');
+                        } else {
+                            showToast('此类型不支持直接编辑', 'info');
+                        }
+                    });
+                }
+                const refreshBtn = document.getElementById('detailRefresh');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', () => {
+                        renderDetail();
+                        appendTerminal(`刷新 Key "${selectedKey}"`, '');
+                    });
+                }
+                const deleteBtn = document.getElementById('detailDelete');
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', () => {
+                        if (confirm(`确定要删除 Key "${selectedKey}" 吗？`)) {
+                            appendTerminal(`删除 Key "${selectedKey}"`, 'ok');
+                            showToast('Key 已删除', 'success');
+                            selectedKey = null;
+                            renderKeyTree(keySearch.value);
+                            renderDetail();
+                        }
+                    });
+                }
+            }
+
+            // ---------- 终端 ----------
+            function appendTerminal(text, type = '') {
+                const line = document.createElement('div');
+                line.className = 'line';
+                const cls = type === 'ok' ? 'output ok' : type === 'error' ? 'output error' : 'output';
+                line.innerHTML = `<span class="prompt">></span><span class="${cls}">${text}</span>`;
+                terminalBody.appendChild(line);
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+            }
+
+            function executeCommand(cmd) {
+                const trimmed = cmd.trim();
+                if (!trimmed) return;
+                appendTerminal(trimmed, '');
+                const lower = trimmed.toLowerCase();
+                if (lower === 'ping') {
+                    appendTerminal('PONG', 'ok');
+                } else if (lower === 'info') {
+                    appendTerminal('# Server\nredis_version: 7.2.4\nuptime: 3 days\nconnected_clients: 12', '');
+                } else if (lower === 'dbsize') {
+                    appendTerminal(`(integer) ${allKeys.length}`, 'ok');
+                } else if (lower.startsWith('get ')) {
+                    const key = trimmed.slice(4).trim();
+                    const found = allKeys.find(k => k.key === key);
+                    if (found && found.type === 'string') {
+                        appendTerminal(found.value || '(nil)', 'ok');
+                    } else {
+                        appendTerminal('(nil)', '');
+                    }
+                } else if (lower.startsWith('set ')) {
+                    const parts = trimmed.slice(4).trim().split(' ');
+                    if (parts.length >= 2) {
+                        appendTerminal('OK', 'ok');
+                    } else {
+                        appendTerminal('ERR wrong number of arguments', 'error');
+                    }
+                } else if (lower.startsWith('keys ')) {
+                    const pattern = trimmed.slice(5).trim();
+                    const matched = allKeys.filter(k => {
+                        if (pattern === '*') return true;
+                        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+                        return regex.test(k.key);
+                    });
+                    appendTerminal(matched.map(k => k.key).join('\n') || '(empty array)', '');
+                } else if (lower === 'flushdb') {
+                    appendTerminal('OK (模拟清空)', 'ok');
+                } else if (lower === 'help') {
+                    appendTerminal('支持命令: PING, INFO, DBSIZE, GET key, SET key value, KEYS pattern, FLUSHDB, HELP', '');
+                } else {
+                    appendTerminal(`ERR 未知命令或模拟未实现: "${trimmed}"`, 'error');
+                }
+                terminalInput.value = '';
+                terminalInput.focus();
+            }
+
+            // ---------- 模态框 ----------
+            let editingConnId = null;
+
+            function openModal(conn = null) {
+                if (conn) {
+                    editingConnId = conn.id;
+                    modalTitle.textContent = '编辑连接';
+                    document.getElementById('connName').value = conn.name;
+                    document.getElementById('connHost').value = conn.host;
+                    document.getElementById('connPort').value = conn.port;
+                    document.getElementById('connUser').value = '';
+                    document.getElementById('connPass').value = '';
+                    document.getElementById('connReadonly').checked = !!conn.readonly;
+                    document.getElementById('connCluster').checked = conn.type === 'cluster';
+                    document.getElementById('connSeparator').value = conn.separator || '';
+                } else {
+                    editingConnId = null;
+                    modalTitle.textContent = '新建连接';
+                    document.getElementById('connName').value = '';
+                    document.getElementById('connHost').value = '127.0.0.1';
+                    document.getElementById('connPort').value = '6379';
+                    document.getElementById('connUser').value = '';
+                    document.getElementById('connPass').value = '';
+                    document.getElementById('connReadonly').checked = false;
+                    document.getElementById('connCluster').checked = false;
+                    document.getElementById('connSeparator').value = '';
+                }
+                modal.classList.add('open');
+                document.getElementById('connName').focus();
+            }
+
+            function closeModal() {
+                modal.classList.remove('open');
+            }
+
+            function saveConnection() {
+                const name = document.getElementById('connName').value.trim();
+                const host = document.getElementById('connHost').value.trim();
+                const port = parseInt(document.getElementById('connPort').value) || 6379;
+                if (!name || !host) {
+                    showToast('请填写名称和主机', 'error');
+                    return;
+                }
+                const id = editingConnId || ('conn_' + Date.now());
+                let separator = document.getElementById('connSeparator').value;
+                const conn = {
+                    id: id,
+                    name: name,
+                    host: host,
+                    port: port,
+                    type: document.getElementById('connCluster').checked ? 'cluster' : 'single',
+                    readonly: document.getElementById('connReadonly').checked,
+                    separator: separator || ':',
+                    password: document.getElementById('connPass').value || null,
+                };
+                invoke('save_connection', { conn }).then(() => {
+                    closeModal();
+                    showToast(editingConnId ? '连接已更新' : '连接已创建', 'success');
+                    return loadConnections();
+                }).then(() => {
+                    if (currentConn) {
+                        const updated = CONNECTIONS.find(c => c.id === currentConn.id);
+                        if (updated) switchConnection(updated);
+                    }
+                }).catch(err => {
+                    showToast('保存失败: ' + err, 'error');
+                });
+            }
+
+            // ---------- Toast 提示 ----------
+            function showToast(msg, type = 'info') {
+                const existing = document.querySelector('.toast-notification');
+                if (existing) existing.remove();
+                const toast = document.createElement('div');
+                toast.className = 'toast-notification';
+                const colors = {
+                    success: 'var(--green)',
+                    error: 'var(--accent)',
+                    info: 'var(--blue)',
+                };
+                toast.style.cssText = `
+                    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+                    background: var(--bg-secondary); border: 1px solid var(--border-color);
+                    padding: 10px 28px; border-radius: var(--radius);
+                    font-size: 14px; color: var(--text-primary);
+                    box-shadow: var(--shadow); z-index: 2000;
+                    border-left: 4px solid ${colors[type] || colors.info};
+                    animation: fadeIn 0.2s ease;
+                    max-width: 90vw;
+                `;
+                toast.textContent = msg;
+                document.body.appendChild(toast);
+                setTimeout(() => {
+                    toast.style.opacity = '0';
+                    toast.style.transition = 'opacity 0.3s';
+                    setTimeout(() => toast.remove(), 300);
+                }, 2200);
+            }
+
+            // ---------- 事件绑定 ----------
+            let terminalCollapsed = false;
+            document.getElementById('terminalToggle').addEventListener('click', () => {
+                terminalCollapsed = !terminalCollapsed;
+                terminalPanel.classList.toggle('collapsed', terminalCollapsed);
+                termChevron.className = terminalCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+            });
+            termToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                terminalCollapsed = !terminalCollapsed;
+                terminalPanel.classList.toggle('collapsed', terminalCollapsed);
+                termChevron.className = terminalCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+            });
+
+            terminalSend.addEventListener('click', () => executeCommand(terminalInput.value));
+            terminalInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') executeCommand(terminalInput.value);
+            });
+            document.getElementById('termClear').addEventListener('click', () => {
+                terminalBody.innerHTML = `
+                    <div class="line"><span class="prompt">></span><span class="output ok">终端已清空</span></div>
+                `;
+            });
+
+            dbSelect.addEventListener('change', (e) => {
+                currentDb = parseInt(e.target.value);
+                appendTerminal(`切换到数据库 ${currentDb}`, 'ok');
+                renderKeyTree(keySearch.value);
+            });
+
+            keySearch.addEventListener('input', (e) => {
+                renderKeyTree(e.target.value);
+            });
+
+            document.getElementById('addConnectionBtn').addEventListener('click', () => openModal(null));
+            document.getElementById('btnNewConnection').addEventListener('click', () => openModal(null));
+
+            document.getElementById('modalCancel').addEventListener('click', closeModal);
+            document.getElementById('modalSave').addEventListener('click', saveConnection);
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') closeModal();
+                if (e.key === 'Enter' && modal.classList.contains('open')) saveConnection();
+            });
+
+            document.getElementById('btnRefresh').addEventListener('click', () => {
+                renderKeyTree(keySearch.value);
+                showToast('已刷新', 'info');
+                appendTerminal('刷新 Key 列表', '');
+            });
+
+            document.getElementById('btnAddKey').addEventListener('click', () => {
+                const name = prompt('请输入新 Key 名称:');
+                if (!name || !name.trim()) return;
+                const trimmed = name.trim();
+                if (!currentConn || !currentConn.id) {
+                    showToast('请先连接 Redis 服务器', 'error');
+                    return;
+                }
+                if (currentConn.online !== true) {
+                    showToast('请先连接 Redis 服务器', 'error');
+                    return;
+                }
+                if (allKeys.find(k => k.key === trimmed)) {
+                    showToast('Key 已存在', 'error');
+                    return;
+                }
+                const value = prompt('请输入 Key 的值:') || '';
+                document.getElementById('btnAddKey').disabled = true;
+                invoke('set_key', { connId: currentConn.id, key: trimmed, value: value })
+                    .then(() => {
+                        showToast(`Key "${trimmed}" 已创建`, 'success');
+                        appendTerminal(`SET ${trimmed} "${value}" → OK`, 'ok');
+                        // 刷新 key 列表
+                        loadKeys().then(() => {
+                            selectedKey = trimmed;
+                            renderKeyTree(keySearch.value);
+                            renderDetail();
+                        });
+                    })
+                    .catch(err => {
+                        showToast('创建失败: ' + err, 'error');
+                        appendTerminal(`SET ${trimmed} 失败: ${err}`, 'error');
+                    })
+                    .finally(() => {
+                        document.getElementById('btnAddKey').disabled = false;
+                    });
+            });
+
+            document.getElementById('btnImport').addEventListener('click', () => {
+                showToast('导入功能 (模拟)', 'info');
+                appendTerminal('执行导入操作 (模拟)', '');
+            });
+            document.getElementById('btnExport').addEventListener('click', () => {
+                showToast('导出功能 (模拟)', 'info');
+                appendTerminal('执行导出操作 (模拟)', '');
+            });
+
+            // ---------- 初始化 ----------
+            // ---------- 数据加载（从后端） ----------
+            function loadConnections() {
+                return invoke('list_connections').then(list => {
+                    CONNECTIONS = (list || []).map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        host: c.host,
+                        port: c.port,
+                        type: c.type || 'single',
+                        readonly: !!c.readonly,
+                        separator: c.separator || ':',
+                    }));
+                    if (currentConn) {
+                        const still = CONNECTIONS.find(c => c.id === currentConn.id);
+                        if (!still) currentConn = null;
+                    }
+                    renderConnections();
+                    updateStatus();
+                    return CONNECTIONS;
+                }).catch(err => {
+                    console.error('加载连接失败', err);
+                    showToast('加载连接失败: ' + err, 'error');
+                });
+            }
+
+            // ---------- 初始化 ----------
+            renderConnections();
+            renderKeyTree();
+            renderDetail();
+            loadConnections();
+            updateStatus();
+
+            setTimeout(() => {
+                appendTerminal('欢迎使用 麦地缓存', 'ok');
+                appendTerminal('输入 HELP 查看可用命令', '');
+            }, 300);
+
+            // 定时刷新服务器信息（仅当已连接时）
+            setInterval(() => {
+                if (currentConn && currentConn.id && currentConn.online) {
+                    invoke('get_server_info', { connId: currentConn.id })
+                        .then(renderServerInfo)
+                        .catch(() => { /* 忽略轮询错误，下次重试 */ });
+                }
+            }, 5000);
+
+            window.__app = { allKeys, KEY_DATA, expandedFolders, renderKeyTree, renderDetail };
+
+        })();
+    </script>
+
+</body>
+</html>
