@@ -24,3 +24,5 @@ thiserror = "1"
 # ===== Redis =====
 redis = { version = "0.25", features = ["tokio-comp", "connection-manager", "cluster", "cluster-async"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+# ===== 系统信息 =====
+sysinfo = "0.39"

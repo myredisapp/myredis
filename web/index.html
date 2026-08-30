@@ -1224,10 +1224,10 @@
 
                 <div class="sidebar-footer">
                     <div class="server-stats">
-                        <div class="stat-item"><span>CPU</span><span class="val" id="statCpu">2.4%</span></div>
-                        <div class="stat-item"><span>内存</span><span class="val" id="statMem">42.7MB</span></div>
-                        <div class="stat-item"><span>连接数</span><span class="val" id="statConn">12</span></div>
-                        <div class="stat-item"><span>Key 总数</span><span class="val" id="statKeys">1,284</span></div>
+                        <div class="stat-item" id="statDiskItem" title="Redis 持久化数据所在磁盘"><span>磁盘</span><span class="val" id="statDisk">-</span></div>
+                        <div class="stat-item"><span>内存</span><span class="val" id="statMem">-</span></div>
+                        <div class="stat-item"><span>连接数</span><span class="val" id="statConn">-</span></div>
+                        <div class="stat-item"><span>Key 总数</span><span class="val" id="statKeys">-</span></div>
                     </div>
                 </div>
             </aside>
@@ -1662,12 +1662,34 @@
                 const keys = info.dbKeys !== undefined ? Number(info.dbKeys).toLocaleString() : '-';
                 setStat('statKeys', keys);
 
+                // 磁盘空间使用率（Redis 持久化数据所在磁盘）
+                const diskEl = document.getElementById('statDisk');
+                const diskWrap = document.getElementById('statDiskItem');
+                if (info.disk && info.disk.usedPercent !== undefined && info.disk.usedPercent !== null) {
+                    const pct = formatDiskPercent(info.disk.usedPercent);
+                    setStat('statDisk', pct);
+                    if (diskWrap) {
+                        diskWrap.title = info.disk.path
+                            ? `Redis 持久化目录: ${info.disk.path} · 磁盘已用 ${pct}`
+                            : '磁盘已用 ' + pct;
+                        diskWrap.style.cursor = 'help';
+                    }
+                } else {
+                    setStat('statDisk', '-');
+                }
+
                 // 内存（B → 可读大小）
                 const mem = info.usedMemory !== undefined ? formatAppBytes(Number(info.usedMemory)) : '-';
                 setStat('statMem', mem);
 
                 // 连接数
                 setStat('statConn', info.connectedClients !== undefined ? String(info.connectedClients) : '-');
+            }
+
+            // 格式化为百分比（保留 1 位小数）
+            function formatDiskPercent(p) {
+                const n = Number(p);
+                return (isFinite(n) ? Math.round(n * 10) / 10 : n) + '%';
             }
 
             function formatAppBytes(bytes) {
@@ -1719,8 +1741,9 @@
                         KEY_DATA = flat;
                         allKeys = flatList;
                         renderKeyTree(keySearch ? keySearch.value : '');
-                        const keysEl = document.getElementById('statKeys');
-                        if (keysEl) keysEl.textContent = allKeys.length.toLocaleString();
+                        // 注意：不要用 allKeys.length 覆盖 statKeys。
+                        // statKeys 表示「当前数据库的 key 总数（DBSIZE）」，由 renderServerInfo 维护，
+                        // 与顶部 DB 选择器联动，是当前的实时数据。
                         return allKeys;
                     })
                     .catch(err => {
