@@ -6,8 +6,9 @@
     <title>麦地缓存</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
-        /* ========== CSS 变量 — 金黄色主题 ========== */
-        :root {
+        /* ========== 深秋（暗色金，默认） ========== */
+        :root,
+        [data-theme="autumn"] {
             --bg-primary: #0d0b08;
             --bg-secondary: #1a150e;
             --bg-tertiary: #261f16;
@@ -28,10 +29,107 @@
             --radius: 8px;
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
             --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            --sidebar-width: 240px;
+            --sidebar-width: 270px;
             --tree-width: 320px;
             --terminal-height: 200px;
             --header-height: 52px;
+            color-scheme: dark;
+        }
+
+        /* ========== 初秋（亮金色） ========== */
+        [data-theme="golden"] {
+            --bg-primary: #fdf8ee;
+            --bg-secondary: #fffaf0;
+            --bg-tertiary: #fdf1d7;
+            --bg-hover: #f7e6c3;
+            --bg-active: #f0d9a8;
+            --bg-input: #fdf8ee;
+            --border-color: #e5c98f;
+            --text-primary: #3d2f14;
+            --text-secondary: #6b5622;
+            --text-muted: #a08a4e;
+            --accent: #d99a1b;          /* 暖金主色 */
+            --accent-hover: #b87f12;
+            --accent-dim: rgba(217, 154, 27, 0.16);
+            --green: #5f9e3a;
+            --blue: #4c7fc0;
+            --yellow: #d9a514;
+            --purple: #9a6fc4;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(140, 100, 30, 0.25);
+            color-scheme: light;
+        }
+
+        /* ========== 春天（清新绿） ========== */
+        [data-theme="spring"] {
+            --bg-primary: #f2f8f1;
+            --bg-secondary: #f9fcf8;
+            --bg-tertiary: #e9f4e6;
+            ﻿--bg-hover: #dcefd5;
+            --bg-active: #cde6c4;
+            --bg-input: #f9fcf8;
+            --border-color: #b5d8ab;
+            --text-primary: #1e3320;
+            --text-secondary: #44664b;
+            --text-muted: #7b9b80;
+            --accent: #4caf50;          /* 春芽绿主色 */
+            --accent-hover: #3d9440;
+            --accent-dim: rgba(76, 175, 80, 0.15);
+            --green: #4caf50;
+            --blue: #66bb6a;
+            --yellow: #d4a017;
+            --purple: #9ccc65;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(76, 130, 70, 0.18);
+            color-scheme: light;
+        }
+
+        /* ========== 夏天（晴空蓝） ========== */
+        [data-theme="summer"] {
+            --bg-primary: #eef6fd;
+            --bg-secondary: #f7fbff;
+            --bg-tertiary: #e3f0fc;
+            --bg-hover: #d0e6fa;
+            --bg-active: #bcdbf8;
+            --bg-input: #f4faff;
+            --border-color: #a8cdec;
+            --text-primary: #0f2b42;
+            --text-secondary: #2f5f8a;
+            --text-muted: #6f96b8;
+            --accent: #22a6f2;          /* 夏日晴空蓝主色 */
+            --accent-hover: #1687cc;
+            --accent-dim: rgba(34, 166, 242, 0.15);
+            --green: #2ecc9a;
+            --blue: #22a6f2;
+            --yellow: #ffc93c;
+            --purple: #9b6cc4;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(34, 110, 170, 0.16);
+            color-scheme: light;
+        }
+
+        /* ========== 冬至：明亮模式 ========== */
+        [data-theme="winter"] {
+            --bg-primary: #f5f6fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f0f2f8;
+            --bg-hover: #e7ebf5;
+            --bg-active: #dbe2f0;
+            --bg-input: #ffffff;
+            --border-color: #d3d9e5;
+            --text-primary: #1c2333;
+            --text-secondary: #455069;
+            --text-muted: #8a93a6;
+            --accent: #2563eb;          /* 冬日晴空蓝 */
+            --accent-hover: #1d4fd8;
+            --accent-dim: rgba(37, 99, 235, 0.12);
+            --green: #2f9e5f;
+            --blue: #3b82f6;
+            --yellow: #d99a14;
+            --purple: #8b5cf6;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(31, 41, 72, 0.14);
+            color-scheme: light;
         }
 
         /* ========== 全局重置 ========== */
@@ -86,6 +184,12 @@
             color: var(--accent);
             font-size: 22px;
             text-shadow: 0 0 8px rgba(245, 179, 66, 0.3);
+        }
+        .titlebar .logo .logo-mark {
+            width: 26px;
+            height: 26px;
+            display: block;
+            filter: drop-shadow(0 0 6px rgba(245, 179, 66, 0.25));
         }
         .titlebar .logo span {
             background: var(--accent-dim);
@@ -179,6 +283,83 @@
         .titlebar .window-controls .close { background: #ff5f57; }
         .titlebar .window-controls .min { background: #ffbd2e; }
         .titlebar .window-controls .max { background: #28c840; }
+
+        /* ========== 主题切换下拉 ========== */
+        .theme-dropdown {
+            position: relative;
+            margin-right: 8px;
+        }
+        .theme-dropdown .ghost-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 34px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .theme-dropdown .ghost-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border-color: var(--accent);
+        }
+        .theme-dropdown .theme-menu {
+            position: absolute;
+            top: calc(var(--header-height) - 12px);
+            right: 0;
+            min-width: 150px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            padding: 6px;
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .theme-dropdown .theme-menu.open { display: flex; }
+        .theme-dropdown .theme-menu-title {
+            font-size: 11px;
+            color: var(--text-muted);
+            padding: 4px 8px 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .theme-dropdown .theme-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 13px;
+            white-space: nowrap;
+            transition: background 0.15s, color 0.15s;
+        }
+        .theme-dropdown .theme-option:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .theme-dropdown .theme-option.active {
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-weight: 600;
+        }
+        .theme-dropdown .theme-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            flex-shrink: 0;
+            display: inline-block;
+        }
 
         /* ========== 主体布局 ========== */
         .app-body {
@@ -277,25 +458,83 @@
             background: rgba(124, 184, 75, 0.2);
             color: var(--green);
         }
-        .connection-item .actions-menu {
+        .connection-item .actions {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+        }
+        .connection-item .dropdown-container .actions {
             opacity: 0;
             transition: opacity 0.2s;
         }
-        .connection-item:hover .actions-menu {
+        .connection-item:hover .dropdown-container .actions {
             opacity: 1;
         }
-        .connection-item .actions-menu button {
+        .connection-item .icon-btn {
             background: transparent;
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
             font-size: 12px;
-            padding: 2px 6px;
+            width: 24px;
+            height: 24px;
             border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            flex-shrink: 0;
         }
-        .connection-item .actions-menu button:hover {
+        .connection-item .icon-btn:hover {
             background: var(--bg-hover);
             color: var(--text-primary);
+        }
+        .dropdown-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+        }
+        .conn-dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            min-width: 130px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: var(--shadow);
+            padding: 4px;
+            z-index: 1000;
+            display: none;
+        }
+        .conn-dropdown-menu.show {
+            display: block;
+        }
+        .conn-dropdown-menu .dd-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 7px 10px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        .conn-dropdown-menu .dd-item:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        .conn-dropdown-menu .dd-item.danger {
+            color: #e06c75;
+        }
+        .conn-dropdown-menu .dd-item.danger:hover {
+            background: rgba(224, 108, 117, 0.12);
+            color: #e06c75;
         }
 
         .add-connection {
@@ -919,7 +1158,7 @@
             padding: 8px 16px;
             font-family: 'JetBrains Mono', 'Fira Code', monospace;
             font-size: 13px;
-            background: #0d0b08;
+            background: var(--bg-secondary);
             display: flex;
             flex-direction: column;
         }
@@ -960,7 +1199,7 @@
             align-items: center;
             gap: 8px;
             padding: 4px 16px 8px;
-            background: #0d0b08;
+            background: var(--bg-secondary);
             border-top: 1px solid var(--border-color);
             flex-shrink: 0;
         }
@@ -1193,7 +1432,24 @@
         <!-- ===== 标题栏 ===== -->
         <header class="titlebar">
             <div class="logo">
-                <i class="fas fa-crown"></i>
+                <svg class="logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="麦地缓存 Logo">
+                    <defs>
+                        <linearGradient id="titlebar-logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="var(--accent-hover)" />
+                            <stop offset="100%" stop-color="var(--accent)" />
+                        </linearGradient>
+                    </defs>
+                    <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#titlebar-logo-gradient)" />
+                    <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#titlebar-logo-gradient)" />
+                    <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+                    <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+                    <circle cx="72" cy="72" r="18" fill="var(--bg-secondary)" stroke="var(--accent)" stroke-width="3" />
+                    <text x="72" y="77" text-anchor="middle" font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-weight="700" font-size="13" fill="var(--accent)">MR</text>
+                    <circle cx="86" cy="56" r="5" fill="var(--accent)" />
+                    <circle cx="56" cy="86" r="5" fill="var(--accent)" />
+                    <path d="M68 56 L78 60" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+                    <path d="M64 78 L58 86" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+                </svg>
                 麦地缓存
                 <span>v2.0</span>
             </div>
@@ -1202,6 +1458,17 @@
                 <span id="statusLabel">已连接 · localhost:6379</span>
             </div>
             <div class="spacer"></div>
+            <div class="theme-dropdown">
+                <button title="切换主题" id="btnTheme" class="ghost-btn"><i class="fas fa-palette"></i></button>
+                <div class="theme-menu" id="themeMenu">
+                    <div class="theme-menu-title">选择主题</div>
+                    <div class="theme-option active" data-theme-value="spring"><span class="theme-swatch" style="background:#4caf50"></span>春分</div>
+                    <div class="theme-option" data-theme-value="summer"><span class="theme-swatch" style="background:#22a6f2"></span>立夏</div>
+                    <div class="theme-option" data-theme-value="golden"><span class="theme-swatch" style="background:#d99a1b"></span>初秋</div>
+                    <div class="theme-option" data-theme-value="autumn"><span class="theme-swatch" style="background:#f5b342"></span>深秋</div>
+                    <div class="theme-option" data-theme-value="winter"><span class="theme-swatch" style="background:#f5f6fa"></span>冬至</div>
+                </div>
+            </div>
             <div class="actions">
                 <button title="刷新所有Key" id="btnRefresh"><i class="fas fa-sync-alt"></i></button>
                 <button title="清空当前数据库" id="btnFlush"><i class="fas fa-trash-alt"></i></button>
@@ -1342,6 +1609,25 @@
         </div>
     </div>
 
+    <!-- ===== 新增 Key 对话框 ===== -->
+    <div class="modal-overlay" id="addKeyModal">
+        <div class="modal">
+            <div class="modal-title"><i class="fas fa-plus-circle"></i> 新增 Key</div>
+            <div class="form-group">
+                <label>Key 名称</label>
+                <input type="text" id="addKeyName" placeholder="请输入 Key 名称" />
+            </div>
+            <div class="form-group">
+                <label>值</label>
+                <textarea id="addKeyValue" rows="6" placeholder="请输入 Key 的值" style="width:100%;resize:vertical;box-sizing:border-box;"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" id="addKeyCancel">取消</button>
+                <button class="primary" id="addKeySave">创建</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // =====================================================================
         //  JavaScript — 完整的交互逻辑 (与之前相同，但颜色已由 CSS 变量控制)
@@ -1441,6 +1727,8 @@
             let currentConn = CONNECTIONS[0];
             let selectedKey = null; // 当前选中的 Key 全名
             let expandedFolders = new Set(['user:', 'session:', 'cache:']);
+            // 已成功建立连接的 connId 集合（多个连接可同时在线）
+            const onlineConns = new Set();
 
             // DOM 引用
             const $ = (sel) => document.querySelector(sel);
@@ -1538,18 +1826,25 @@
                 }
                 connectionListEl.innerHTML = CONNECTIONS.map(conn => {
                     const isActive = currentConn && conn.id === currentConn.id;
-                    const isOnline = !!(currentConn && currentConn.id === conn.id && currentConn.online);
+                    const isOnline = onlineConns.has(conn.id);
                     return `
                     <div class="connection-item ${isActive ? 'active' : ''}" data-id="${conn.id}">
-                        <div class="icon"><i class="fas fa-server"></i></div>
                         <div class="info">
                             <div class="name">${conn.name}</div>
                             <div class="host">${conn.host}:${conn.port}</div>
                         </div>
                         <span class="badge ${isOnline ? 'online' : ''}">${isOnline ? '● 在线' : '○ 离线'}</span>
-                        <div class="actions-menu">
-                            <button class="edit-conn" data-id="${conn.id}" title="编辑"><i class="fas fa-edit"></i></button>
-                            <button class="del-conn" data-id="${conn.id}" title="删除"><i class="fas fa-times"></i></button>
+                        <div class="dropdown-container">
+                            <div class="actions">
+                                <button class="icon-btn refresh-conn" data-id="${conn.id}" title="刷新"><i class="fas fa-sync-alt"></i></button>
+                                <button class="icon-btn conn-menu-btn" data-id="${conn.id}" title="更多操作"><i class="fas fa-ellipsis-v"></i></button>
+                            </div>
+                            <div class="conn-dropdown-menu" data-id="${conn.id}">
+                                <button class="dd-item" data-action="edit"><i class="fas fa-pen"></i>编辑</button>
+                                <button class="dd-item" data-action="duplicate"><i class="fas fa-copy"></i>复制</button>
+                                <button class="dd-item" data-action="disconnect" ${isOnline ? '' : 'disabled'} style="${isOnline ? '' : 'opacity:.4;cursor:not-allowed;'}"><i class="fas fa-plug"></i>关闭连接</button>
+                                <button class="dd-item" data-action="delete"><i class="fas fa-trash-alt"></i>删除</button>
+                            </div>
                         </div>
                     </div>`;
                 }).join('');
@@ -1557,36 +1852,94 @@
                 // 事件绑定
                 connectionListEl.querySelectorAll('.connection-item').forEach(el => {
                     el.addEventListener('click', (e) => {
-                        if (e.target.closest('.actions-menu')) return;
+                        if (e.target.closest('.actions')) return;
                         const id = el.dataset.id;
                         const conn = CONNECTIONS.find(c => c.id === id);
                         if (conn) switchConnection(conn);
                     });
                 });
-                connectionListEl.querySelectorAll('.edit-conn').forEach(btn => {
+                // 刷新图标
+                connectionListEl.querySelectorAll('.refresh-conn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const id = btn.dataset.id;
                         const conn = CONNECTIONS.find(c => c.id === id);
-                        if (conn) openModal(conn);
+                        if (conn) switchConnection(conn);
                     });
                 });
-                connectionListEl.querySelectorAll('.del-conn').forEach(btn => {
+                // 菜单按钮：点击切换下拉
+                connectionListEl.querySelectorAll('.conn-menu-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
                         const id = btn.dataset.id;
-                        if (confirm('确定要删除此连接吗？')) {
-                            invoke('delete_connection', { connId: id }).then(() => {
+                        // 关闭其他下拉
+                        document.querySelectorAll('.conn-dropdown-menu.show').forEach(m => {
+                            if (m.dataset.id !== id) m.classList.remove('show');
+                        });
+                        const menu = connectionListEl.querySelector(`.conn-dropdown-menu[data-id="${id}"]`);
+                        if (menu) menu.classList.toggle('show');
+                    });
+                });
+                // 下拉菜单按钮
+                connectionListEl.querySelectorAll('.conn-dropdown-menu .dd-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const menu = item.closest('.conn-dropdown-menu');
+                        if (menu) menu.classList.remove('show');
+                        const id = item.closest('.conn-dropdown-menu').dataset.id;
+                        const conn = CONNECTIONS.find(c => c.id === id);
+                        const action = item.dataset.action;
+                        if (!conn) return;
+                        if (action === 'edit') {
+                            openModal(conn);
+                        } else if (action === 'duplicate') {
+                            openModal(null);
+                            document.getElementById('connName').value = conn.name + ' 副本';
+                            if (conn.host) document.getElementById('connHost').value = conn.host;
+                            if (conn.port) document.getElementById('connPort').value = conn.port;
+                            if (conn.password) document.getElementById('connPass').value = conn.password;
+                            if (conn.readonly) document.getElementById('connReadonly').checked = true;
+                            if (conn.type === 'cluster') document.getElementById('connCluster').checked = true;
+                            if (conn.separator) document.getElementById('connSeparator').value = conn.separator;
+                            document.getElementById('connName').focus();
+                        } else if (action === 'disconnect') {
+                            if (!onlineConns.has(id)) return; // 已离线，忽略
+                            invoke('disconnect', { connId: id }).then(() => {
+                                onlineConns.delete(id);
                                 if (currentConn && currentConn.id === id) {
-                                    currentConn = null;
+                                    currentConn.online = false;
+                                    renderKeyTree();
+                                    renderDetail();
                                 }
-                                return loadConnections();
+                                renderConnections();
+                                updateStatus();
+                                refreshDbSelector();
+                                appendTerminal(`已关闭连接 ${conn.name}`, '');
                             }).catch(err => {
-                                showToast('删除失败: ' + err, 'error');
+                                showToast('关闭连接失败: ' + err, 'error');
                             });
+                        } else if (action === 'delete') {
+                            if (confirm('确定要删除此连接吗？')) {
+                                invoke('delete_connection', { connId: id }).then(() => {
+                                    onlineConns.delete(id);
+                                    if (currentConn && currentConn.id === id) {
+                                        currentConn = null;
+                                    }
+                                    return loadConnections();
+                                }).catch(err => {
+                                    showToast('删除失败: ' + err, 'error');
+                                });
+                            }
                         }
                     });
                 });
+                // 点击空白处关闭下拉
+                if (!window._connMenuListener) {
+                    window._connMenuListener = true;
+                    document.addEventListener('click', () => {
+                        document.querySelectorAll('.conn-dropdown-menu.show').forEach(m => m.classList.remove('show'));
+                    });
+                }
             }
 
             function connectTo(conn) {
@@ -1606,6 +1959,7 @@
                         password: conn.password || null,
                     }
                 }).then(() => {
+                    if (conn && conn.id) onlineConns.add(conn.id);
                     currentConn = { ...conn, online: true };
                     return invoke('get_server_info', { connId: conn.id });
                 }).then((info) => {
@@ -1629,6 +1983,7 @@
                         renderServerInfo(info);
                         // 更新连接状态为「已连接」并刷新底栏和左侧徽章
                         currentConn.online = true;
+                        onlineConns.add(conn.id);
                         renderConnections();
                         updateStatus();
                         refreshDbSelector();
@@ -1643,7 +1998,10 @@
                         loadKeys();
                     }
                 }).catch(err => {
-                    if (currentConn) currentConn.online = false;
+                    if (currentConn) {
+                        currentConn.online = false;
+                        onlineConns.delete(currentConn.id);
+                    }
                     renderConnections();
                     updateStatus();
                     appendTerminal(`连接失败: ${err}`, 'error');
@@ -2310,10 +2668,11 @@
                 appendTerminal('刷新 Key 列表', '');
             });
 
-            document.getElementById('btnAddKey').addEventListener('click', () => {
-                const name = prompt('请输入新 Key 名称:');
-                if (!name || !name.trim()) return;
-                const trimmed = name.trim();
+            const addKeyModal = document.getElementById('addKeyModal');
+            const addKeyNameInput = document.getElementById('addKeyName');
+            const addKeyValueInput = document.getElementById('addKeyValue');
+
+            function openAddKeyModal() {
                 if (!currentConn || !currentConn.id) {
                     showToast('请先连接 Redis 服务器', 'error');
                     return;
@@ -2322,14 +2681,32 @@
                     showToast('请先连接 Redis 服务器', 'error');
                     return;
                 }
-                if (allKeys.find(k => k.key === trimmed)) {
+                addKeyNameInput.value = '';
+                addKeyValueInput.value = '';
+                addKeyModal.classList.add('open');
+                setTimeout(() => addKeyNameInput.focus(), 50);
+            }
+
+            function closeAddKeyModal() {
+                addKeyModal.classList.remove('open');
+            }
+
+            function submitAddKey() {
+                const trimmed = addKeyNameInput.value.trim();
+                if (!trimmed) {
+                    showToast('请输入 Key 名称', 'error');
+                    addKeyNameInput.focus();
+                    return;
+                }
+                if (allKeys.some(k => k.key === trimmed)) {
                     showToast('Key 已存在', 'error');
                     return;
                 }
-                const value = prompt('请输入 Key 的值:') || '';
+                const value = addKeyValueInput.value;
                 document.getElementById('btnAddKey').disabled = true;
                 invoke('set_key', { connId: currentConn.id, key: trimmed, value: value })
                     .then(() => {
+                        closeAddKeyModal();
                         showToast(`Key "${trimmed}" 已创建`, 'success');
                         appendTerminal(`SET ${trimmed} "${value}" → OK`, 'ok');
                         // 刷新 key 列表
@@ -2346,7 +2723,14 @@
                     .finally(() => {
                         document.getElementById('btnAddKey').disabled = false;
                     });
-            });
+            }
+
+            document.getElementById('btnAddKey').addEventListener('click', openAddKeyModal);
+            document.getElementById('addKeyCancel').addEventListener('click', closeAddKeyModal);
+            document.getElementById('addKeySave').addEventListener('click', submitAddKey);
+            addKeyNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAddKey(); });
+            addKeyValueInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitAddKey(); });
+            addKeyModal.addEventListener('click', (e) => { if (e.target === addKeyModal) closeAddKeyModal(); });
 
             document.getElementById('btnImport').addEventListener('click', () => {
                 showToast('导入功能 (模拟)', 'info');
@@ -2406,6 +2790,47 @@
             }, 5000);
 
             window.__app = { allKeys, KEY_DATA, expandedFolders, renderKeyTree, renderDetail };
+
+            // ==================== 主题切换 ====================
+            const THEME_KEY = 'mc_cache_theme';
+            const themeBtn = document.getElementById('btnTheme');
+            const themeMenu = document.getElementById('themeMenu');
+
+            function applyTheme(name) {
+                if (!name) name = 'autumn';
+                document.documentElement.setAttribute('data-theme', name);
+            }
+
+            function updateThemeMenu(name) {
+                if (!name) name = 'autumn';
+                document.querySelectorAll('#themeMenu .theme-option').forEach(opt => {
+                    opt.classList.toggle('active', opt.getAttribute('data-theme-value') === name);
+                });
+            }
+
+            themeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                themeMenu.classList.toggle('open');
+            });
+            document.addEventListener('click', () => themeMenu.classList.remove('open'));
+
+            themeMenu.addEventListener('click', (e) => {
+                const opt = e.target.closest('.theme-option');
+                if (!opt) return;
+                let name = opt.getAttribute('data-theme-value') || 'autumn';
+                applyTheme(name);
+                localStorage.setItem(THEME_KEY, name);
+                updateThemeMenu(name);
+                themeMenu.classList.remove('open');
+            });
+
+            // 恢复用户上次选择的主题
+            try {
+                let saved = localStorage.getItem(THEME_KEY) || 'autumn';
+                applyTheme(saved);
+                updateThemeMenu(saved);
+                document.documentElement.setAttribute('data-theme', saved);
+            } catch (e) {}
 
         })();
     </script>

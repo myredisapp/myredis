@@ -1,0 +1,43 @@
+<!--
+  麦地缓存 Logo - 主题自适应版
+  文件：assets/logo/logo-themed.svg
+  说明：
+    - 直接使用页面主题 CSS 变量 --accent 与 --accent-hover。
+    - 当该 SVG 以内联方式放入 web/index.html 时，会自动跟随用户切换的四季主题。
+    - 如需在独立文件中预览，请在 <style> 中给 --accent 与 --accent-hover 设置默认值。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>麦地缓存 Logo - Themed</title>
+  <style>
+    /* 独立打开时的回退色，内联到页面时会被页面 CSS 变量覆盖 */
+    :root {
+      --accent: #f5b342;
+      --accent-hover: #f9c75e;
+    }
+  </style>
+
+  <defs>
+    <linearGradient id="md-theme-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--accent-hover)" />
+      <stop offset="100%" stop-color="var(--accent)" />
+    </linearGradient>
+  </defs>
+
+  <!-- 数据库圆柱 -->
+  <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#md-theme-gradient)" />
+  <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#md-theme-gradient)" />
+  <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+  <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+
+  <!-- MR 徽章 -->
+  <circle cx="72" cy="72" r="18" fill="#ffffff" stroke="var(--accent)" stroke-width="3" />
+  <text x="72" y="77" text-anchor="middle"
+        font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+        font-weight="700" font-size="13" fill="var(--accent)">MR</text>
+
+  <!-- 连接节点 -->
+  <circle cx="86" cy="56" r="5" fill="var(--accent)" />
+  <circle cx="56" cy="86" r="5" fill="var(--accent)" />
+  <path d="M68 56 L78 60" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+  <path d="M64 78 L58 86" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+</svg>

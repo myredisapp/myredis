@@ -1,0 +1,65 @@
+<!--
+  麦地缓存 Logo - Connected 徽章版
+  文件：assets/logo/logo.svg
+  说明：
+    - 这是一个可编辑的 SVG 源文件，不是最终图片。
+    - 颜色通过 CSS 变量定义，方便在 CSS 中覆盖或在矢量软件中直接修改。
+    - 如需更换主题色，修改 <style> 中的 --md-logo-primary 与 --md-logo-secondary。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>麦地缓存 Logo</title>
+  <style>
+    :root {
+      /* 默认深秋主题色，可被外部 CSS 覆盖 */
+      --md-logo-primary: #f5b342;
+      --md-logo-secondary: #f9c75e;
+      --md-logo-surface: #ffffff;
+      --md-logo-stripe: rgba(255, 255, 255, 0.35);
+    }
+    .md-logo-primary { fill: var(--md-logo-primary); }
+    .md-logo-secondary { fill: var(--md-logo-secondary); }
+    .md-logo-surface { fill: var(--md-logo-surface); }
+    .md-logo-stroke { stroke: var(--md-logo-primary); }
+    .md-logo-stripe { stroke: var(--md-logo-stripe); }
+    .md-logo-text { fill: var(--md-logo-primary); }
+  </style>
+
+  <defs>
+    <linearGradient id="md-logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--md-logo-secondary)" />
+      <stop offset="100%" stop-color="var(--md-logo-primary)" />
+    </linearGradient>
+  </defs>
+
+  <!-- 数据库圆柱主体 -->
+  <g id="database-cylinder">
+    <!-- 顶部盖板 -->
+    <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#md-logo-gradient)" />
+    <!-- 柱身 -->
+    <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#md-logo-gradient)" />
+
+    <!-- 两道横向条纹（数据库标志性线条）-->
+    <path d="M20 42 Q44 50 68 42" class="md-logo-stripe" stroke-width="3" fill="none" stroke-linecap="round" />
+    <path d="M20 60 Q44 68 68 60" class="md-logo-stripe" stroke-width="3" fill="none" stroke-linecap="round" />
+  </g>
+
+  <!-- MR 徽章 -->
+  <g id="mr-badge">
+    <circle cx="72" cy="72" r="18" class="md-logo-surface" stroke="var(--md-logo-primary)" stroke-width="3" />
+    <text x="72" y="77" text-anchor="middle"
+          font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+          font-weight="700" font-size="13" class="md-logo-text">MR</text>
+  </g>
+
+  <!-- 连接线与小节点（Connected 特征）-->
+  <g id="connection-lines">
+    <!-- 右上小节点 -->
+    <circle cx="86" cy="56" r="5" class="md-logo-primary" />
+    <!-- 左下小节点 -->
+    <circle cx="56" cy="86" r="5" class="md-logo-primary" />
+
+    <!-- 连接线 -->
+    <path d="M68 56 L78 60" class="md-logo-stroke" stroke-width="2" stroke-linecap="round" fill="none" />
+    <path d="M64 78 L58 86" class="md-logo-stroke" stroke-width="2" stroke-linecap="round" fill="none" />
+  </g>
+</svg>

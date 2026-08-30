@@ -1,0 +1,491 @@
+<title>麦地 Logo 方案 · 第三辑</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --text: #1f1a14;
+    --text-muted: #7d6f5f;
+    --border: #e7e0d5;
+    --accent: #b8841f;
+    --shadow: 0 18px 50px rgba(60, 45, 25, 0.10);
+    --radius: 16px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16120d;
+      --surface: #1e1913;
+      --text: #f5e6d3;
+      --text-muted: #a08b72;
+      --border: #3d3226;
+      --accent: #f5b342;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #16120d;
+    --surface: #1e1913;
+    --text: #f5e6d3;
+    --text-muted: #a08b72;
+    --border: #3d3226;
+    --accent: #f5b342;
+    --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    min-height: 100vh;
+  }
+
+  header {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 72px 28px 40px;
+    text-align: center;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .eyebrow::before, .eyebrow::after {
+    content: "";
+    width: 28px;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h1 {
+    font-family: "Noto Serif SC", "Songti SC", serif;
+    font-size: clamp(34px, 6vw, 54px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 18px;
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    max-width: 620px;
+    margin: 0 auto 36px;
+    font-size: 17px;
+    color: var(--text-muted);
+  }
+
+  .theme-strip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    justify-content: center;
+    padding: 14px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+  }
+
+  .theme-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .theme-chip span {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 28px 100px;
+  }
+
+  .concept {
+    margin-bottom: 72px;
+  }
+
+  .concept-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 26px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  .concept-number {
+    font-family: "Noto Serif SC", serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .concept-title {
+    font-family: "Noto Serif SC", serif;
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  .concept-desc {
+    margin-left: auto;
+    max-width: 420px;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .logo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 20px;
+  }
+
+  .logo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 22px 22px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 28px 70px rgba(60, 45, 25, 0.14);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .logo-card:hover {
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    }
+  }
+  :root[data-theme="dark"] .logo-card:hover {
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  }
+
+  .mark-stage {
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    position: relative;
+  }
+
+  .mark-stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: radial-gradient(circle at 50% 60%, rgba(0,0,0,0.03) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .mark-stage svg {
+    width: 110px;
+    height: 110px;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,0.12));
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .logo-card:hover .mark-stage svg {
+    transform: scale(1.06);
+  }
+
+  .season-name {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .season-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .small-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .small-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .usage-note {
+    max-width: 760px;
+    margin: 60px auto 0;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .usage-note h3 {
+    font-family: "Noto Serif SC", serif;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .usage-note p, .usage-note ul {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .usage-note ul {
+    margin-top: 12px;
+    padding-left: 20px;
+  }
+
+  .usage-note li {
+    margin-bottom: 6px;
+  }
+
+  @media (max-width: 640px) {
+    header { padding-top: 44px; }
+    .concept-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .concept-desc { text-align: left; margin-left: 0; }
+    .logo-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<header>
+  <div class="eyebrow">MaiDi Cache Identity · Round 3</div>
+  <h1>麦地缓存 · LOGO 方案 第三辑</h1>
+  <p class="subtitle">
+    重新绘制。这一辑更强调“一笔成形”的流畅感与高端感，减少机械几何，让标志更像一个完整的视觉符号。
+  </p>
+  <div class="theme-strip">
+    <div class="theme-chip"><span style="background:#4caf50"></span>春分 · Spring</div>
+    <div class="theme-chip"><span style="background:#22a6f2"></span>立夏 · Summer</div>
+    <div class="theme-chip"><span style="background:#d99a1b"></span>初秋 · Golden</div>
+    <div class="theme-chip"><span style="background:#f5b342"></span>深秋 · Autumn</div>
+    <div class="theme-chip"><span style="background:#2563eb"></span>冬至 · Winter</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Concept 1: One Stroke -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">01</span>
+      <h2 class="concept-title">一笔 · Stroke</h2>
+      <p class="concept-desc">一条连续的书法式曲线，从头到底勾出一支麦穗。无断点、无拼接，像手写签名一样有辨识度。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="一笔 春分"><defs><linearGradient id="b1s" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#4caf50"/><stop offset="100%" stop-color="#7cb84b"/></linearGradient></defs><path d="M28 86 Q36 72 34 56 Q32 40 42 30 Q52 20 64 14 L66 22 Q54 30 48 42 Q44 52 46 64 Q48 76 58 86 Q46 80 40 68 Q36 76 28 86Z" fill="url(#b1s)"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-stroke"/></svg><span style="font-size:12px;color:var(--text-muted)">Signature</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="一笔 立夏"><defs><linearGradient id="b1u" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#22a6f2"/><stop offset="100%" stop-color="#6a9fd8"/></linearGradient></defs><path d="M28 86 Q36 72 34 56 Q32 40 42 30 Q52 20 64 14 L66 22 Q54 30 48 42 Q44 52 46 64 Q48 76 58 86 Q46 80 40 68 Q36 76 28 86Z" fill="url(#b1u)"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-stroke"/></svg><span style="font-size:12px;color:var(--text-muted)">Signature</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="一笔 初秋"><defs><linearGradient id="b1g" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#d99a1b"/><stop offset="100%" stop-color="#e5b33a"/></linearGradient></defs><path d="M28 86 Q36 72 34 56 Q32 40 42 30 Q52 20 64 14 L66 22 Q54 30 48 42 Q44 52 46 64 Q48 76 58 86 Q46 80 40 68 Q36 76 28 86Z" fill="url(#b1g)"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-stroke"/></svg><span style="font-size:12px;color:var(--text-muted)">Signature</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="一笔 深秋"><defs><linearGradient id="b1a" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f5b342"/><stop offset="100%" stop-color="#f9c75e"/></linearGradient></defs><path d="M28 86 Q36 72 34 56 Q32 40 42 30 Q52 20 64 14 L66 22 Q54 30 48 42 Q44 52 46 64 Q48 76 58 86 Q46 80 40 68 Q36 76 28 86Z" fill="url(#b1a)"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-stroke"/></svg><span style="font-size:12px;color:var(--text-muted)">Signature</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="一笔 冬至"><defs><linearGradient id="b1w" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs><path d="M28 86 Q36 72 34 56 Q32 40 42 30 Q52 20 64 14 L66 22 Q54 30 48 42 Q44 52 46 64 Q48 76 58 86 Q46 80 40 68 Q36 76 28 86Z" fill="url(#b1w)"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-stroke"/></svg><span style="font-size:12px;color:var(--text-muted)">Signature</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 2: Crown of Barley -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">02</span>
+      <h2 class="concept-title">穗冠 · Crown</h2>
+      <p class="concept-desc">两株麦穗向内弯曲，构成一顶轻盈的冠。呼应原标题栏的皇冠图标，但换成自然的大麦语言。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="穗冠 春分"><defs><linearGradient id="b2s" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#4caf50"/><stop offset="100%" stop-color="#7cb84b"/></linearGradient></defs><path d="M18 78 Q18 40 34 22 Q42 34 50 46 Q58 34 66 22 Q82 40 82 78 L74 78 Q74 52 66 38 Q58 50 50 60 Q42 50 34 38 Q26 52 26 78 Z" fill="url(#b2s)"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-crown"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="穗冠 立夏"><defs><linearGradient id="b2u" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#22a6f2"/><stop offset="100%" stop-color="#6a9fd8"/></linearGradient></defs><path d="M18 78 Q18 40 34 22 Q42 34 50 46 Q58 34 66 22 Q82 40 82 78 L74 78 Q74 52 66 38 Q58 50 50 60 Q42 50 34 38 Q26 52 26 78 Z" fill="url(#b2u)"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-crown"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="穗冠 初秋"><defs><linearGradient id="b2g" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#d99a1b"/><stop offset="100%" stop-color="#e5b33a"/></linearGradient></defs><path d="M18 78 Q18 40 34 22 Q42 34 50 46 Q58 34 66 22 Q82 40 82 78 L74 78 Q74 52 66 38 Q58 50 50 60 Q42 50 34 38 Q26 52 26 78 Z" fill="url(#b2g)"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-crown"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="穗冠 深秋"><defs><linearGradient id="b2a" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f5b342"/><stop offset="100%" stop-color="#f9c75e"/></linearGradient></defs><path d="M18 78 Q18 40 34 22 Q42 34 50 46 Q58 34 66 22 Q82 40 82 78 L74 78 Q74 52 66 38 Q58 50 50 60 Q42 50 34 38 Q26 52 26 78 Z" fill="url(#b2a)"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-crown"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="穗冠 冬至"><defs><linearGradient id="b2w" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs><path d="M18 78 Q18 40 34 22 Q42 34 50 46 Q58 34 66 22 Q82 40 82 78 L74 78 Q74 52 66 38 Q58 50 50 60 Q42 50 34 38 Q26 52 26 78 Z" fill="url(#b2w)"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-crown"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 3: Soft Drop -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">03</span>
+      <h2 class="concept-title">圆穗 · Drop</h2>
+      <p class="concept-desc">用饱满的水滴/麦粒剪影作为主体，内部以细纹暗示麦穗结构。圆润、亲和，适合桌面端与移动端图标。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="圆穗 春分"><defs><linearGradient id="b3s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><path d="M50 14 Q72 34 72 58 Q72 82 50 86 Q28 82 28 58 Q28 34 50 14Z" fill="url(#b3s)"/><path d="M38 46 Q50 40 62 46 M36 58 Q50 52 64 58 M38 70 Q50 64 62 70" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round" fill="none"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-drop"/></svg><span style="font-size:12px;color:var(--text-muted)">Icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="圆穗 立夏"><defs><linearGradient id="b3u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><path d="M50 14 Q72 34 72 58 Q72 82 50 86 Q28 82 28 58 Q28 34 50 14Z" fill="url(#b3u)"/><path d="M38 46 Q50 40 62 46 M36 58 Q50 52 64 58 M38 70 Q50 64 62 70" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round" fill="none"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-drop"/></svg><span style="font-size:12px;color:var(--text-muted)">Icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="圆穗 初秋"><defs><linearGradient id="b3g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><path d="M50 14 Q72 34 72 58 Q72 82 50 86 Q28 82 28 58 Q28 34 50 14Z" fill="url(#b3g)"/><path d="M38 46 Q50 40 62 46 M36 58 Q50 52 64 58 M38 70 Q50 64 62 70" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round" fill="none"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-drop"/></svg><span style="font-size:12px;color:var(--text-muted)">Icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="圆穗 深秋"><defs><linearGradient id="b3a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><path d="M50 14 Q72 34 72 58 Q72 82 50 86 Q28 82 28 58 Q28 34 50 14Z" fill="url(#b3a)"/><path d="M38 46 Q50 40 62 46 M36 58 Q50 52 64 58 M38 70 Q50 64 62 70" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round" fill="none"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-drop"/></svg><span style="font-size:12px;color:var(--text-muted)">Icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="圆穗 冬至"><defs><linearGradient id="b3w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><path d="M50 14 Q72 34 72 58 Q72 82 50 86 Q28 82 28 58 Q28 34 50 14Z" fill="url(#b3w)"/><path d="M38 46 Q50 40 62 46 M36 58 Q50 52 64 58 M38 70 Q50 64 62 70" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round" fill="none"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-drop"/></svg><span style="font-size:12px;color:var(--text-muted)">Icon</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 4: Cache Layers -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">04</span>
+      <h2 class="concept-title">层穗 · Layers</h2>
+      <p class="concept-desc">把麦穗抽象成三层堆叠的曲面，既像谷粒层叠，也像缓存分层。稳重、有建筑感。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="层穗 春分"><defs><linearGradient id="b4s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><path d="M20 34 Q50 18 80 34 L80 44 Q50 28 20 44 Z" fill="url(#b4s)"/><path d="M20 50 Q50 34 80 50 L80 60 Q50 44 20 60 Z" fill="url(#b4s)"/><path d="M20 66 Q50 50 80 66 L80 76 Q50 60 20 76 Z" fill="url(#b4s)"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-layers"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech mark</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="层穗 立夏"><defs><linearGradient id="b4u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><path d="M20 34 Q50 18 80 34 L80 44 Q50 28 20 44 Z" fill="url(#b4u)"/><path d="M20 50 Q50 34 80 50 L80 60 Q50 44 20 60 Z" fill="url(#b4u)"/><path d="M20 66 Q50 50 80 66 L80 76 Q50 60 20 76 Z" fill="url(#b4u)"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-layers"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech mark</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="层穗 初秋"><defs><linearGradient id="b4g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><path d="M20 34 Q50 18 80 34 L80 44 Q50 28 20 44 Z" fill="url(#b4g)"/><path d="M20 50 Q50 34 80 50 L80 60 Q50 44 20 60 Z" fill="url(#b4g)"/><path d="M20 66 Q50 50 80 66 L80 76 Q50 60 20 76 Z" fill="url(#b4g)"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-layers"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech mark</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="层穗 深秋"><defs><linearGradient id="b4a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><path d="M20 34 Q50 18 80 34 L80 44 Q50 28 20 44 Z" fill="url(#b4a)"/><path d="M20 50 Q50 34 80 50 L80 60 Q50 44 20 60 Z" fill="url(#b4a)"/><path d="M20 66 Q50 50 80 66 L80 76 Q50 60 20 76 Z" fill="url(#b4a)"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-layers"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech mark</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="层穗 冬至"><defs><linearGradient id="b4w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><path d="M20 34 Q50 18 80 34 L80 44 Q50 28 20 44 Z" fill="url(#b4w)"/><path d="M20 50 Q50 34 80 50 L80 60 Q50 44 20 60 Z" fill="url(#b4w)"/><path d="M20 66 Q50 50 80 66 L80 76 Q50 60 20 76 Z" fill="url(#b4w)"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-layers"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech mark</span></div>
+      </article>
+    </div>
+  </section>
+
+  <aside class="usage-note">
+    <h3>第三辑说明</h3>
+    <p>这一辑重新从“形态感”出发，减少碎片化的几何元素，每个标志都由更完整的轮廓构成：</p>
+    <ul>
+      <li><strong>一笔</strong>：书法式签名感，品牌气质最浓。</li>
+      <li><strong>穗冠</strong>：继承原皇冠意象，但完全自然化。</li>
+      <li><strong>圆穗</strong>：友好、圆润，适合小尺寸识别。</li>
+      <li><strong>层穗</strong>：把“大麦”与“分层/缓存”概念直接关联。</li>
+    </ul>
+  </aside>
+
+</main>
+
+<svg width="0" height="0" style="position:absolute;">
+  <symbol id="sm-stroke" viewBox="0 0 100 100"><path d="M30 84 Q38 70 36 56 Q34 42 44 32 Q54 22 64 18 L66 24 Q54 32 48 44 Q44 54 46 66 Q48 76 56 84 Q46 78 40 68 Q36 76 30 84Z" fill="currentColor"/></symbol>
+  <symbol id="sm-crown" viewBox="0 0 100 100"><path d="M20 78 Q20 44 34 28 Q42 38 50 48 Q58 38 66 28 Q80 44 80 78 L74 78 Q74 54 66 40 Q58 50 50 60 Q42 50 34 40 Q26 54 26 78 Z" fill="currentColor"/></symbol>
+  <symbol id="sm-drop" viewBox="0 0 100 100"><path d="M50 18 Q70 36 70 58 Q70 80 50 84 Q30 80 30 58 Q30 36 50 18Z" fill="currentColor"/></symbol>
+  <symbol id="sm-layers" viewBox="0 0 100 100"><path d="M20 36 Q50 20 80 36 L80 44 Q50 28 20 44 Z" fill="currentColor"/><path d="M20 54 Q50 38 80 54 L80 62 Q50 46 20 62 Z" fill="currentColor"/><path d="M20 72 Q50 56 80 72 L80 80 Q50 64 20 80 Z" fill="currentColor"/></symbol>
+</svg>
