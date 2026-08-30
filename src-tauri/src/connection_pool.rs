@@ -147,6 +147,15 @@ impl Pool {
         Ok(())
     }
 
+    /// 获取连接配置的克隆。
+    pub fn get(&self, id: &str) -> Result<Connection, AppError> {
+        let guard = self.inner.lock().unwrap();
+        guard
+            .get(id)
+            .map(|e| e.conn.clone())
+            .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))
+    }
+
     /// 断开（移除）一个连接。
     pub fn disconnect(&self, id: &str) -> bool {
         self.inner.lock().unwrap().remove(id).is_some()

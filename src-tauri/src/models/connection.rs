@@ -34,6 +34,9 @@ pub struct Connection {
     /// 默认 `:`，如 `user:1001:name`。
     #[serde(default = "default_separator")]
     pub separator: String,
+    /// 逻辑数据库编号（0-15）。连接 / 切换时通过 URL 的 `/db` 段选中。
+    #[serde(default)]
+    pub db: u64,
     /// 密码（可选）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
@@ -50,13 +53,15 @@ impl Connection {
     /// 当前仅支持 `redis://`（明文）协议，`rediss` 在解析前已拦截。
     ///
     /// 若配置了密码，则以 `redis://:password@host:port` 形式内嵌，用于认证。
+    /// 通过 `/db` 段指定逻辑数据库。
     pub fn to_connection_url(&self) -> String {
+        let db = &format!("/{}", self.db);
         match &self.password {
             Some(pwd) if !pwd.is_empty() => {
                 let escaped = pwd.replace('@', "%40").replace('/', "%2F");
-                format!("redis://:{}@{}:{}", escaped, self.host, self.port)
+                format!("redis://:{}@{}:{}{}", escaped, self.host, self.port, db)
             }
-            _ => format!("redis://{}:{}", self.host, self.port),
+            _ => format!("redis://{}:{}{}", self.host, self.port, db),
         }
     }
 /// 是否只读连接。
@@ -81,9 +86,10 @@ mod tests {
             conn_type: ConnType::Single,
             readonly: false,
             separator: ":".into(),
+            db: 0,
             password: None,
         };
-        assert_eq!(conn.to_connection_url(), "redis://127.0.0.1:6379");
+        assert_eq!(conn.to_connection_url(), "redis://127.0.0.1:6379/0");
     }
 
     #[test]
@@ -96,11 +102,28 @@ mod tests {
             conn_type: ConnType::Single,
             readonly: false,
             separator: ":".into(),
+            db: 0,
             password: Some("secret@123".into()),
         };
         assert_eq!(
             conn.to_connection_url(),
-            "redis://:secret%40123@127.0.0.1:6379"
+            "redis://:secret%40123@127.0.0.1:6379/0"
         );
+    }
+
+    #[test]
+    fn connection_url_with_db() {
+        let conn = Connection {
+            id: "1".into(),
+            name: "t".into(),
+            host: "127.0.0.1".into(),
+            port: 6379,
+            conn_type: ConnType::Single,
+            readonly: false,
+            separator: ":".into(),
+            db: 3,
+            password: None,
+        };
+        assert_eq!(conn.to_connection_url(), "redis://127.0.0.1:6379/3");
     }
 }

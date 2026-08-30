@@ -20,6 +20,8 @@ async fn redis_ping_returns_pong() {
         port: 6379,
         conn_type: ConnType::Single,
         readonly: false,
+        separator: ":".into(),
+        db: 0,
         password: None,
     };
     pool.connect(&conn).await.expect("连接 Redis 失败，请确认服务已启动");
@@ -38,6 +40,8 @@ fn tls_not_supported() {
         port: 6380,
         conn_type: ConnType::Single,
         readonly: false,
+        separator: ":".into(),
+        db: 0,
         password: None,
     };
     let fut = pool.connect(&conn);

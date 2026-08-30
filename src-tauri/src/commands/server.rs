@@ -84,6 +84,19 @@ pub async fn get_server_info(pool: State<'_, Pool>, conn_id: String) -> AppResul
     Ok(ServerInfo::parse_info(&info, db_size))
 }
 
+/// 切换当前连接使用的逻辑数据库（默认 db0）。
+///
+/// 通过修改数据库编号并重新建立连接生效，成功返回新的数据库编号。
+#[tauri::command]
+pub async fn select_db(pool: State<'_, Pool>, conn_id: String, db: u64) -> Result<u64, String> {
+    // 从池中取回原始连接配置
+    let conn = pool.get(&conn_id).map_err(|e| e.to_string())?;
+    let mut updated = conn;
+    updated.db = db;
+    pool.connect(&updated).await.map_err(|e| e.to_string())?;
+    Ok(updated.db)
+}
+
 /// PING 测试连接。
 #[tauri::command]
 pub async fn ping(pool: State<'_, Pool>, conn_id: String) -> AppResult<String> {

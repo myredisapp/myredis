@@ -470,6 +470,43 @@
         .toolbar .toolbar-actions button.primary:hover {
             background: var(--accent-hover);
         }
+        /* ---- 数据库选择器（位于搜索框左侧） ---- */
+        .toolbar .key-db-selector {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0 8px;
+            height: 31px;
+            transition: border 0.2s;
+        }
+        .toolbar .key-db-selector:focus-within {
+            border-color: var(--accent);
+        }
+        .toolbar .key-db-selector > i {
+            color: var(--text-muted);
+            font-size: 13px;
+            display: none; /* 小屏隐藏图标，紧凑显示 */
+        }
+        .toolbar .key-db-selector select {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 13px;
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        .toolbar .key-db-selector select:disabled {
+            color: var(--text-muted);
+            cursor: not-allowed;
+            opacity: .6;
+        }
 
         /* ---- 数据浏览区 ---- */
         .data-panel {
@@ -1200,6 +1237,12 @@
 
                 <!-- 工具栏 -->
                 <div class="toolbar">
+                    <div class="key-db-selector" id="dbSelectorWrap" title="选择数据库 (Db)">
+                        <i class="fas fa-database"></i>
+                        <select id="dbSelect" disabled>
+                            <option value="0">Db0</option>
+                        </select>
+                    </div>
                     <div class="search-box">
                         <i class="fas fa-search"></i>
                         <input type="text" placeholder="搜索 Key ... (支持 * 通配符)" id="keySearch" />
@@ -1417,6 +1460,71 @@
             const keySearch = $('#keySearch');
             const modal = $('#connectionModal');
             const modalTitle = $('#modalTitle');
+            const dbSelectorWrap = $('#dbSelectorWrap');
+            const dbSelect = $('#dbSelect');
+            // Redis 逻辑数据库数量（默认 16 个：db0 - db15）
+            const DB_COUNT = 16;
+
+            // 初始化数据库选择下拉选项（仅创建一次）
+            (function initDbOptions() {
+                if (!dbSelect) return;
+                dbSelect.innerHTML = '';
+                for (let i = 0; i < DB_COUNT; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = String(i);
+                    opt.textContent = 'DB ' + i;
+                    dbSelect.appendChild(opt);
+                }
+            })();
+
+            // 根据当前连接刷新数据库选择框的可用状态与选中值
+            function refreshDbSelector() {
+                if (!dbSelect) return;
+                const online = !!(currentConn && currentConn.online);
+                dbSelect.disabled = !online;
+                let current = 0;
+                if (currentConn && currentConn.db !== undefined && currentConn.db !== null) {
+                    current = Number(currentConn.db);
+                }
+                if (dbSelect.value !== String(current)) dbSelect.value = String(current);
+            }
+
+            // 切换数据库（由下拉框 change 触发）
+            function onDbChange() {
+                if (!currentConn || !currentConn.id) return;
+                if (!currentConn.online) {
+                    refreshDbSelector();
+                    return;
+                }
+                const db = parseInt(dbSelect.value, 10);
+                if (isNaN(db) || (currentConn.db !== undefined && currentConn.db === db)) {
+                    refreshDbSelector();
+                    return;
+                }
+                dbSelect.disabled = true;
+                appendTerminal(`正在切换到数据库 Db${db} …`, '');
+                invoke('select_db', { connId: currentConn.id, db: db })
+                    .then((dbIndex) => {
+                        currentConn.db = dbIndex;
+                        // 逻辑数据库已更换，清空选中的 Key 与搜索条件
+                        selectedKey = null;
+                        if (keySearch) keySearch.value = '';
+                        renderDetail();
+                        appendTerminal(`已切换到数据库 Db${dbIndex}`, 'ok');
+                        // 刷新 key 列表与服务器信息
+                        const infoP = invoke('get_server_info', { connId: currentConn.id })
+                            .then((info) => { currentConn.info = info; renderServerInfo(info); return info; })
+                            .catch(() => {});
+                        return Promise.all([loadKeys(), infoP]);
+                    })
+                    .catch((err) => {
+                        appendTerminal(`切换数据库失败: ${err}`, 'error');
+                        showToast('切换数据库失败: ' + err, 'error');
+                    })
+                    .finally(() => {
+                        refreshDbSelector();
+                    });
+            }
 
             // ---------- 渲染：连接列表 ----------
             function renderConnections() {
@@ -1494,6 +1602,7 @@
                         type: conn.type || 'single',
                         readonly: !!conn.readonly,
                         separator: conn.separator || ':',
+                        db: (conn.db !== undefined && conn.db !== null) ? conn.db : 0,
                         password: conn.password || null,
                     }
                 }).then(() => {
@@ -1507,11 +1616,14 @@
 
             function switchConnection(conn) {
                 if (!conn) return;
+                // 初始化逻辑数据库编号（旧连接配置可能没有 db 字段）
+                if (conn.db === undefined || conn.db === null) conn.db = 0;
                 currentConn = conn;
                 renderConnections();
                 updateStatus();
                 renderKeyTree();
                 renderDetail();
+                refreshDbSelector();
                 connectTo(conn).then((info) => {
                     if (info) {
                         renderServerInfo(info);
@@ -1519,6 +1631,7 @@
                         currentConn.online = true;
                         renderConnections();
                         updateStatus();
+                        refreshDbSelector();
                         const mem = info.usedMemory ? formatAppBytes(Number(info.usedMemory)) : '-';
                         const days = info.uptimeSeconds > 0 ? Math.floor(info.uptimeSeconds / 86400) : 0;
                         const hrs = info.uptimeSeconds > 0 ? Math.floor((info.uptimeSeconds % 86400) / 3600) : 0;
@@ -2152,6 +2265,9 @@
                 renderKeyTree(e.target.value);
             });
 
+            // 数据库切换
+            if (dbSelect) dbSelect.addEventListener('change', onDbChange);
+
             document.getElementById('addConnectionBtn').addEventListener('click', () => openModal(null));
             document.getElementById('btnNewConnection').addEventListener('click', () => openModal(null));
 
@@ -2245,6 +2361,7 @@
             }
 
             // ---------- 初始化 ----------
+            refreshDbSelector();
             renderConnections();
             renderKeyTree();
             renderDetail();

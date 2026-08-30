@@ -58,6 +58,7 @@ pub fn run() {
             commands::connection::delete_connection,
             commands::server::ping,
             commands::server::get_server_info,
+            commands::server::select_db,
             commands::key::list_keys,
             commands::key::set_key,
             commands::key::del_key,
