@@ -579,6 +579,8 @@
             overflow-y: auto;
             padding: 20px 24px;
             background: var(--bg-primary);
+            display: flex;
+            flex-direction: column;
         }
         .key-detail::-webkit-scrollbar {
             width: 4px;
@@ -594,6 +596,7 @@
             gap: 16px;
             margin-bottom: 20px;
             flex-wrap: wrap;
+            flex-shrink: 0;
         }
         .detail-header .key-title {
             font-size: 20px;
@@ -658,19 +661,33 @@
         .detail-header .detail-actions button.primary:hover {
             background: var(--accent-hover);
         }
+        .detail-header .detail-actions button:disabled,
+        .detail-header .detail-actions button:disabled:hover {
+            cursor: not-allowed;
+        }
 
         .detail-body {
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
             overflow: hidden;
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
         .detail-body .value-editor {
             padding: 16px 20px;
-            min-height: 160px;
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         .detail-body .value-editor textarea {
             width: 100%;
+            flex: 1;
             min-height: 120px;
             background: var(--bg-input);
             border: 1px solid var(--border-color);
@@ -682,9 +699,34 @@
             resize: vertical;
             outline: none;
             transition: border 0.2s;
+            display: block;
         }
         .detail-body .value-editor textarea:focus {
             border-color: var(--accent);
+        }
+        .detail-body .value-editor .editor-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .detail-body .value-editor .editor-toolbar button {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 4px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s;
+        }
+        .detail-body .value-editor .editor-toolbar button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
         }
         .detail-body .value-editor .hash-view {
             display: grid;
@@ -751,7 +793,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
+            flex: 1;
             color: var(--text-muted);
             text-align: center;
         }
@@ -1144,27 +1186,6 @@
                 </button>
 
                 <div class="sidebar-footer">
-                    <div class="db-selector">
-                        <label><i class="fas fa-database"></i> DB</label>
-                        <select id="dbSelect">
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                            <option value="6">6</option>
-                            <option value="7">7</option>
-                            <option value="8">8</option>
-                            <option value="9">9</option>
-                            <option value="10">10</option>
-                            <option value="11">11</option>
-                            <option value="12">12</option>
-                            <option value="13">13</option>
-                            <option value="14">14</option>
-                            <option value="15">15</option>
-                        </select>
-                    </div>
                     <div class="server-stats">
                         <div class="stat-item"><span>CPU</span><span class="val" id="statCpu">2.4%</span></div>
                         <div class="stat-item"><span>内存</span><span class="val" id="statMem">42.7MB</span></div>
@@ -1316,13 +1337,65 @@
                     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
                 });
             }
+            // 尝试把字符串解析成 JSON，解析失败返回原值
+            function tryParseJson(str) {
+                if (typeof str !== 'string' || !str) return str;
+                const s = str.trim();
+                if (!(s.startsWith('{') || s.startsWith('['))) return str;
+                try {
+                    return JSON.parse(s);
+                } catch (e) {
+                    return str;
+                }
+            }
+            // 格式化 JSON 文本：JSON 字符串原样解析并美化，否则尝试解析后美化，仍失败则原样返回
+            function formatJsonText(text) {
+                if (typeof text !== 'string') {
+                    try { return JSON.stringify(text, null, 2); } catch (e) { return String(text); }
+                }
+                const trimmed = text.trim();
+                if (!trimmed) return text;
+                const parsed = tryParseJson(trimmed);
+                if (typeof parsed !== 'string') {
+                    try { return JSON.stringify(parsed, null, 2); } catch (e) { return text; }
+                }
+                const inner = tryParseJson(parsed);
+                if (typeof inner !== 'string') {
+                    try { return JSON.stringify(inner, null, 2); } catch (e) { return parsed; }
+                }
+                return text;
+            }
+            // 为编辑器生成格式化按钮（JSON 支持直接点击，其它类型用复制代替）
+            function buildValueEditorActions(typeClass) {
+                const actions = [];
+                if (typeClass === 'string') {
+                    actions.push('<button class="format" id="editorFormat" type="button" title="格式化 JSON"><i class="fas fa-magic"></i> 格式化</button>');
+                }
+                actions.push('<button class="copy" id="editorCopy" type="button" title="复制内容"><i class="far fa-copy"></i> 复制</button>');
+                return actions.join('');
+            }
+            // 剪贴板降级方案：临时 textarea + execCommand
+            function fallbackCopy(text, done) {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (done) done();
+                } catch (e) {
+                    if (typeof done === 'function') { /* 保留占位，失败时静默 */ }
+                }
+            }
             // Key 树数据：初始为空，连接后由后端返回的真实数据重建
             let KEY_DATA = {};
             let allKeys = [];
 
             // ---------- 状态 ----------
             let currentConn = CONNECTIONS[0];
-            let currentDb = 0;
             let selectedKey = null; // 当前选中的 Key 全名
             let expandedFolders = new Set(['user:', 'session:', 'cache:']);
 
@@ -1341,7 +1414,6 @@
             const terminalPanel = $('#terminalPanel');
             const statusDot = $('#statusDot');
             const statusLabel = $('#statusLabel');
-            const dbSelect = $('#dbSelect');
             const keySearch = $('#keySearch');
             const modal = $('#connectionModal');
             const modalTitle = $('#modalTitle');
@@ -1507,13 +1579,12 @@
             // 根据当前连接是否为只读，启用/禁用写操作入口
             function updateReadonlyUI() {
                 const readonly = !!(currentConn && currentConn.online && currentConn.readonly);
-                const ids = ['btnAddKey', 'btnFlush'];
+                const ids = ['btnAddKey', 'btnFlush', 'detailSave'];
                 ids.forEach(id => {
                     const btn = document.getElementById(id);
                     if (btn) {
                         btn.disabled = readonly;
                         btn.title = readonly ? '只读连接，禁止写操作' : btn.getAttribute('data-orig-title') || '';
-                        btn.style.opacity = readonly ? '0.5' : '';
                         btn.style.cursor = readonly ? 'not-allowed' : '';
                     }
                 });
@@ -1705,6 +1776,10 @@
                 const typeClass = item.type || 'string';
                 const typeLabel = typeClass.toUpperCase();
                 const ttl = item.ttl !== undefined ? item.ttl : -1;
+                // 只读连接（已连接且配置为只读）时，禁用「保存」按钮
+                const readonlyConn = !!(currentConn && currentConn.online && currentConn.readonly);
+
+                const valueActions = buildValueEditorActions(typeClass);
 
                 let valueHtml = '';
                 if (typeClass === 'string') {
@@ -1782,13 +1857,16 @@
                         </div>
                         <span class="ttl"><i class="far fa-clock"></i> ${ttlDisplay}</span>
                         <div class="detail-actions">
-                            <button class="primary" id="detailSave"><i class="fas fa-save"></i> 保存</button>
+                            <button class="primary" id="detailSave"${readonlyConn ? ' disabled' : ''} data-orig-title="保存修改" title="${readonlyConn ? '只读连接，禁止写操作' : '保存修改'}"><i class="fas fa-save"></i> 保存</button>
                             <button id="detailRefresh"><i class="fas fa-sync-alt"></i> 刷新</button>
                             <button class="danger" id="detailDelete"><i class="fas fa-trash-alt"></i> 删除</button>
                         </div>
                     </div>
                     <div class="detail-body">
                         <div class="value-editor">
+                            <div class="editor-toolbar">
+                                ${valueActions}
+                            </div>
                             ${valueHtml}
                         </div>
                         <div class="value-footer">
@@ -1804,13 +1882,39 @@
                 const saveBtn = document.getElementById('detailSave');
                 if (saveBtn) {
                     saveBtn.addEventListener('click', () => {
-                        const editor = document.getElementById('valueEditor');
-                        if (editor) {
-                            appendTerminal(`保存 Key "${selectedKey}" 的值`, 'ok');
-                            showToast('Key 已保存', 'success');
-                        } else {
-                            showToast('此类型不支持直接编辑', 'info');
+                        if (!currentConn || !currentConn.id) {
+                            showToast('请先连接 Redis 服务器', 'error');
+                            return;
                         }
+                        if (currentConn.readonly) {
+                            showToast('只读连接，禁止写操作', 'error');
+                            appendTerminal(`保存 Key "${selectedKey}" 失败: 当前为只读连接，禁止写操作`, 'error');
+                            return;
+                        }
+                        const editor = document.getElementById('valueEditor');
+                        if (!editor) {
+                            showToast('此类型不支持直接修改', 'info');
+                            return;
+                        }
+                        const value = editor.value;
+                        saveBtn.disabled = true;
+                        invoke('set_key', { connId: currentConn.id, key: selectedKey, value: value })
+                            .then(() => {
+                                appendTerminal(`SET ${selectedKey} → OK`, 'ok');
+                                showToast('Key 已保存', 'success');
+                                // 同步本地缓存并刷新列表
+                                if (KEY_DATA[selectedKey]) {
+                                    KEY_DATA[selectedKey].value = value;
+                                }
+                                loadKeys();
+                            })
+                            .catch(err => {
+                                showToast('保存失败: ' + err, 'error');
+                                appendTerminal(`保存 Key "${selectedKey}" 失败: ${err}`, 'error');
+                            })
+                            .finally(() => {
+                                saveBtn.disabled = false;
+                            });
                     });
                 }
                 const refreshBtn = document.getElementById('detailRefresh');
@@ -1829,6 +1933,38 @@
                             selectedKey = null;
                             renderKeyTree(keySearch.value);
                             renderDetail();
+                        }
+                    });
+                }
+
+                // 获取当前详情展示的文本值（string 取编辑器内容，其它类型取序列化结果）
+                const currentDetailValue = () => {
+                    const editor = document.getElementById('valueEditor');
+                    if (editor) return editor.value;
+                    return item.value != null ? JSON.stringify(item.value, null, 2) : '';
+                };
+
+                const formatBtn = document.getElementById('editorFormat');
+                if (formatBtn) {
+                    formatBtn.addEventListener('click', () => {
+                        const editor = document.getElementById('valueEditor');
+                        if (!editor) return;
+                        const formatted = formatJsonText(editor.value);
+                        editor.value = formatted;
+                        appendTerminal(`格式化 Key "${selectedKey}" 的值`, 'ok');
+                        showToast('已格式化', 'success');
+                    });
+                }
+
+                const copyBtn = document.getElementById('editorCopy');
+                if (copyBtn) {
+                    copyBtn.addEventListener('click', () => {
+                        const text = currentDetailValue();
+                        const done = () => { showToast('已复制到剪贴板', 'success'); };
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+                        } else {
+                            fallbackCopy(text, done);
                         }
                     });
                 }
@@ -2010,12 +2146,6 @@
                 terminalBody.innerHTML = `
                     <div class="line"><span class="prompt">></span><span class="output ok">终端已清空</span></div>
                 `;
-            });
-
-            dbSelect.addEventListener('change', (e) => {
-                currentDb = parseInt(e.target.value);
-                appendTerminal(`切换到数据库 ${currentDb}`, 'ok');
-                renderKeyTree(keySearch.value);
             });
 
             keySearch.addEventListener('input', (e) => {
