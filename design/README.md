@@ -35,6 +35,7 @@ assets/logo/
 ├── logo.svg           # 主 Logo 源文件（可编辑 CSS 变量）
 ├── logo-themed.svg    # 主题自适应版（跟随页面 --accent）
 ├── favicon.svg        # 标签页图标源文件
+├── icon-source.svg    # Tauri 桌面应用图标源文件（固定深秋色）
 └── README.md          # Logo 使用说明
 ```
 
@@ -102,9 +103,25 @@ python3 design/generate-logo-html.py
 
 ## 导出应用图标
 
-### PNG / ICO
+### Tauri 桌面端
 
-用浏览器或设计软件打开 `assets/logo/logo.svg` / `assets/logo/favicon.svg`，导出为：
+本项目使用 Tauri 构建桌面应用。生成所有平台图标的命令：
+
+```bash
+cargo tauri icon assets/logo/icon-source.svg
+```
+
+该命令会覆盖 `src-tauri/icons/` 下的：
+- `icon.ico`（Windows）
+- `icon.icns`（macOS）
+- `icon.png` 及各尺寸 PNG（Linux / 通用）
+- `ios/`、`android/`（如启用移动端）
+
+`icon-source.svg` 使用固定深秋色，避免不同渲染器对 CSS 变量解析不一致。
+
+### 网页端 / 手动导出
+
+用浏览器或设计软件打开 `assets/logo/logo.svg` / `assets/logo/favicon.svg`，导出为所需尺寸：
 
 | 尺寸 | 用途 |
 |---|---|

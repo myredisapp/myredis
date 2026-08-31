@@ -9,6 +9,7 @@
 | `logo.svg` | 主 Logo 源文件，使用 CSS 变量控制颜色，可直接编辑 |
 | `logo-themed.svg` | 主题自适应版本，会跟随 `web/index.html` 的 `--accent` 变量自动变色 |
 | `favicon.svg` | 浏览器标签页图标源文件，小尺寸优化 |
+| `icon-source.svg` | Tauri 桌面应用图标源文件，固定深秋色，用于生成所有平台图标 |
 
 ## 如何修改颜色
 
@@ -64,7 +65,24 @@
 
 ## 生成不同尺寸
 
-### PNG / ICO
+### Tauri 桌面应用图标
+
+本项目使用 Tauri 构建桌面应用。运行以下命令，会根据 `icon-source.svg` 重新生成 `src-tauri/icons/` 下的所有图标：
+
+```bash
+cargo tauri icon assets/logo/icon-source.svg
+```
+
+生成的文件包括：
+- Windows: `icon.ico`
+- macOS: `icon.icns`
+- Linux: `icon.png`
+- 通用尺寸: `32x32.png`, `64x64.png`, `128x128.png`, `128x128@2x.png`
+- 移动端（如启用）: `ios/`, `android/`
+
+`icon-source.svg` 使用固定深秋主题色，确保在各种平台渲染器下颜色一致。
+
+### PNG / ICO（手动方式）
 
 用浏览器打开 `logo.svg` 或 `favicon.svg`，按 `Cmd/Ctrl + Shift + P` 打开打印/导出，
 或在设计软件中导出为：
