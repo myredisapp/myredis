@@ -1897,6 +1897,7 @@
                             document.getElementById('connName').value = conn.name + ' 副本';
                             if (conn.host) document.getElementById('connHost').value = conn.host;
                             if (conn.port) document.getElementById('connPort').value = conn.port;
+                            if (conn.username) document.getElementById('connUser').value = conn.username;
                             if (conn.password) document.getElementById('connPass').value = conn.password;
                             if (conn.readonly) document.getElementById('connReadonly').checked = true;
                             if (conn.type === 'cluster') document.getElementById('connCluster').checked = true;
@@ -1956,6 +1957,7 @@
                         readonly: !!conn.readonly,
                         separator: conn.separator || ':',
                         db: (conn.db !== undefined && conn.db !== null) ? conn.db : 0,
+                        username: conn.username || null,
                         password: conn.password || null,
                     }
                 }).then(() => {
@@ -2529,8 +2531,8 @@
                     document.getElementById('connName').value = conn.name;
                     document.getElementById('connHost').value = conn.host;
                     document.getElementById('connPort').value = conn.port;
-                    document.getElementById('connUser').value = '';
-                    document.getElementById('connPass').value = '';
+                    document.getElementById('connUser').value = conn.username || '';
+                    document.getElementById('connPass').value = conn.password || '';
                     document.getElementById('connReadonly').checked = !!conn.readonly;
                     document.getElementById('connCluster').checked = conn.type === 'cluster';
                     document.getElementById('connSeparator').value = conn.separator || '';
@@ -2572,6 +2574,7 @@
                     type: document.getElementById('connCluster').checked ? 'cluster' : 'single',
                     readonly: document.getElementById('connReadonly').checked,
                     separator: separator || ':',
+                    username: document.getElementById('connUser').value || null,
                     password: document.getElementById('connPass').value || null,
                 };
                 invoke('save_connection', { conn }).then(() => {
@@ -2753,6 +2756,8 @@
                         type: c.type || 'single',
                         readonly: !!c.readonly,
                         separator: c.separator || ':',
+                        username: c.username || '',
+                        password: c.password || '',
                     }));
                     if (currentConn) {
                         const still = CONNECTIONS.find(c => c.id === currentConn.id);

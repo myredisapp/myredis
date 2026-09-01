@@ -1,6 +1,29 @@
 //! # 连接配置模型
 
+use percent_encoding::{percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
+
+/// URL userinfo 中不需要 percent-encode 的字符集合（RFC 3986 的 unreserved + sub-delims）。
+const USERINFO_ENCODE_SET: &AsciiSet = &NON_ALPHANUMERIC
+    .remove(b'-')
+    .remove(b'.')
+    .remove(b'_')
+    .remove(b'~')
+    .remove(b'!')
+    .remove(b'$')
+    .remove(b'&')
+    .remove(b'\'')
+    .remove(b'(')
+    .remove(b')')
+    .remove(b'*')
+    .remove(b'+')
+    .remove(b',')
+    .remove(b';')
+    .remove(b'=');
+
+fn encode_userinfo(s: &str) -> String {
+    percent_encode(s.as_bytes(), USERINFO_ENCODE_SET).to_string()
+}
 
 /// 连接类型。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -37,6 +60,9 @@ pub struct Connection {
     /// 逻辑数据库编号（0-15）。连接 / 切换时通过 URL 的 `/db` 段选中。
     #[serde(default)]
     pub db: u64,
+    /// 用户名（可选），用于 Redis 6.0+ ACL 认证。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
     /// 密码（可选）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
@@ -52,16 +78,37 @@ impl Connection {
     ///
     /// 当前仅支持 `redis://`（明文）协议，`rediss` 在解析前已拦截。
     ///
-    /// 若配置了密码，则以 `redis://:password@host:port` 形式内嵌，用于认证。
-    /// 通过 `/db` 段指定逻辑数据库。
+    /// 支持用户名 + 密码的 ACL 认证，生成形式如下：
+    /// - 用户名 + 密码：`redis://user:password@host:port/db`
+    /// - 仅用户名：`redis://user@host:port/db`
+    /// - 仅密码：`redis://:password@host:port/db`
+    /// - 都为空：`redis://host:port/db`
+    ///
+    /// 用户名与密码中的特殊字符会按 RFC 3986 进行 percent-encoding，
+    /// 避免 `@`、`/`、`?`、`#`、`:` 等破坏 URL 结构。
     pub fn to_connection_url(&self) -> String {
-        let db = &format!("/{}", self.db);
-        match &self.password {
-            Some(pwd) if !pwd.is_empty() => {
-                let escaped = pwd.replace('@', "%40").replace('/', "%2F");
-                format!("redis://:{}@{}:{}{}", escaped, self.host, self.port, db)
-            }
-            _ => format!("redis://{}:{}{}", self.host, self.port, db),
+        let db = format!("/{}", self.db);
+        let username = self
+            .username
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(encode_userinfo)
+            .unwrap_or_default();
+        let password = self
+            .password
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(encode_userinfo)
+            .unwrap_or_default();
+
+        if !username.is_empty() && !password.is_empty() {
+            format!("redis://{}:{}@{}:{}{}", username, password, self.host, self.port, db)
+        } else if !username.is_empty() {
+            format!("redis://{}@{}:{}{}", username, self.host, self.port, db)
+        } else if !password.is_empty() {
+            format!("redis://:{}@{}:{}{}", password, self.host, self.port, db)
+        } else {
+            format!("redis://{}:{}{}", self.host, self.port, db)
         }
     }
 /// 是否只读连接。
@@ -87,6 +134,7 @@ mod tests {
             readonly: false,
             separator: ":".into(),
             db: 0,
+            username: None,
             password: None,
         };
         assert_eq!(conn.to_connection_url(), "redis://127.0.0.1:6379/0");
@@ -103,6 +151,7 @@ mod tests {
             readonly: false,
             separator: ":".into(),
             db: 0,
+            username: None,
             password: Some("secret@123".into()),
         };
         assert_eq!(
@@ -122,8 +171,69 @@ mod tests {
             readonly: false,
             separator: ":".into(),
             db: 3,
+            username: None,
             password: None,
         };
         assert_eq!(conn.to_connection_url(), "redis://127.0.0.1:6379/3");
+    }
+
+    #[test]
+    fn connection_url_with_username_only() {
+        let conn = Connection {
+            id: "1".into(),
+            name: "t".into(),
+            host: "127.0.0.1".into(),
+            port: 6379,
+            conn_type: ConnType::Single,
+            readonly: false,
+            separator: ":".into(),
+            db: 0,
+            username: Some("redis_user".into()),
+            password: None,
+        };
+        assert_eq!(
+            conn.to_connection_url(),
+            "redis://redis_user@127.0.0.1:6379/0"
+        );
+    }
+
+    #[test]
+    fn connection_url_with_username_and_password() {
+        let conn = Connection {
+            id: "1".into(),
+            name: "t".into(),
+            host: "127.0.0.1".into(),
+            port: 6379,
+            conn_type: ConnType::Single,
+            readonly: false,
+            separator: ":".into(),
+            db: 0,
+            username: Some("user@domain".into()),
+            password: Some("secret/123".into()),
+        };
+        assert_eq!(
+            conn.to_connection_url(),
+            "redis://user%40domain:secret%2F123@127.0.0.1:6379/0"
+        );
+    }
+
+    #[test]
+    fn connection_url_encodes_special_characters() {
+        let conn = Connection {
+            id: "1".into(),
+            name: "t".into(),
+            host: "127.0.0.1".into(),
+            port: 6379,
+            conn_type: ConnType::Single,
+            readonly: false,
+            separator: ":".into(),
+            db: 0,
+            username: Some("user:name".into()),
+            password: Some("p@ss:w?rd#".into()),
+        };
+        assert_eq!(
+            conn.to_connection_url(),
+            "redis://user%3Aname:p%40ss%3Aw%3Frd%23@127.0.0.1:6379/0"
+        );
     }
 }
