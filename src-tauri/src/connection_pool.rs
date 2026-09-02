@@ -167,4 +167,43 @@ impl Pool {
         let pong: String = redis::cmd("PING").query_async(&mut manager).await?;
         Ok(pong)
     }
+
+    /// 临时测试连接参数是否可用。
+    ///
+    /// 直接按 `conn` 建立 Redis 连接，执行一次 `PING` 后立即释放，
+    /// 不写入连接池内部 map。
+    pub async fn test(conn: &Connection) -> Result<String, AppError> {
+        let timeout = crate::config::ConnectionTimeout::default().connect;
+        match conn.conn_type {
+            ConnType::Single => {
+                let url = conn.to_connection_url();
+                let client = redis::Client::open(url).map_err(AppError::from)?;
+                let future = client.get_multiplexed_async_connection();
+                let mut con = tokio::time::timeout(timeout, future)
+                    .await
+                    .map_err(|_| AppError::Timeout("连接超时".into()))?
+                    .map_err(AppError::from)?;
+                let pong: String = redis::cmd("PING")
+                    .query_async(&mut con)
+                    .await
+                    .map_err(AppError::from)?;
+                Ok(pong)
+            }
+            ConnType::Cluster => {
+                let url = conn.to_connection_url();
+                let client =
+                    redis::cluster::ClusterClient::new(vec![url]).map_err(AppError::from)?;
+                let future = client.get_async_connection();
+                let mut con = tokio::time::timeout(timeout, future)
+                    .await
+                    .map_err(|_| AppError::Timeout("连接超时".into()))?
+                    .map_err(AppError::from)?;
+                let pong: String = redis::cmd("PING")
+                    .query_async(&mut con)
+                    .await
+                    .map_err(AppError::from)?;
+                Ok(pong)
+            }
+        }
+    }
 }
