@@ -29,10 +29,7 @@ pub async fn list_connections(state: State<'_, AppState>) -> Result<Vec<Connecti
 
 /// 保存（新增或更新）一个连接配置，持久化到本地。
 #[tauri::command]
-pub async fn save_connection(
-    state: State<'_, AppState>,
-    conn: Connection,
-) -> Result<(), String> {
+pub async fn save_connection(state: State<'_, AppState>, conn: Connection) -> Result<(), String> {
     let repo = state.repo()?;
     let mut all = repo.load().map_err(|e| e.to_string())?;
     if let Some(existing) = all.iter_mut().find(|c| c.id == conn.id) {
@@ -45,7 +42,10 @@ pub async fn save_connection(
 
 /// 删除一个连接配置，返回是否删除成功。
 #[tauri::command]
-pub async fn delete_connection(state: State<'_, AppState>, conn_id: String) -> Result<bool, String> {
+pub async fn delete_connection(
+    state: State<'_, AppState>,
+    conn_id: String,
+) -> Result<bool, String> {
     let repo = state.repo()?;
     let mut all = repo.load().map_err(|e| e.to_string())?;
     let before = all.len();

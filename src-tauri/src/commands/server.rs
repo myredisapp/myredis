@@ -90,7 +90,11 @@ fn disk_usage_for(path: &str) -> Option<DiskUsage> {
     let mut best: Option<(std::path::PathBuf, u64, u64)> = None;
     for d in disks.iter() {
         if path_norm.starts_with(d.mount_point()) {
-            let candidate = (d.mount_point().to_path_buf(), d.total_space(), d.available_space());
+            let candidate = (
+                d.mount_point().to_path_buf(),
+                d.total_space(),
+                d.available_space(),
+            );
             let better = match &best {
                 None => true,
                 Some(b) => candidate.0.components().count() > b.0.components().count(),

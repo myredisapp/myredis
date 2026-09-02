@@ -102,7 +102,10 @@ impl Connection {
             .unwrap_or_default();
 
         if !username.is_empty() && !password.is_empty() {
-            format!("redis://{}:{}@{}:{}{}", username, password, self.host, self.port, db)
+            format!(
+                "redis://{}:{}@{}:{}{}",
+                username, password, self.host, self.port, db
+            )
         } else if !username.is_empty() {
             format!("redis://{}@{}:{}{}", username, self.host, self.port, db)
         } else if !password.is_empty() {
@@ -111,7 +114,7 @@ impl Connection {
             format!("redis://{}:{}{}", self.host, self.port, db)
         }
     }
-/// 是否只读连接。
+    /// 是否只读连接。
     ///
     /// 只读连接会前端禁用写操作、后端更发送 `READONLY` 并拦截写命令。
     pub fn is_readonly(&self) -> bool {

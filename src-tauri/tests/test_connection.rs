@@ -25,7 +25,9 @@ async fn test_connection_returns_pong() {
         username: None,
         password: None,
     };
-    let pong = Pool::test(&conn).await.expect("测试连接失败，请确认 Redis 已启动");
+    let pong = Pool::test(&conn)
+        .await
+        .expect("测试连接失败，请确认 Redis 已启动");
     assert_eq!(pong, "PONG");
     println!("测试连接返回: {}", pong);
 }

@@ -61,7 +61,10 @@ impl Pool {
             ConnType::Single => {
                 let url = conn.to_connection_url();
                 let client = redis::Client::open(url).map_err(AppError::from)?;
-                let manager = client.get_connection_manager().await.map_err(AppError::from)?;
+                let manager = client
+                    .get_connection_manager()
+                    .await
+                    .map_err(AppError::from)?;
 
                 // 若只读，发送 READONLY（单机一般无副作用，但保留以便代理/哨兵环境也可用）
                 if conn.is_readonly() {
@@ -83,7 +86,10 @@ impl Pool {
                 let url = conn.to_connection_url();
                 let client =
                     redis::cluster::ClusterClient::new(vec![url]).map_err(AppError::from)?;
-                let mut c = client.get_async_connection().await.map_err(AppError::from)?;
+                let mut c = client
+                    .get_async_connection()
+                    .await
+                    .map_err(AppError::from)?;
                 if conn.is_readonly() {
                     let _: Result<(), redis::RedisError> =
                         redis::cmd("READONLY").query_async(&mut c).await;
@@ -173,20 +179,23 @@ impl Pool {
     /// 直接按 `conn` 建立 Redis 连接，执行一次 `PING` 后立即释放，
     /// 不写入连接池内部 map。
     pub async fn test(conn: &Connection) -> Result<String, AppError> {
-        let timeout = crate::config::ConnectionTimeout::default().connect;
+        let timeout_cfg = crate::config::ConnectionTimeout::default();
+        let connect_timeout = timeout_cfg.connect;
+        let command_timeout = timeout_cfg.command;
         match conn.conn_type {
             ConnType::Single => {
                 let url = conn.to_connection_url();
                 let client = redis::Client::open(url).map_err(AppError::from)?;
                 let future = client.get_multiplexed_async_connection();
-                let mut con = tokio::time::timeout(timeout, future)
+                let mut con = tokio::time::timeout(connect_timeout, future)
                     .await
                     .map_err(|_| AppError::Timeout("连接超时".into()))?
                     .map_err(AppError::from)?;
-                let pong: String = redis::cmd("PING")
-                    .query_async(&mut con)
-                    .await
-                    .map_err(AppError::from)?;
+                let pong: String =
+                    tokio::time::timeout(command_timeout, redis::cmd("PING").query_async(&mut con))
+                        .await
+                        .map_err(|_| AppError::Timeout("PING 命令超时".into()))?
+                        .map_err(AppError::from)?;
                 Ok(pong)
             }
             ConnType::Cluster => {
@@ -194,14 +203,15 @@ impl Pool {
                 let client =
                     redis::cluster::ClusterClient::new(vec![url]).map_err(AppError::from)?;
                 let future = client.get_async_connection();
-                let mut con = tokio::time::timeout(timeout, future)
+                let mut con = tokio::time::timeout(connect_timeout, future)
                     .await
                     .map_err(|_| AppError::Timeout("连接超时".into()))?
                     .map_err(AppError::from)?;
-                let pong: String = redis::cmd("PING")
-                    .query_async(&mut con)
-                    .await
-                    .map_err(AppError::from)?;
+                let pong: String =
+                    tokio::time::timeout(command_timeout, redis::cmd("PING").query_async(&mut con))
+                        .await
+                        .map_err(|_| AppError::Timeout("PING 命令超时".into()))?
+                        .map_err(AppError::from)?;
                 Ok(pong)
             }
         }
