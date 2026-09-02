@@ -1363,6 +1363,18 @@
         .modal .modal-actions button.primary:hover {
             background: var(--accent-hover);
         }
+        #testStatus {
+            font-size: 13px;
+            margin-left: 8px;
+            align-self: center;
+            min-height: 20px;
+        }
+        #testStatus.success {
+            color: var(--green);
+        }
+        #testStatus.error {
+            color: #e06c75;
+        }
 
         /* ========== 响应式微调 ========== */
         @media (max-width: 1100px) {
@@ -1603,6 +1615,9 @@
                 <input type="text" id="connSeparator" placeholder=":" maxlength="4" />
             </div>
             <div class="modal-actions">
+                <button class="secondary" id="modalTest">测试连接</button>
+                <span id="testStatus"></span>
+                <div class="spacer"></div>
                 <button class="secondary" id="modalCancel">取消</button>
                 <button class="primary" id="modalSave">保存连接</button>
             </div>
@@ -2548,12 +2563,14 @@
                     document.getElementById('connCluster').checked = false;
                     document.getElementById('connSeparator').value = '';
                 }
+                showTestStatus('', '');
                 modal.classList.add('open');
                 document.getElementById('connName').focus();
             }
 
             function closeModal() {
                 modal.classList.remove('open');
+                showTestStatus('', '');
             }
 
             function saveConnection() {
@@ -2589,6 +2606,51 @@
                 }).catch(err => {
                     showToast('保存失败: ' + err, 'error');
                 });
+            }
+
+            function showTestStatus(msg, type) {
+                const el = document.getElementById('testStatus');
+                el.textContent = msg;
+                el.className = type === 'success' ? 'success' : type === 'error' ? 'error' : '';
+            }
+
+            function testConnection() {
+                const host = document.getElementById('connHost').value.trim();
+                const port = parseInt(document.getElementById('connPort').value) || 0;
+                if (!host || !port) {
+                    showTestStatus('请填写主机和端口', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('modalTest');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '测试中…';
+                showTestStatus('正在测试连接…', 'info');
+
+                const conn = {
+                    id: editingConnId || ('test_' + Date.now()),
+                    name: document.getElementById('connName').value.trim() || '测试连接',
+                    host: host,
+                    port: port,
+                    type: document.getElementById('connCluster').checked ? 'cluster' : 'single',
+                    readonly: document.getElementById('connReadonly').checked,
+                    separator: document.getElementById('connSeparator').value || ':',
+                    username: document.getElementById('connUser').value || null,
+                    password: document.getElementById('connPass').value || null,
+                };
+
+                invoke('test_connection', { conn })
+                    .then(pong => {
+                        showTestStatus('✓ 连接成功（' + pong + '）', 'success');
+                    })
+                    .catch(err => {
+                        showTestStatus('✗ ' + err, 'error');
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    });
             }
 
             // ---------- Toast 提示 ----------
@@ -2655,11 +2717,19 @@
             document.getElementById('addConnectionBtn').addEventListener('click', () => openModal(null));
             document.getElementById('btnNewConnection').addEventListener('click', () => openModal(null));
 
+            document.getElementById('modalTest').addEventListener('click', testConnection);
             document.getElementById('modalCancel').addEventListener('click', closeModal);
             document.getElementById('modalSave').addEventListener('click', saveConnection);
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) closeModal();
             });
+
+            ['connName', 'connHost', 'connPort', 'connUser', 'connPass', 'connSeparator'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => showTestStatus('', ''));
+            });
+            document.getElementById('connReadonly').addEventListener('change', () => showTestStatus('', ''));
+            document.getElementById('connCluster').addEventListener('change', () => showTestStatus('', ''));
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') closeModal();
                 if (e.key === 'Enter' && modal.classList.contains('open')) saveConnection();
