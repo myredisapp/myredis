@@ -21,3 +21,6 @@ bin/
 # --- 配置 / 日志 ---
 *.log
 .DS_Store
+
+# --- IDE ---
+.idea/

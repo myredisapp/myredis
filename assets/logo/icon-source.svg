@@ -1,0 +1,32 @@
+<!--
+  麦地缓存桌面应用图标源文件
+  用于 Tauri `cargo tauri icon` 命令生成各种尺寸图标
+  颜色为深秋主题固定色，确保在不同渲染器中一致
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>麦地缓存 App Icon</title>
+  <defs>
+    <linearGradient id="icon-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f9c75e" />
+      <stop offset="100%" stop-color="#f5b342" />
+    </linearGradient>
+  </defs>
+
+  <!-- 数据库圆柱 -->
+  <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#icon-gradient)" />
+  <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#icon-gradient)" />
+  <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+  <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+
+  <!-- MR 徽章 -->
+  <circle cx="72" cy="72" r="18" fill="#ffffff" stroke="#f5b342" stroke-width="3" />
+  <text x="72" y="77" text-anchor="middle"
+        font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+        font-weight="700" font-size="13" fill="#f5b342">MR</text>
+
+  <!-- 连接节点 -->
+  <circle cx="86" cy="56" r="5" fill="#f5b342" />
+  <circle cx="56" cy="86" r="5" fill="#f5b342" />
+  <path d="M68 56 L78 60" stroke="#f5b342" stroke-width="2" stroke-linecap="round" fill="none" />
+  <path d="M64 78 L58 86" stroke="#f5b342" stroke-width="2" stroke-linecap="round" fill="none" />
+</svg>

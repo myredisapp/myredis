@@ -22,6 +22,7 @@ async fn redis_ping_returns_pong() {
         readonly: false,
         separator: ":".into(),
         db: 0,
+        username: None,
         password: None,
     };
     pool.connect(&conn).await.expect("连接 Redis 失败，请确认服务已启动");
@@ -42,6 +43,7 @@ fn tls_not_supported() {
         readonly: false,
         separator: ":".into(),
         db: 0,
+        username: None,
         password: None,
     };
     let fut = pool.connect(&conn);

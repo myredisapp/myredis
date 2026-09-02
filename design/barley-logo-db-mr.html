@@ -1,0 +1,491 @@
+<title>麦地 Logo 数据库 MR 方案</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --text: #1f1a14;
+    --text-muted: #7d6f5f;
+    --border: #e7e0d5;
+    --accent: #b8841f;
+    --shadow: 0 18px 50px rgba(60, 45, 25, 0.10);
+    --radius: 16px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16120d;
+      --surface: #1e1913;
+      --text: #f5e6d3;
+      --text-muted: #a08b72;
+      --border: #3d3226;
+      --accent: #f5b342;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #16120d;
+    --surface: #1e1913;
+    --text: #f5e6d3;
+    --text-muted: #a08b72;
+    --border: #3d3226;
+    --accent: #f5b342;
+    --shadow: 0 22px 60px rgba(0, 0, 0, 0.55);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    min-height: 100vh;
+  }
+
+  header {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 72px 28px 40px;
+    text-align: center;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .eyebrow::before, .eyebrow::after {
+    content: "";
+    width: 28px;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h1 {
+    font-family: "Noto Serif SC", "Songti SC", serif;
+    font-size: clamp(34px, 6vw, 54px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 18px;
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    max-width: 640px;
+    margin: 0 auto 36px;
+    font-size: 17px;
+    color: var(--text-muted);
+  }
+
+  .theme-strip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    justify-content: center;
+    padding: 14px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+  }
+
+  .theme-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .theme-chip span {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 28px 100px;
+  }
+
+  .concept {
+    margin-bottom: 72px;
+  }
+
+  .concept-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 26px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  .concept-number {
+    font-family: "Noto Serif SC", serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .concept-title {
+    font-family: "Noto Serif SC", serif;
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  .concept-desc {
+    margin-left: auto;
+    max-width: 440px;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .logo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 20px;
+  }
+
+  .logo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 22px 22px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 28px 70px rgba(60, 45, 25, 0.14);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .logo-card:hover {
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    }
+  }
+  :root[data-theme="dark"] .logo-card:hover {
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  }
+
+  .mark-stage {
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    position: relative;
+  }
+
+  .mark-stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: radial-gradient(circle at 50% 60%, rgba(0,0,0,0.03) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .mark-stage svg {
+    width: 110px;
+    height: 110px;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,0.12));
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .logo-card:hover .mark-stage svg {
+    transform: scale(1.06);
+  }
+
+  .season-name {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .season-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .small-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .small-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .usage-note {
+    max-width: 760px;
+    margin: 60px auto 0;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .usage-note h3 {
+    font-family: "Noto Serif SC", serif;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .usage-note p, .usage-note ul {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .usage-note ul {
+    margin-top: 12px;
+    padding-left: 20px;
+  }
+
+  .usage-note li {
+    margin-bottom: 6px;
+  }
+
+  @media (max-width: 640px) {
+    header { padding-top: 44px; }
+    .concept-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .concept-desc { text-align: left; margin-left: 0; }
+    .logo-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<header>
+  <div class="eyebrow">MaiDi Cache · DB + MR</div>
+  <h1>麦地缓存 · 数据库 MR 方案</h1>
+  <p class="subtitle">
+    在“麦库”数据库圆柱基础上，增加两道横向条纹让它更像标准数据库图标，并在不同位置尝试放置 MR 字母。
+  </p>
+  <div class="theme-strip">
+    <div class="theme-chip"><span style="background:#4caf50"></span>春分 · Spring</div>
+    <div class="theme-chip"><span style="background:#22a6f2"></span>立夏 · Summer</div>
+    <div class="theme-chip"><span style="background:#d99a1b"></span>初秋 · Golden</div>
+    <div class="theme-chip"><span style="background:#f5b342"></span>深秋 · Autumn</div>
+    <div class="theme-chip"><span style="background:#2563eb"></span>冬至 · Winter</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Concept 1: MR on top cap -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">01</span>
+      <h2 class="concept-title">MR 顶标 · Top</h2>
+      <p class="concept-desc">两道条纹的标准数据库圆柱，MR 字母置于顶部盖板上，像数据库实例的名称标签。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR顶标 春分"><defs><linearGradient id="d1s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d1s)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d1s)"/><path d="M22 44 Q50 56 78 44" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 60 Q50 72 78 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><text x="50" y="32" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="#ffffff">MR</text></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-top"/></svg><span style="font-size:12px;color:var(--text-muted)">Top label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR顶标 立夏"><defs><linearGradient id="d1u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d1u)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d1u)"/><path d="M22 44 Q50 56 78 44" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 60 Q50 72 78 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><text x="50" y="32" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="#ffffff">MR</text></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-top"/></svg><span style="font-size:12px;color:var(--text-muted)">Top label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR顶标 初秋"><defs><linearGradient id="d1g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d1g)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d1g)"/><path d="M22 44 Q50 56 78 44" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 60 Q50 72 78 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><text x="50" y="32" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="#ffffff">MR</text></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-top"/></svg><span style="font-size:12px;color:var(--text-muted)">Top label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR顶标 深秋"><defs><linearGradient id="d1a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d1a)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d1a)"/><path d="M22 44 Q50 56 78 44" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 60 Q50 72 78 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><text x="50" y="32" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="#ffffff">MR</text></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-top"/></svg><span style="font-size:12px;color:var(--text-muted)">Top label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR顶标 冬至"><defs><linearGradient id="d1w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d1w)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d1w)"/><path d="M22 44 Q50 56 78 44" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 60 Q50 72 78 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><text x="50" y="32" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="#ffffff">MR</text></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-top"/></svg><span style="font-size:12px;color:var(--text-muted)">Top label</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 2: MR on front face -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">02</span>
+      <h2 class="concept-title">MR 前标 · Front</h2>
+      <p class="concept-desc">MR 放在圆柱正面两道条纹之间，像数据库封面铭牌，小尺寸下识别度最好。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR前标 春分"><defs><linearGradient id="d2s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><ellipse cx="50" cy="24" rx="28" ry="10" fill="url(#d2s)"/><path d="M22 24 L22 72 Q22 84 50 84 Q78 84 78 72 L78 24" fill="url(#d2s)"/><path d="M22 40 Q50 52 78 40" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><rect x="34" y="44" width="32" height="18" rx="4" fill="rgba(255,255,255,0.9)"/><text x="50" y="58" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="url(#d2s)">MR</text></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-front"/></svg><span style="font-size:12px;color:var(--text-muted)">Front label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR前标 立夏"><defs><linearGradient id="d2u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><ellipse cx="50" cy="24" rx="28" ry="10" fill="url(#d2u)"/><path d="M22 24 L22 72 Q22 84 50 84 Q78 84 78 72 L78 24" fill="url(#d2u)"/><path d="M22 40 Q50 52 78 40" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><rect x="34" y="44" width="32" height="18" rx="4" fill="rgba(255,255,255,0.9)"/><text x="50" y="58" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="url(#d2u)">MR</text></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-front"/></svg><span style="font-size:12px;color:var(--text-muted)">Front label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR前标 初秋"><defs><linearGradient id="d2g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><ellipse cx="50" cy="24" rx="28" ry="10" fill="url(#d2g)"/><path d="M22 24 L22 72 Q22 84 50 84 Q78 84 78 72 L78 24" fill="url(#d2g)"/><path d="M22 40 Q50 52 78 40" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><rect x="34" y="44" width="32" height="18" rx="4" fill="rgba(255,255,255,0.9)"/><text x="50" y="58" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="url(#d2g)">MR</text></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-front"/></svg><span style="font-size:12px;color:var(--text-muted)">Front label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR前标 深秋"><defs><linearGradient id="d2a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><ellipse cx="50" cy="24" rx="28" ry="10" fill="url(#d2a)"/><path d="M22 24 L22 72 Q22 84 50 84 Q78 84 78 72 L78 24" fill="url(#d2a)"/><path d="M22 40 Q50 52 78 40" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><rect x="34" y="44" width="32" height="18" rx="4" fill="rgba(255,255,255,0.9)"/><text x="50" y="58" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="url(#d2a)">MR</text></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-front"/></svg><span style="font-size:12px;color:var(--text-muted)">Front label</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR前标 冬至"><defs><linearGradient id="d2w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><ellipse cx="50" cy="24" rx="28" ry="10" fill="url(#d2w)"/><path d="M22 24 L22 72 Q22 84 50 84 Q78 84 78 72 L78 24" fill="url(#d2w)"/><path d="M22 40 Q50 52 78 40" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><rect x="34" y="44" width="32" height="18" rx="4" fill="rgba(255,255,255,0.9)"/><text x="50" y="58" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="url(#d2w)">MR</text></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-front"/></svg><span style="font-size:12px;color:var(--text-muted)">Front label</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 3: MR Badge overlapping -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">03</span>
+      <h2 class="concept-title">MR 徽章 · Badge</h2>
+      <p class="concept-desc">数据库圆柱右下角叠加一个圆形 MR 徽章，既不影响圆柱识别，又突出品牌缩写。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR徽章 春分"><defs><linearGradient id="d3s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><ellipse cx="44" cy="26" rx="26" ry="10" fill="url(#d3s)"/><path d="M18 26 L18 72 Q18 82 44 82 Q70 82 70 72 L70 26" fill="url(#d3s)"/><path d="M18 42 Q44 52 70 42" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M18 60 Q44 70 70 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><circle cx="72" cy="72" r="22" fill="#ffffff" stroke="url(#d3s)" stroke-width="4"/><text x="72" y="78" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="20" fill="url(#d3s)">MR</text></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-badge"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR徽章 立夏"><defs><linearGradient id="d3u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><ellipse cx="44" cy="26" rx="26" ry="10" fill="url(#d3u)"/><path d="M18 26 L18 72 Q18 82 44 82 Q70 82 70 72 L70 26" fill="url(#d3u)"/><path d="M18 42 Q44 52 70 42" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M18 60 Q44 70 70 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><circle cx="72" cy="72" r="22" fill="#ffffff" stroke="url(#d3u)" stroke-width="4"/><text x="72" y="78" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="20" fill="url(#d3u)">MR</text></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-badge"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR徽章 初秋"><defs><linearGradient id="d3g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><ellipse cx="44" cy="26" rx="26" ry="10" fill="url(#d3g)"/><path d="M18 26 L18 72 Q18 82 44 82 Q70 82 70 72 L70 26" fill="url(#d3g)"/><path d="M18 42 Q44 52 70 42" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M18 60 Q44 70 70 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><circle cx="72" cy="72" r="22" fill="#ffffff" stroke="url(#d3g)" stroke-width="4"/><text x="72" y="78" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="20" fill="url(#d3g)">MR</text></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-badge"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR徽章 深秋"><defs><linearGradient id="d3a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><ellipse cx="44" cy="26" rx="26" ry="10" fill="url(#d3a)"/><path d="M18 26 L18 72 Q18 82 44 82 Q70 82 70 72 L70 26" fill="url(#d3a)"/><path d="M18 42 Q44 52 70 42" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M18 60 Q44 70 70 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><circle cx="72" cy="72" r="22" fill="#ffffff" stroke="url(#d3a)" stroke-width="4"/><text x="72" y="78" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="20" fill="url(#d3a)">MR</text></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-badge"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR徽章 冬至"><defs><linearGradient id="d3w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><ellipse cx="44" cy="26" rx="26" ry="10" fill="url(#d3w)"/><path d="M18 26 L18 72 Q18 82 44 82 Q70 82 70 72 L70 26" fill="url(#d3w)"/><path d="M18 42 Q44 52 70 42" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M18 60 Q44 70 70 60" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><circle cx="72" cy="72" r="22" fill="#ffffff" stroke="url(#d3w)" stroke-width="4"/><text x="72" y="78" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="20" fill="url(#d3w)">MR</text></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-badge"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 4: MR as top cap split -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">04</span>
+      <h2 class="concept-title">MR 分层 · Split Cap</h2>
+      <p class="concept-desc">顶部盖板从中间分开，左半为 M、右半为 R，同时形成两道横向条纹。字母与数据库结构融为一体。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR分层 春分"><defs><linearGradient id="d4s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d4s)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d4s)"/><path d="M22 46 Q50 58 78 46" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M34 18 L34 34 L40 28 L46 34 L46 18" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 18 L54 34 Q66 34 66 26 Q66 18 54 18 M62 30 L70 34" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-split"/></svg><span style="font-size:12px;color:var(--text-muted)">Integrated</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR分层 立夏"><defs><linearGradient id="d4u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d4u)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d4u)"/><path d="M22 46 Q50 58 78 46" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M34 18 L34 34 L40 28 L46 34 L46 18" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 18 L54 34 Q66 34 66 26 Q66 18 54 18 M62 30 L70 34" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-split"/></svg><span style="font-size:12px;color:var(--text-muted)">Integrated</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR分层 初秋"><defs><linearGradient id="d4g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d4g)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d4g)"/><path d="M22 46 Q50 58 78 46" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M34 18 L34 34 L40 28 L46 34 L46 18" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 18 L54 34 Q66 34 66 26 Q66 18 54 18 M62 30 L70 34" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-split"/></svg><span style="font-size:12px;color:var(--text-muted)">Integrated</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR分层 深秋"><defs><linearGradient id="d4a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d4a)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d4a)"/><path d="M22 46 Q50 58 78 46" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M34 18 L34 34 L40 28 L46 34 L46 18" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 18 L54 34 Q66 34 66 26 Q66 18 54 18 M62 30 L70 34" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-split"/></svg><span style="font-size:12px;color:var(--text-muted)">Integrated</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="MR分层 冬至"><defs><linearGradient id="d4w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><ellipse cx="50" cy="28" rx="28" ry="11" fill="url(#d4w)"/><path d="M22 28 L22 70 Q22 82 50 82 Q78 82 78 70 L78 28" fill="url(#d4w)"/><path d="M22 46 Q50 58 78 46" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M22 64 Q50 76 78 64" stroke="rgba(255,255,255,0.35)" stroke-width="4" fill="none"/><path d="M34 18 L34 34 L40 28 L46 34 L46 18" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 18 L54 34 Q66 34 66 26 Q66 18 54 18 M62 30 L70 34" stroke="#ffffff" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-split"/></svg><span style="font-size:12px;color:var(--text-muted)">Integrated</span></div>
+      </article>
+    </div>
+  </section>
+
+  <aside class="usage-note">
+    <h3>数据库 MR 方案说明</h3>
+    <p>在数据库圆柱上做了四版 MR 放置尝试：</p>
+    <ul>
+      <li><strong>MR 顶标</strong>：MR 写在顶部盖板上，最像“数据库实例名”。</li>
+      <li><strong>MR 前标</strong>：MR 放在正面标签牌里，小尺寸识别度最高。</li>
+      <li><strong>MR 徽章</strong>：右下角圆形徽章，不影响圆柱主体识别。</li>
+      <li><strong>MR 分层</strong>：顶部盖板直接画成 MR 字母，与圆柱结构融合。</li>
+    </ul>
+  </aside>
+
+</main>
+
+<svg width="0" height="0" style="position:absolute;">
+  <symbol id="sm-top" viewBox="0 0 100 100"><ellipse cx="50" cy="28" rx="26" ry="10" fill="currentColor"/><path d="M24 28 L24 70 Q24 80 50 80 Q76 80 76 70 L76 28" fill="currentColor"/><path d="M24 44 Q50 54 76 44" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><path d="M24 60 Q50 70 76 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><text x="50" y="31" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="12" fill="#ffffff">MR</text></symbol>
+  <symbol id="sm-front" viewBox="0 0 100 100"><ellipse cx="50" cy="24" rx="26" ry="9" fill="currentColor"/><path d="M24 24 L24 72 Q24 82 50 82 Q76 82 76 72 L76 24" fill="currentColor"/><path d="M24 40 Q50 50 76 40" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><path d="M24 62 Q50 72 76 62" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><rect x="36" y="44" width="28" height="14" rx="3" fill="#ffffff"/><text x="50" y="55" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="11" fill="currentColor">MR</text></symbol>
+  <symbol id="sm-badge" viewBox="0 0 100 100"><ellipse cx="42" cy="26" rx="24" ry="9" fill="currentColor"/><path d="M18 26 L18 72 Q18 80 42 80 Q66 80 66 72 L66 26" fill="currentColor"/><path d="M18 42 Q42 50 66 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><path d="M18 58 Q42 66 66 58" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><circle cx="72" cy="72" r="18" fill="#ffffff" stroke="currentColor" stroke-width="3"/><text x="72" y="77" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-weight="700" font-size="14" fill="currentColor">MR</text></symbol>
+  <symbol id="sm-split" viewBox="0 0 100 100"><ellipse cx="50" cy="28" rx="26" ry="10" fill="currentColor"/><path d="M24 28 L24 70 Q24 80 50 80 Q76 80 76 70 L76 28" fill="currentColor"/><path d="M24 46 Q50 56 76 46" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><path d="M24 64 Q50 74 76 64" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none"/><path d="M36 20 L36 32 L40 27 L44 32 L44 20" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 20 L54 32 Q62 32 62 26 Q62 20 54 20 M60 30 L66 32" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>

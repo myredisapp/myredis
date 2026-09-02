@@ -1,0 +1,491 @@
+<title>麦地 Logo 方案 · 第二辑</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #faf8f4;
+    --surface: #ffffff;
+    --text: #1f1a14;
+    --text-muted: #7d6f5f;
+    --border: #e7e0d5;
+    --accent: #b8841f;
+    --shadow: 0 18px 50px rgba(60, 45, 25, 0.10);
+    --radius: 16px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16120d;
+      --surface: #1e1913;
+      --text: #f5e6d3;
+      --text-muted: #a08b72;
+      --border: #3d3226;
+      --accent: #f5b342;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #16120d;
+    --surface: #1e1913;
+    --text: #f5e6d3;
+    --text-muted: #a08b72;
+    --border: #3d3226;
+    --accent: #f5b342;
+    --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.65;
+    min-height: 100vh;
+  }
+
+  header {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 72px 28px 40px;
+    text-align: center;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .eyebrow::before, .eyebrow::after {
+    content: "";
+    width: 28px;
+    height: 1px;
+    background: var(--border);
+  }
+
+  h1 {
+    font-family: "Noto Serif SC", "Songti SC", serif;
+    font-size: clamp(34px, 6vw, 54px);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 18px;
+    text-wrap: balance;
+  }
+
+  .subtitle {
+    max-width: 620px;
+    margin: 0 auto 36px;
+    font-size: 17px;
+    color: var(--text-muted);
+  }
+
+  .theme-strip {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 10px 20px;
+    justify-content: center;
+    padding: 14px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow);
+  }
+
+  .theme-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .theme-chip span {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+  }
+
+  main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 28px 100px;
+  }
+
+  .concept {
+    margin-bottom: 72px;
+  }
+
+  .concept-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 26px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 16px;
+  }
+
+  .concept-number {
+    font-family: "Noto Serif SC", serif;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.08em;
+  }
+
+  .concept-title {
+    font-family: "Noto Serif SC", serif;
+    font-size: 26px;
+    font-weight: 700;
+  }
+
+  .concept-desc {
+    margin-left: auto;
+    max-width: 420px;
+    font-size: 14px;
+    color: var(--text-muted);
+    text-align: right;
+  }
+
+  .logo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 20px;
+  }
+
+  .logo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 22px 22px;
+    text-align: center;
+    box-shadow: var(--shadow);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .logo-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 28px 70px rgba(60, 45, 25, 0.14);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .logo-card:hover {
+      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    }
+  }
+  :root[data-theme="dark"] .logo-card:hover {
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  }
+
+  .mark-stage {
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    position: relative;
+  }
+
+  .mark-stage::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: radial-gradient(circle at 50% 60%, rgba(0,0,0,0.03) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .mark-stage svg {
+    width: 110px;
+    height: 110px;
+    filter: drop-shadow(0 10px 18px rgba(0,0,0,0.12));
+    transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .logo-card:hover .mark-stage svg {
+    transform: scale(1.06) rotate(-1.5deg);
+  }
+
+  .season-name {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .season-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .small-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .small-mark {
+    width: 28px;
+    height: 28px;
+  }
+
+  .usage-note {
+    max-width: 760px;
+    margin: 60px auto 0;
+    padding: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  .usage-note h3 {
+    font-family: "Noto Serif SC", serif;
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+
+  .usage-note p, .usage-note ul {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .usage-note ul {
+    margin-top: 12px;
+    padding-left: 20px;
+  }
+
+  .usage-note li {
+    margin-bottom: 6px;
+  }
+
+  @media (max-width: 640px) {
+    header { padding-top: 44px; }
+    .concept-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .concept-desc { text-align: left; margin-left: 0; }
+    .logo-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+
+<header>
+  <div class="eyebrow">MaiDi Cache Identity · Round 2</div>
+  <h1>麦地缓存 · LOGO 方案 第二辑</h1>
+  <p class="subtitle">
+    换一组更简洁、更具符号感的大麦标志。减少具象描绘，强调轮廓、负形与识别度。
+  </p>
+  <div class="theme-strip">
+    <div class="theme-chip"><span style="background:#4caf50"></span>春分 · Spring</div>
+    <div class="theme-chip"><span style="background:#22a6f2"></span>立夏 · Summer</div>
+    <div class="theme-chip"><span style="background:#d99a1b"></span>初秋 · Golden</div>
+    <div class="theme-chip"><span style="background:#f5b342"></span>深秋 · Autumn</div>
+    <div class="theme-chip"><span style="background:#2563eb"></span>冬至 · Winter</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Concept 1: Awn -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">01</span>
+      <h2 class="concept-title">麦芒 · Awn</h2>
+      <p class="concept-desc">以麦芒的长曲线为主角，三颗麦粒轻落其上。像羽毛、像笔尖，极简且优雅。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="麦芒 春分"><defs><linearGradient id="a1s" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#4caf50"/><stop offset="100%" stop-color="#7cb84b"/></linearGradient></defs><path d="M20 84 Q40 70 52 46 Q60 28 64 10" stroke="url(#a1s)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="34" cy="68" r="7" fill="url(#a1s)"/><circle cx="46" cy="52" r="7" fill="url(#a1s)"/><circle cx="56" cy="36" r="7" fill="url(#a1s)"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-awn"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="麦芒 立夏"><defs><linearGradient id="a1u" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#22a6f2"/><stop offset="100%" stop-color="#6a9fd8"/></linearGradient></defs><path d="M20 84 Q40 70 52 46 Q60 28 64 10" stroke="url(#a1u)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="34" cy="68" r="7" fill="url(#a1u)"/><circle cx="46" cy="52" r="7" fill="url(#a1u)"/><circle cx="56" cy="36" r="7" fill="url(#a1u)"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-awn"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="麦芒 初秋"><defs><linearGradient id="a1g" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#d99a1b"/><stop offset="100%" stop-color="#e5b33a"/></linearGradient></defs><path d="M20 84 Q40 70 52 46 Q60 28 64 10" stroke="url(#a1g)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="34" cy="68" r="7" fill="url(#a1g)"/><circle cx="46" cy="52" r="7" fill="url(#a1g)"/><circle cx="56" cy="36" r="7" fill="url(#a1g)"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-awn"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="麦芒 深秋"><defs><linearGradient id="a1a" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#f5b342"/><stop offset="100%" stop-color="#f9c75e"/></linearGradient></defs><path d="M20 84 Q40 70 52 46 Q60 28 64 10" stroke="url(#a1a)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="34" cy="68" r="7" fill="url(#a1a)"/><circle cx="46" cy="52" r="7" fill="url(#a1a)"/><circle cx="56" cy="36" r="7" fill="url(#a1a)"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-awn"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="麦芒 冬至"><defs><linearGradient id="a1w" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563eb"/><stop offset="100%" stop-color="#60a5fa"/></linearGradient></defs><path d="M20 84 Q40 70 52 46 Q60 28 64 10" stroke="url(#a1w)" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="34" cy="68" r="7" fill="url(#a1w)"/><circle cx="46" cy="52" r="7" fill="url(#a1w)"/><circle cx="56" cy="36" r="7" fill="url(#a1w)"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-awn"/></svg><span style="font-size:12px;color:var(--text-muted)">App icon</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 2: Seal -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">02</span>
+      <h2 class="concept-title">丰印 · Seal</h2>
+      <p class="concept-desc">圆形印章构图，麦穗环绕中心麦粒。稳重、正式，具有品牌徽章感。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="丰印 春分"><defs><linearGradient id="a2s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><circle cx="50" cy="50" r="42" fill="none" stroke="url(#a2s)" stroke-width="5"/><circle cx="50" cy="50" r="12" fill="url(#a2s)"/><path d="M50 18 L50 38 M50 62 L50 82 M18 50 L38 50 M62 50 L82 50" stroke="url(#a2s)" stroke-width="5" stroke-linecap="round"/><path d="M29 29 L42 42 M71 29 L58 42 M29 71 L42 58 M71 71 L58 58" stroke="url(#a2s)" stroke-width="5" stroke-linecap="round"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-seal"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="丰印 立夏"><defs><linearGradient id="a2u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><circle cx="50" cy="50" r="42" fill="none" stroke="url(#a2u)" stroke-width="5"/><circle cx="50" cy="50" r="12" fill="url(#a2u)"/><path d="M50 18 L50 38 M50 62 L50 82 M18 50 L38 50 M62 50 L82 50" stroke="url(#a2u)" stroke-width="5" stroke-linecap="round"/><path d="M29 29 L42 42 M71 29 L58 42 M29 71 L42 58 M71 71 L58 58" stroke="url(#a2u)" stroke-width="5" stroke-linecap="round"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-seal"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="丰印 初秋"><defs><linearGradient id="a2g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><circle cx="50" cy="50" r="42" fill="none" stroke="url(#a2g)" stroke-width="5"/><circle cx="50" cy="50" r="12" fill="url(#a2g)"/><path d="M50 18 L50 38 M50 62 L50 82 M18 50 L38 50 M62 50 L82 50" stroke="url(#a2g)" stroke-width="5" stroke-linecap="round"/><path d="M29 29 L42 42 M71 29 L58 42 M29 71 L42 58 M71 71 L58 58" stroke="url(#a2g)" stroke-width="5" stroke-linecap="round"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-seal"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="丰印 深秋"><defs><linearGradient id="a2a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><circle cx="50" cy="50" r="42" fill="none" stroke="url(#a2a)" stroke-width="5"/><circle cx="50" cy="50" r="12" fill="url(#a2a)"/><path d="M50 18 L50 38 M50 62 L50 82 M18 50 L38 50 M62 50 L82 50" stroke="url(#a2a)" stroke-width="5" stroke-linecap="round"/><path d="M29 29 L42 42 M71 29 L58 42 M29 71 L42 58 M71 71 L58 58" stroke="url(#a2a)" stroke-width="5" stroke-linecap="round"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-seal"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="丰印 冬至"><defs><linearGradient id="a2w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><circle cx="50" cy="50" r="42" fill="none" stroke="url(#a2w)" stroke-width="5"/><circle cx="50" cy="50" r="12" fill="url(#a2w)"/><path d="M50 18 L50 38 M50 62 L50 82 M18 50 L38 50 M62 50 L82 50" stroke="url(#a2w)" stroke-width="5" stroke-linecap="round"/><path d="M29 29 L42 42 M71 29 L58 42 M29 71 L42 58 M71 71 L58 58" stroke="url(#a2w)" stroke-width="5" stroke-linecap="round"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-seal"/></svg><span style="font-size:12px;color:var(--text-muted)">Badge</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 3: Twin Ears forming M -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">03</span>
+      <h2 class="concept-title">双穗 · M</h2>
+      <p class="concept-desc">两株麦穗对称交叉，负形构成字母 M。把“麦 / Mai”的首字母与大麦形态合二为一。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="双穗 春分"><defs><linearGradient id="a3s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><path d="M30 92 L30 48 Q30 20 50 8" stroke="url(#a3s)" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M70 92 L70 48 Q70 20 50 8" stroke="url(#a3s)" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="30" cy="42" r="7" fill="url(#a3s)"/><circle cx="30" cy="62" r="7" fill="url(#a3s)"/><circle cx="30" cy="82" r="7" fill="url(#a3s)"/><circle cx="70" cy="42" r="7" fill="url(#a3s)"/><circle cx="70" cy="62" r="7" fill="url(#a3s)"/><circle cx="70" cy="82" r="7" fill="url(#a3s)"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-m"/></svg><span style="font-size:12px;color:var(--text-muted)">Monogram</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="双穗 立夏"><defs><linearGradient id="a3u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><path d="M30 92 L30 48 Q30 20 50 8" stroke="url(#a3u)" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M70 92 L70 48 Q70 20 50 8" stroke="url(#a3u)" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="30" cy="42" r="7" fill="url(#a3u)"/><circle cx="30" cy="62" r="7" fill="url(#a3u)"/><circle cx="30" cy="82" r="7" fill="url(#a3u)"/><circle cx="70" cy="42" r="7" fill="url(#a3u)"/><circle cx="70" cy="62" r="7" fill="url(#a3u)"/><circle cx="70" cy="82" r="7" fill="url(#a3u)"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-m"/></svg><span style="font-size:12px;color:var(--text-muted)">Monogram</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="双穗 初秋"><defs><linearGradient id="a3g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><path d="M30 92 L30 48 Q30 20 50 8" stroke="url(#a3g)" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M70 92 L70 48 Q70 20 50 8" stroke="url(#a3g)" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="30" cy="42" r="7" fill="url(#a3g)"/><circle cx="30" cy="62" r="7" fill="url(#a3g)"/><circle cx="30" cy="82" r="7" fill="url(#a3g)"/><circle cx="70" cy="42" r="7" fill="url(#a3g)"/><circle cx="70" cy="62" r="7" fill="url(#a3g)"/><circle cx="70" cy="82" r="7" fill="url(#a3g)"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-m"/></svg><span style="font-size:12px;color:var(--text-muted)">Monogram</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="双穗 深秋"><defs><linearGradient id="a3a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><path d="M30 92 L30 48 Q30 20 50 8" stroke="url(#a3a)" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M70 92 L70 48 Q70 20 50 8" stroke="url(#a3a)" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="30" cy="42" r="7" fill="url(#a3a)"/><circle cx="30" cy="62" r="7" fill="url(#a3a)"/><circle cx="30" cy="82" r="7" fill="url(#a3a)"/><circle cx="70" cy="42" r="7" fill="url(#a3a)"/><circle cx="70" cy="62" r="7" fill="url(#a3a)"/><circle cx="70" cy="82" r="7" fill="url(#a3a)"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-m"/></svg><span style="font-size:12px;color:var(--text-muted)">Monogram</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="双穗 冬至"><defs><linearGradient id="a3w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><path d="M30 92 L30 48 Q30 20 50 8" stroke="url(#a3w)" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M70 92 L70 48 Q70 20 50 8" stroke="url(#a3w)" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="30" cy="42" r="7" fill="url(#a3w)"/><circle cx="30" cy="62" r="7" fill="url(#a3w)"/><circle cx="30" cy="82" r="7" fill="url(#a3w)"/><circle cx="70" cy="42" r="7" fill="url(#a3w)"/><circle cx="70" cy="62" r="7" fill="url(#a3w)"/><circle cx="70" cy="82" r="7" fill="url(#a3w)"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-m"/></svg><span style="font-size:12px;color:var(--text-muted)">Monogram</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Concept 4: Grain Array -->
+  <section class="concept">
+    <div class="concept-header">
+      <span class="concept-number">04</span>
+      <h2 class="concept-title">粒阵 · Array</h2>
+      <p class="concept-desc">七颗麦粒排列成数据柱阵，像缓存层、像键值序列。是四个方案中最具技术语言的一个。</p>
+    </div>
+    <div class="logo-grid">
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="粒阵 春分"><defs><linearGradient id="a4s" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#7cb84b"/><stop offset="100%" stop-color="#4caf50"/></linearGradient></defs><rect x="14" y="52" width="10" height="38" rx="5" fill="url(#a4s)"/><rect x="30" y="36" width="10" height="54" rx="5" fill="url(#a4s)"/><rect x="46" y="20" width="10" height="70" rx="5" fill="url(#a4s)"/><rect x="62" y="36" width="10" height="54" rx="5" fill="url(#a4s)"/><rect x="78" y="52" width="10" height="38" rx="5" fill="url(#a4s)"/></svg></div>
+        <div class="season-name">春分</div>
+        <div class="season-meta">Spring Green</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-array"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="粒阵 立夏"><defs><linearGradient id="a4u" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a9fd8"/><stop offset="100%" stop-color="#22a6f2"/></linearGradient></defs><rect x="14" y="52" width="10" height="38" rx="5" fill="url(#a4u)"/><rect x="30" y="36" width="10" height="54" rx="5" fill="url(#a4u)"/><rect x="46" y="20" width="10" height="70" rx="5" fill="url(#a4u)"/><rect x="62" y="36" width="10" height="54" rx="5" fill="url(#a4u)"/><rect x="78" y="52" width="10" height="38" rx="5" fill="url(#a4u)"/></svg></div>
+        <div class="season-name">立夏</div>
+        <div class="season-meta">Summer Sky</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-array"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="粒阵 初秋"><defs><linearGradient id="a4g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#e5b33a"/><stop offset="100%" stop-color="#d99a1b"/></linearGradient></defs><rect x="14" y="52" width="10" height="38" rx="5" fill="url(#a4g)"/><rect x="30" y="36" width="10" height="54" rx="5" fill="url(#a4g)"/><rect x="46" y="20" width="10" height="70" rx="5" fill="url(#a4g)"/><rect x="62" y="36" width="10" height="54" rx="5" fill="url(#a4g)"/><rect x="78" y="52" width="10" height="38" rx="5" fill="url(#a4g)"/></svg></div>
+        <div class="season-name">初秋</div>
+        <div class="season-meta">Golden Harvest</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-array"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="粒阵 深秋"><defs><linearGradient id="a4a" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e"/><stop offset="100%" stop-color="#f5b342"/></linearGradient></defs><rect x="14" y="52" width="10" height="38" rx="5" fill="url(#a4a)"/><rect x="30" y="36" width="10" height="54" rx="5" fill="url(#a4a)"/><rect x="46" y="20" width="10" height="70" rx="5" fill="url(#a4a)"/><rect x="62" y="36" width="10" height="54" rx="5" fill="url(#a4a)"/><rect x="78" y="52" width="10" height="38" rx="5" fill="url(#a4a)"/></svg></div>
+        <div class="season-name">深秋</div>
+        <div class="season-meta">Amber Dark</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-array"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech icon</span></div>
+      </article>
+      <article class="logo-card">
+        <div class="mark-stage"><svg viewBox="0 0 100 100" aria-label="粒阵 冬至"><defs><linearGradient id="a4w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs><rect x="14" y="52" width="10" height="38" rx="5" fill="url(#a4w)"/><rect x="30" y="36" width="10" height="54" rx="5" fill="url(#a4w)"/><rect x="46" y="20" width="10" height="70" rx="5" fill="url(#a4w)"/><rect x="62" y="36" width="10" height="54" rx="5" fill="url(#a4w)"/><rect x="78" y="52" width="10" height="38" rx="5" fill="url(#a4w)"/></svg></div>
+        <div class="season-name">冬至</div>
+        <div class="season-meta">Winter Frost</div>
+        <div class="small-row"><svg class="small-mark" viewBox="0 0 100 100"><use href="#sm-array"/></svg><span style="font-size:12px;color:var(--text-muted)">Tech icon</span></div>
+      </article>
+    </div>
+  </section>
+
+  <aside class="usage-note">
+    <h3>第二辑说明</h3>
+    <p>这一辑刻意避免了写实麦穗，转向符号化、徽章化和几何化，强调：</p>
+    <ul>
+      <li><strong>麦芒</strong>：极简曲线，适合高端、轻盈的品牌调性。</li>
+      <li><strong>丰印</strong>：印章式徽章，适合正式场合与启动页。</li>
+      <li><strong>双穗</strong>：把“Mai”首字母与大麦结合，识别度最高。</li>
+      <li><strong>粒阵</strong>：数据柱阵，最贴近“缓存”这一技术产品。</li>
+    </ul>
+  </aside>
+
+</main>
+
+<svg width="0" height="0" style="position:absolute;">
+  <symbol id="sm-awn" viewBox="0 0 100 100"><path d="M24 84 Q42 70 54 48 Q62 30 66 14" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="36" cy="68" r="6" fill="currentColor"/><circle cx="48" cy="50" r="6" fill="currentColor"/></symbol>
+  <symbol id="sm-seal" viewBox="0 0 100 100"><circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="50" cy="50" r="10" fill="currentColor"/></symbol>
+  <symbol id="sm-m" viewBox="0 0 100 100"><path d="M28 92 L28 50 Q28 24 50 12" stroke="currentColor" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M72 92 L72 50 Q72 24 50 12" stroke="currentColor" stroke-width="7" fill="none" stroke-linecap="round"/></symbol>
+  <symbol id="sm-array" viewBox="0 0 100 100"><rect x="18" y="54" width="10" height="40" rx="5" fill="currentColor"/><rect x="34" y="38" width="10" height="56" rx="5" fill="currentColor"/><rect x="50" y="22" width="10" height="72" rx="5" fill="currentColor"/><rect x="66" y="38" width="10" height="56" rx="5" fill="currentColor"/><rect x="82" y="54" width="10" height="40" rx="5" fill="currentColor"/></symbol>
+</svg>

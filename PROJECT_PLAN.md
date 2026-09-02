@@ -509,8 +509,8 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 | 集群（Cluster） | ✅ | 见下 |
 | 主从 / Sentinel | ⚠️ 部分 | 本期仅透传命令，不实现故障转移 |
 | 密码认证（`AUTH password`） | ✅ | 明文密码，见 9.2 |
+| ACL 用户名 + 密码认证（`AUTH username password`） | ✅ | Redis 6.0+ ACL，用户名留空时使用默认用户 |
 | **TLS / SSL（rediss）** | ❌ | **本期不支持**，详见下方说明 |
-| **ACL 用户名鉴权** | ❌ | **本期不支持**，仅支持默认 `default` 用户 |
 | SSH 隧道 | ❌ | 本期不支持 |
 
 #### 9.4.1 TLS / rediss 不支持说明
@@ -519,11 +519,11 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 - 若用户输入 `rediss://` 开头的地址，程序将返回错误提示「暂不支持 TLS 加密连接 (rediss)」。
 - 依赖 `redis` crate 时关闭其 `tls` / `tokio-native-tls` 等 feature，避免误启用。
 
-#### 9.4.2 ACL 不支持说明
+#### 9.4.2 ACL 用户名认证说明
 
-- 连接仅支持 `AUTH password` 密码认证，登录框**不出现**「用户名」字段。
-- 连接参数中 `username` 固定为 `None`，不使用 `AUTH username password` 双参数形式。
-- 如后续需要，可平滑支持 `AUTH username password` 而不破坏现有结构（字段已预留 `Option`），但本期不开放。
+- 连接支持 `AUTH username password` 双参数认证（Redis 6.0+ ACL）。
+- 登录框提供「用户名 (可选)」字段；留空时使用默认用户，等效于 `AUTH password`，兼容 Redis < 6.0。
+- 连接参数中 `username` 为 `Option<String>`，未配置时为 `None`，不影响现有结构。
 
 ### 9.5 前端技术栈
 

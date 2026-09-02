@@ -1,0 +1,34 @@
+<!--
+  麦地缓存 Favicon - 简化版
+  文件：assets/logo/favicon.svg
+  说明：
+    - 针对 16×16 / 32×32 等小尺寸优化，去掉了过细的连接线与节点。
+    - 如需生成 .ico 或 .png，可用该 SVG 在浏览器或设计软件中导出。
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>麦地缓存 Favicon</title>
+  <style>
+    :root {
+      --md-logo-primary: #f5b342;
+      --md-logo-secondary: #f9c75e;
+      --md-logo-surface: #ffffff;
+    }
+  </style>
+
+  <defs>
+    <linearGradient id="md-favicon-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="var(--md-logo-secondary)" />
+      <stop offset="100%" stop-color="var(--md-logo-primary)" />
+    </linearGradient>
+  </defs>
+
+  <!-- 简化数据库圆柱 -->
+  <ellipse cx="44" cy="28" rx="24" ry="9" fill="url(#md-favicon-gradient)" />
+  <path d="M20 28 L20 70 Q20 78 44 78 Q68 78 68 70 L68 28" fill="url(#md-favicon-gradient)" />
+
+  <!-- 简化 MR 徽章 -->
+  <circle cx="72" cy="72" r="20" fill="var(--md-logo-surface)" stroke="var(--md-logo-primary)" stroke-width="4" />
+  <text x="72" y="78" text-anchor="middle"
+        font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif"
+        font-weight="700" font-size="15" fill="var(--md-logo-primary)">MR</text>
+</svg>
