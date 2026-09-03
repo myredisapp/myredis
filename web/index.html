@@ -904,6 +904,23 @@
         .detail-header .ttl i {
             margin-right: 4px;
         }
+        .detail-header .ttl input {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            padding: 2px 8px;
+            font-size: 13px;
+            width: 80px;
+            outline: none;
+        }
+        .detail-header .ttl input:focus {
+            border-color: var(--accent);
+        }
+        .detail-header .ttl input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .detail-header .detail-actions {
             margin-left: auto;
             display: flex;
@@ -1639,6 +1656,11 @@
                 <label>值</label>
                 <textarea id="addKeyValue" rows="6" placeholder="请输入 Key 的值" style="width:100%;resize:vertical;box-sizing:border-box;"></textarea>
             </div>
+            <div class="form-group">
+                <label>TTL（秒）</label>
+                <input type="number" id="addKeyTtl" value="-1" placeholder="-1 表示永不过期" />
+                <small style="color: var(--text-muted); font-size: 12px;">-1 表示永不过期，正整数表示过期秒数</small>
+            </div>
             <div class="modal-actions">
                 <button class="secondary" id="addKeyCancel">取消</button>
                 <button class="primary" id="addKeySave">创建</button>
@@ -2361,7 +2383,7 @@
                     `;
                 }
 
-                const ttlDisplay = ttl === -1 ? '永不过期' : `${ttl}s`;
+                const ttlDisabled = readonlyConn ? ' disabled' : '';
 
                 keyDetailEl.innerHTML = `
                     <div class="detail-header">
@@ -2369,7 +2391,7 @@
                             <span>${selectedKey}</span>
                             <span class="type-badge ${typeClass}">${typeLabel}</span>
                         </div>
-                        <span class="ttl"><i class="far fa-clock"></i> ${ttlDisplay}</span>
+                        <span class="ttl"><i class="far fa-clock"></i> <input type="number" id="detailTtl" value="${ttl}" title="TTL（秒），-1 表示永不过期"${ttlDisabled} /></span>
                         <div class="detail-actions">
                             <button class="primary" id="detailSave"${readonlyConn ? ' disabled' : ''} data-orig-title="保存修改" title="${readonlyConn ? '只读连接，禁止写操作' : '保存修改'}"><i class="fas fa-save"></i> 保存</button>
                             <button id="detailRefresh"><i class="fas fa-sync-alt"></i> 刷新</button>
@@ -2411,16 +2433,24 @@
                             return;
                         }
                         const value = editor.value;
+                        const ttlInput = document.getElementById('detailTtl');
+                        const ttlResult = parseTtl(ttlInput ? ttlInput.value : '-1');
+                        if (!ttlResult.ok) {
+                            showToast(ttlResult.message, 'error');
+                            if (ttlInput) ttlInput.focus();
+                            return;
+                        }
                         saveBtn.disabled = true;
-                        invoke('set_key', { connId: currentConn.id, key: selectedKey, value: value })
+                        invoke('set_key', { connId: currentConn.id, key: selectedKey, value: value, ttl: ttlResult.ttl })
                             .then(() => {
-                                appendTerminal(`SET ${selectedKey} → OK`, 'ok');
+                                const ttlArg = ttlResult.ttl > 0 ? ` EX ${ttlResult.ttl}` : '';
+                                appendTerminal(`SET ${selectedKey}${ttlArg} → OK`, 'ok');
                                 showToast('Key 已保存', 'success');
-                                // 同步本地缓存并刷新列表
                                 if (KEY_DATA[selectedKey]) {
                                     KEY_DATA[selectedKey].value = value;
+                                    KEY_DATA[selectedKey].ttl = ttlResult.ttl;
                                 }
-                                loadKeys();
+                                loadKeys().then(() => renderDetail());
                             })
                             .catch(err => {
                                 showToast('保存失败: ' + err, 'error');
@@ -2747,6 +2777,7 @@
             const addKeyModal = document.getElementById('addKeyModal');
             const addKeyNameInput = document.getElementById('addKeyName');
             const addKeyValueInput = document.getElementById('addKeyValue');
+            const addKeyTtlInput = document.getElementById('addKeyTtl');
 
             function openAddKeyModal() {
                 if (!currentConn || !currentConn.id) {
@@ -2759,12 +2790,31 @@
                 }
                 addKeyNameInput.value = '';
                 addKeyValueInput.value = '';
+                addKeyTtlInput.value = '-1';
                 addKeyModal.classList.add('open');
                 setTimeout(() => addKeyNameInput.focus(), 50);
             }
 
             function closeAddKeyModal() {
                 addKeyModal.classList.remove('open');
+            }
+
+            function parseTtl(value) {
+                if (value === '' || value === null || value === undefined) {
+                    return { ok: false, message: '请输入 TTL' };
+                }
+                const trimmed = String(value).trim();
+                if (!/^-?\d+$/.test(trimmed)) {
+                    return { ok: false, message: 'TTL 必须为整数' };
+                }
+                const n = parseInt(trimmed, 10);
+                if (n === -1) {
+                    return { ok: true, ttl: -1 };
+                }
+                if (n <= 0) {
+                    return { ok: false, message: 'TTL 必须为 -1 或正整数' };
+                }
+                return { ok: true, ttl: n };
             }
 
             function submitAddKey() {
@@ -2778,13 +2828,20 @@
                     showToast('Key 已存在', 'error');
                     return;
                 }
+                const ttlResult = parseTtl(addKeyTtlInput.value);
+                if (!ttlResult.ok) {
+                    showToast(ttlResult.message, 'error');
+                    addKeyTtlInput.focus();
+                    return;
+                }
                 const value = addKeyValueInput.value;
                 document.getElementById('btnAddKey').disabled = true;
-                invoke('set_key', { connId: currentConn.id, key: trimmed, value: value })
+                invoke('set_key', { connId: currentConn.id, key: trimmed, value: value, ttl: ttlResult.ttl })
                     .then(() => {
                         closeAddKeyModal();
                         showToast(`Key "${trimmed}" 已创建`, 'success');
-                        appendTerminal(`SET ${trimmed} "${value}" → OK`, 'ok');
+                        const ttlArg = ttlResult.ttl > 0 ? ` EX ${ttlResult.ttl}` : '';
+                        appendTerminal(`SET ${trimmed} "${value}"${ttlArg} → OK`, 'ok');
                         // 刷新 key 列表
                         loadKeys().then(() => {
                             selectedKey = trimmed;
@@ -2806,6 +2863,7 @@
             document.getElementById('addKeySave').addEventListener('click', submitAddKey);
             addKeyNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAddKey(); });
             addKeyValueInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitAddKey(); });
+            addKeyTtlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAddKey(); });
             addKeyModal.addEventListener('click', (e) => { if (e.target === addKeyModal) closeAddKeyModal(); });
 
             document.getElementById('btnImport').addEventListener('click', () => {

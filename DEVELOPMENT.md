@@ -124,11 +124,12 @@ cd src-tauri
 # 运行（开发）
 cargo tauri dev
 
-# 单元测试
+# 单元测试（不依赖 Redis）
 cargo test
 
 # 集成测试（需先启动 Redis，如 docker run -p 6379:6379 redis）
-cargo test --test ping_integration -- --nocapture
+# 所有带 #[ignore] 的 Redis 依赖测试：
+cargo test -- --ignored
 
 # 代码检查
 cargo clippy -- -D warnings
