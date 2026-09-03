@@ -56,6 +56,7 @@ pub fn run() {
             commands::connection::list_connections,
             commands::connection::save_connection,
             commands::connection::delete_connection,
+            commands::connection::test_connection,
             commands::server::ping,
             commands::server::get_server_info,
             commands::server::select_db,

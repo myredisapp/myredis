@@ -25,7 +25,9 @@ async fn redis_ping_returns_pong() {
         username: None,
         password: None,
     };
-    pool.connect(&conn).await.expect("连接 Redis 失败，请确认服务已启动");
+    pool.connect(&conn)
+        .await
+        .expect("连接 Redis 失败，请确认服务已启动");
     let pong = pool.ping("itest1").await.expect("PING 失败");
     assert_eq!(pong, "PONG");
     println!("PING 返回: {}", pong);
@@ -67,7 +69,6 @@ fn connection_json_deserializes_from_frontend_payload() {
 
 #[test]
 fn get_server_info_parses_real_redis() {
-
     let rt = tokio::runtime::Runtime::new().unwrap();
     let (raw, db_size) = rt.block_on(async {
         let client = redis::Client::open("redis://127.0.0.1:6379").unwrap();
@@ -86,7 +87,10 @@ fn get_server_info_parses_real_redis() {
     assert!(raw.contains("redis_version"));
     assert!(raw.contains("used_memory"));
     for line in raw.lines().filter(|l| l.starts_with("redis_version:")) {
-        println!("服务端 Redis 版本: {}", line.split(':').nth(1).unwrap_or("?"));
+        println!(
+            "服务端 Redis 版本: {}",
+            line.split(':').nth(1).unwrap_or("?")
+        );
     }
     println!("DBSIZE = {}", db_size);
     let _ = db_size;
