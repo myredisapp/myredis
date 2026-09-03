@@ -86,9 +86,6 @@ pub async fn set_key(
     set_key_inner(&pool, conn_id, key, value, ttl).await
 }
 
-/// Redis SET EX 允许的最大秒数（2^53 - 1 毫秒换算为秒，再向下取整）。
-const MAX_TTL_SECONDS: i64 = 9_223_372_036_854_775;
-
 /// 构造 `SET key value [EX ttl]` 命令。
 ///
 /// 调用方需保证 `ttl` 已经过合法性校验；本函数仅负责命令组装。
@@ -111,9 +108,6 @@ async fn set_key_inner(
     if ttl != -1 && ttl <= 0 {
         return Err("TTL 必须为 -1 或正整数".into());
     }
-    if ttl > MAX_TTL_SECONDS {
-        return Err(format!("TTL 不能超过 Redis 最大值 {} 秒", MAX_TTL_SECONDS));
-    }
 
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
@@ -129,7 +123,7 @@ async fn set_key_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_set_cmd, set_key_inner, MAX_TTL_SECONDS};
+    use super::{build_set_cmd, set_key_inner};
     use crate::connection_pool::Pool;
     use crate::models::{ConnType, Connection};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -278,7 +272,7 @@ mod tests {
         let value = "x".to_string();
         let conn_id = format!("key_test_invalid_ttl:{}", unique_id());
 
-        for invalid_ttl in [0, -2, -100, MAX_TTL_SECONDS + 1] {
+        for invalid_ttl in [0, -2, -100] {
             let result = set_key_inner(
                 &pool,
                 conn_id.clone(),
