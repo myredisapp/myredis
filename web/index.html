@@ -2448,8 +2448,9 @@
                                 showToast('Key 已保存', 'success');
                                 if (KEY_DATA[selectedKey]) {
                                     KEY_DATA[selectedKey].value = value;
+                                    KEY_DATA[selectedKey].ttl = ttlResult.ttl;
                                 }
-                                loadKeys();
+                                loadKeys().then(() => renderDetail());
                             })
                             .catch(err => {
                                 showToast('保存失败: ' + err, 'error');

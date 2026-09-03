@@ -86,6 +86,21 @@ pub async fn set_key(
     set_key_inner(&pool, conn_id, key, value, ttl).await
 }
 
+/// Redis SET EX 允许的最大秒数（2^53 - 1 毫秒换算为秒，再向下取整）。
+const MAX_TTL_SECONDS: i64 = 9_223_372_036_854_775;
+
+/// 构造 `SET key value [EX ttl]` 命令。
+///
+/// 调用方需保证 `ttl` 已经过合法性校验；本函数仅负责命令组装。
+fn build_set_cmd(key: &str, value: &str, ttl: i64) -> redis::Cmd {
+    let mut cmd = redis::cmd("SET");
+    cmd.arg(key).arg(value);
+    if ttl > 0 {
+        cmd.arg("EX").arg(ttl);
+    }
+    cmd
+}
+
 async fn set_key_inner(
     pool: &Pool,
     conn_id: String,
@@ -96,15 +111,14 @@ async fn set_key_inner(
     if ttl != -1 && ttl <= 0 {
         return Err("TTL 必须为 -1 或正整数".into());
     }
+    if ttl > MAX_TTL_SECONDS {
+        return Err(format!("TTL 不能超过 Redis 最大值 {} 秒", MAX_TTL_SECONDS));
+    }
 
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
 
-    let mut cmd = redis::cmd("SET");
-    cmd.arg(&key).arg(&value);
-    if ttl > 0 {
-        cmd.arg("EX").arg(ttl);
-    }
+    let cmd = build_set_cmd(&key, &value, ttl);
     let ok: String = cmd
         .query_async(&mut con)
         .await
@@ -115,9 +129,25 @@ async fn set_key_inner(
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::key::set_key_inner;
+    use super::{build_set_cmd, set_key_inner, MAX_TTL_SECONDS};
     use crate::connection_pool::Pool;
     use crate::models::{ConnType, Connection};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_id() -> String {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let n = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        format!("{}_{}", ts, n)
+    }
+
+    fn unique_key(prefix: &str) -> String {
+        format!("maidi:test:{}:{}", prefix, unique_id())
+    }
 
     async fn test_pool(conn_id: &str) -> Result<Pool, String> {
         let pool = Pool::new();
@@ -139,19 +169,78 @@ mod tests {
         Ok(pool)
     }
 
+    /// 将 `redis::Cmd` 打包后的 RESP 数组解析为字符串参数列表。
+    fn parse_cmd_args(cmd: &redis::Cmd) -> Vec<String> {
+        let packed = cmd.get_packed_command();
+        let s = String::from_utf8(packed).expect("命令应为 UTF-8");
+        let mut args = Vec::new();
+        let mut chars = s.chars().peekable();
+
+        // 期望以 '*' 开头
+        assert_eq!(chars.next(), Some('*'));
+        let mut count = 0usize;
+        while let Some(&c) = chars.peek() {
+            if c == '\r' {
+                chars.next();
+                assert_eq!(chars.next(), Some('\n'));
+                break;
+            }
+            count = count * 10 + c.to_digit(10).unwrap() as usize;
+            chars.next();
+        }
+
+        for _ in 0..count {
+            assert_eq!(chars.next(), Some('$'));
+            let mut len = 0usize;
+            while let Some(&c) = chars.peek() {
+                if c == '\r' {
+                    chars.next();
+                    assert_eq!(chars.next(), Some('\n'));
+                    break;
+                }
+                len = len * 10 + c.to_digit(10).unwrap() as usize;
+                chars.next();
+            }
+            let mut buf = String::with_capacity(len);
+            for _ in 0..len {
+                buf.push(chars.next().expect("参数长度不足"));
+            }
+            assert_eq!(chars.next(), Some('\r'));
+            assert_eq!(chars.next(), Some('\n'));
+            args.push(buf);
+        }
+
+        args
+    }
+
+    #[test]
+    fn build_set_cmd_without_ttl() {
+        let cmd = build_set_cmd("mykey", "myvalue", -1);
+        let args = parse_cmd_args(&cmd);
+        assert_eq!(args, vec!["SET", "mykey", "myvalue"]);
+    }
+
+    #[test]
+    fn build_set_cmd_with_ttl() {
+        let cmd = build_set_cmd("mykey", "myvalue", 10);
+        let args = parse_cmd_args(&cmd);
+        assert_eq!(args, vec!["SET", "mykey", "myvalue", "EX", "10"]);
+    }
+
     #[tokio::test]
     #[ignore]
     async fn set_key_without_ttl() -> Result<(), String> {
-        let pool = test_pool("key_test_no_ttl").await?;
-        let key = "maidi:test:no_ttl".to_string();
+        let conn_id = format!("key_test_no_ttl:{}", unique_id());
+        let pool = test_pool(&conn_id).await?;
+        let key = unique_key("no_ttl");
         let value = "hello".to_string();
 
-        let result = set_key_inner(&pool, "key_test_no_ttl".into(), key.clone(), value, -1).await;
+        let result = set_key_inner(&pool, conn_id.clone(), key.clone(), value, -1).await;
         assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
 
         let ttl: i64 = redis::cmd("TTL")
             .arg(&key)
-            .query_async(&mut pool.manager("key_test_no_ttl").unwrap())
+            .query_async(&mut pool.manager(&conn_id).unwrap())
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -161,16 +250,17 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn set_key_with_ttl_sets_expiry() -> Result<(), String> {
-        let pool = test_pool("key_test_ttl").await?;
-        let key = "maidi:test:with_ttl".to_string();
+        let conn_id = format!("key_test_ttl:{}", unique_id());
+        let pool = test_pool(&conn_id).await?;
+        let key = unique_key("with_ttl");
         let value = "world".to_string();
 
-        let result = set_key_inner(&pool, "key_test_ttl".into(), key.clone(), value, 10).await;
+        let result = set_key_inner(&pool, conn_id.clone(), key.clone(), value, 10).await;
         assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
 
         let ttl: i64 = redis::cmd("TTL")
             .arg(&key)
-            .query_async(&mut pool.manager("key_test_ttl").unwrap())
+            .query_async(&mut pool.manager(&conn_id).unwrap())
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -184,13 +274,14 @@ mod tests {
     #[tokio::test]
     async fn set_key_rejects_invalid_ttl() {
         let pool = Pool::new();
-        let key = "maidi:test:invalid_ttl".to_string();
+        let key = unique_key("invalid_ttl");
         let value = "x".to_string();
+        let conn_id = format!("key_test_invalid_ttl:{}", unique_id());
 
-        for invalid_ttl in [0, -2, -100] {
+        for invalid_ttl in [0, -2, -100, MAX_TTL_SECONDS + 1] {
             let result = set_key_inner(
                 &pool,
-                "key_test_invalid_ttl".into(),
+                conn_id.clone(),
                 key.clone(),
                 value.clone(),
                 invalid_ttl,
