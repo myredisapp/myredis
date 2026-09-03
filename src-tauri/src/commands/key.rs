@@ -100,23 +100,15 @@ async fn set_key_inner(
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
 
-    let ok: String = if ttl > 0 {
-        redis::cmd("SET")
-            .arg(&key)
-            .arg(&value)
-            .arg("EX")
-            .arg(ttl)
-            .query_async(&mut con)
-            .await
-            .map_err(|e: redis::RedisError| e.to_string())?
-    } else {
-        redis::cmd("SET")
-            .arg(&key)
-            .arg(&value)
-            .query_async(&mut con)
-            .await
-            .map_err(|e: redis::RedisError| e.to_string())?
-    };
+    let mut cmd = redis::cmd("SET");
+    cmd.arg(&key).arg(&value);
+    if ttl > 0 {
+        cmd.arg("EX").arg(ttl);
+    }
+    let ok: String = cmd
+        .query_async(&mut con)
+        .await
+        .map_err(|e: redis::RedisError| e.to_string())?;
 
     Ok(ok)
 }
@@ -127,7 +119,7 @@ mod tests {
     use crate::connection_pool::Pool;
     use crate::models::{ConnType, Connection};
 
-    async fn test_pool(conn_id: &str) -> Pool {
+    async fn test_pool(conn_id: &str) -> Result<Pool, String> {
         let pool = Pool::new();
         let conn = Connection {
             id: conn_id.into(),
@@ -143,14 +135,14 @@ mod tests {
         };
         pool.connect(&conn)
             .await
-            .expect("连接 Redis 失败，请确认服务已启动");
-        pool
+            .map_err(|e| format!("连接 Redis 失败，请确认服务已启动: {e}"))?;
+        Ok(pool)
     }
 
     #[tokio::test]
     #[ignore]
-    async fn set_key_without_ttl() {
-        let pool = test_pool("key_test_no_ttl").await;
+    async fn set_key_without_ttl() -> Result<(), String> {
+        let pool = test_pool("key_test_no_ttl").await?;
         let key = "maidi:test:no_ttl".to_string();
         let value = "hello".to_string();
 
@@ -161,14 +153,15 @@ mod tests {
             .arg(&key)
             .query_async(&mut pool.manager("key_test_no_ttl").unwrap())
             .await
-            .unwrap();
+            .map_err(|e| e.to_string())?;
         assert_eq!(ttl, -1, "未设置 TTL 的 key 应当永不过期");
+        Ok(())
     }
 
     #[tokio::test]
     #[ignore]
-    async fn set_key_with_ttl_sets_expiry() {
-        let pool = test_pool("key_test_ttl").await;
+    async fn set_key_with_ttl_sets_expiry() -> Result<(), String> {
+        let pool = test_pool("key_test_ttl").await?;
         let key = "maidi:test:with_ttl".to_string();
         let value = "world".to_string();
 
@@ -179,18 +172,18 @@ mod tests {
             .arg(&key)
             .query_async(&mut pool.manager("key_test_ttl").unwrap())
             .await
-            .unwrap();
+            .map_err(|e| e.to_string())?;
         assert!(
             ttl > 0 && ttl <= 10,
             "TTL 应当被设置为正数且不超过 10 秒: got {}",
             ttl
         );
+        Ok(())
     }
 
     #[tokio::test]
-    #[ignore]
     async fn set_key_rejects_invalid_ttl() {
-        let pool = test_pool("key_test_invalid_ttl").await;
+        let pool = Pool::new();
         let key = "maidi:test:invalid_ttl".to_string();
         let value = "x".to_string();
 
