@@ -904,6 +904,23 @@
         .detail-header .ttl i {
             margin-right: 4px;
         }
+        .detail-header .ttl input {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            padding: 2px 8px;
+            font-size: 13px;
+            width: 80px;
+            outline: none;
+        }
+        .detail-header .ttl input:focus {
+            border-color: var(--accent);
+        }
+        .detail-header .ttl input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .detail-header .detail-actions {
             margin-left: auto;
             display: flex;
@@ -2367,6 +2384,7 @@
                 }
 
                 const ttlDisplay = ttl === -1 ? '永不过期' : `${ttl}s`;
+                const ttlDisabled = readonlyConn ? ' disabled' : '';
 
                 keyDetailEl.innerHTML = `
                     <div class="detail-header">
@@ -2374,7 +2392,7 @@
                             <span>${selectedKey}</span>
                             <span class="type-badge ${typeClass}">${typeLabel}</span>
                         </div>
-                        <span class="ttl"><i class="far fa-clock"></i> ${ttlDisplay}</span>
+                        <span class="ttl"><i class="far fa-clock"></i> <input type="number" id="detailTtl" value="${ttl}" title="TTL（秒），-1 表示永不过期"${ttlDisabled} /></span>
                         <div class="detail-actions">
                             <button class="primary" id="detailSave"${readonlyConn ? ' disabled' : ''} data-orig-title="保存修改" title="${readonlyConn ? '只读连接，禁止写操作' : '保存修改'}"><i class="fas fa-save"></i> 保存</button>
                             <button id="detailRefresh"><i class="fas fa-sync-alt"></i> 刷新</button>
@@ -2416,12 +2434,19 @@
                             return;
                         }
                         const value = editor.value;
+                        const ttlInput = document.getElementById('detailTtl');
+                        const ttlResult = parseTtl(ttlInput ? ttlInput.value : '-1');
+                        if (!ttlResult.ok) {
+                            showToast(ttlResult.message, 'error');
+                            if (ttlInput) ttlInput.focus();
+                            return;
+                        }
                         saveBtn.disabled = true;
-                        invoke('set_key', { connId: currentConn.id, key: selectedKey, value: value })
+                        invoke('set_key', { connId: currentConn.id, key: selectedKey, value: value, ttl: ttlResult.ttl })
                             .then(() => {
-                                appendTerminal(`SET ${selectedKey} → OK`, 'ok');
+                                const ttlArg = ttlResult.ttl > 0 ? ` EX ${ttlResult.ttl}` : '';
+                                appendTerminal(`SET ${selectedKey}${ttlArg} → OK`, 'ok');
                                 showToast('Key 已保存', 'success');
-                                // 同步本地缓存并刷新列表
                                 if (KEY_DATA[selectedKey]) {
                                     KEY_DATA[selectedKey].value = value;
                                 }
