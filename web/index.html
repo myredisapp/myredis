@@ -2383,6 +2383,7 @@
                     `;
                 }
 
+                const ttlDisplay = ttl === -1 ? '永不过期' : `${ttl}s`;
                 const ttlDisabled = readonlyConn ? ' disabled' : '';
 
                 keyDetailEl.innerHTML = `
