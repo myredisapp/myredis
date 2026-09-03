@@ -71,23 +71,145 @@ pub async fn list_keys(
     Ok(keys)
 }
 
-/// 新建或覆盖一个字符串类型的 key（等价于 `SET key value`）。
+/// 新建或覆盖一个字符串类型的 key（等价于 `SET key value [EX ttl]`）。
+///
+/// `ttl` 为 `-1` 表示不设置过期时间；为正整数时表示过期秒数。
+/// 其他值（如 `0`、负数且不等于 `-1`）会返回参数错误。
 #[tauri::command]
 pub async fn set_key(
     pool: tauri::State<'_, Pool>,
     conn_id: String,
     key: String,
     value: String,
+    ttl: i64,
 ) -> Result<String, String> {
+    set_key_inner(&pool, conn_id, key, value, ttl).await
+}
+
+async fn set_key_inner(
+    pool: &Pool,
+    conn_id: String,
+    key: String,
+    value: String,
+    ttl: i64,
+) -> Result<String, String> {
+    if ttl != -1 && ttl <= 0 {
+        return Err("TTL 必须为 -1 或正整数".into());
+    }
+
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
-    let ok: String = redis::cmd("SET")
-        .arg(&key)
-        .arg(&value)
-        .query_async(&mut con)
-        .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+
+    let ok: String = if ttl > 0 {
+        redis::cmd("SET")
+            .arg(&key)
+            .arg(&value)
+            .arg("EX")
+            .arg(ttl)
+            .query_async(&mut con)
+            .await
+            .map_err(|e: redis::RedisError| e.to_string())?
+    } else {
+        redis::cmd("SET")
+            .arg(&key)
+            .arg(&value)
+            .query_async(&mut con)
+            .await
+            .map_err(|e: redis::RedisError| e.to_string())?
+    };
+
     Ok(ok)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::commands::key::set_key_inner;
+    use crate::connection_pool::Pool;
+    use crate::models::{ConnType, Connection};
+
+    async fn test_pool(conn_id: &str) -> Pool {
+        let pool = Pool::new();
+        let conn = Connection {
+            id: conn_id.into(),
+            name: "integration".into(),
+            host: "127.0.0.1".into(),
+            port: 6379,
+            conn_type: ConnType::Single,
+            readonly: false,
+            separator: ":".into(),
+            db: 0,
+            username: None,
+            password: None,
+        };
+        pool.connect(&conn)
+            .await
+            .expect("连接 Redis 失败，请确认服务已启动");
+        pool
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn set_key_without_ttl() {
+        let pool = test_pool("key_test_no_ttl").await;
+        let key = "maidi:test:no_ttl".to_string();
+        let value = "hello".to_string();
+
+        let result = set_key_inner(&pool, "key_test_no_ttl".into(), key.clone(), value, -1).await;
+        assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
+
+        let ttl: i64 = redis::cmd("TTL")
+            .arg(&key)
+            .query_async(&mut pool.manager("key_test_no_ttl").unwrap())
+            .await
+            .unwrap();
+        assert_eq!(ttl, -1, "未设置 TTL 的 key 应当永不过期");
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn set_key_with_ttl_sets_expiry() {
+        let pool = test_pool("key_test_ttl").await;
+        let key = "maidi:test:with_ttl".to_string();
+        let value = "world".to_string();
+
+        let result = set_key_inner(&pool, "key_test_ttl".into(), key.clone(), value, 10).await;
+        assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
+
+        let ttl: i64 = redis::cmd("TTL")
+            .arg(&key)
+            .query_async(&mut pool.manager("key_test_ttl").unwrap())
+            .await
+            .unwrap();
+        assert!(
+            ttl > 0 && ttl <= 10,
+            "TTL 应当被设置为正数且不超过 10 秒: got {}",
+            ttl
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn set_key_rejects_invalid_ttl() {
+        let pool = test_pool("key_test_invalid_ttl").await;
+        let key = "maidi:test:invalid_ttl".to_string();
+        let value = "x".to_string();
+
+        for invalid_ttl in [0, -2, -100] {
+            let result = set_key_inner(
+                &pool,
+                "key_test_invalid_ttl".into(),
+                key.clone(),
+                value.clone(),
+                invalid_ttl,
+            )
+            .await;
+            assert!(result.is_err(), "TTL={} 应当返回错误", invalid_ttl);
+            assert!(
+                result.unwrap_err().contains("TTL"),
+                "错误信息应提示 TTL 参数"
+            );
+        }
+    }
 }
 
 /// 删除一个或多个 key，返回实际删除的 key 数量。
