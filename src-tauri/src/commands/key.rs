@@ -163,63 +163,26 @@ mod tests {
         Ok(pool)
     }
 
-    /// 将 `redis::Cmd` 打包后的 RESP 数组解析为字符串参数列表。
-    fn parse_cmd_args(cmd: &redis::Cmd) -> Vec<String> {
-        let packed = cmd.get_packed_command();
-        let s = String::from_utf8(packed).expect("命令应为 UTF-8");
-        let mut args = Vec::new();
-        let mut chars = s.chars().peekable();
-
-        // 期望以 '*' 开头
-        assert_eq!(chars.next(), Some('*'));
-        let mut count = 0usize;
-        while let Some(&c) = chars.peek() {
-            if c == '\r' {
-                chars.next();
-                assert_eq!(chars.next(), Some('\n'));
-                break;
-            }
-            count = count * 10 + c.to_digit(10).unwrap() as usize;
-            chars.next();
-        }
-
-        for _ in 0..count {
-            assert_eq!(chars.next(), Some('$'));
-            let mut len = 0usize;
-            while let Some(&c) = chars.peek() {
-                if c == '\r' {
-                    chars.next();
-                    assert_eq!(chars.next(), Some('\n'));
-                    break;
-                }
-                len = len * 10 + c.to_digit(10).unwrap() as usize;
-                chars.next();
-            }
-            let mut buf = String::with_capacity(len);
-            for _ in 0..len {
-                buf.push(chars.next().expect("参数长度不足"));
-            }
-            assert_eq!(chars.next(), Some('\r'));
-            assert_eq!(chars.next(), Some('\n'));
-            args.push(buf);
-        }
-
-        args
-    }
-
     #[test]
     fn build_set_cmd_without_ttl() {
         let cmd = build_set_cmd("mykey", "myvalue", -1);
-        let args = parse_cmd_args(&cmd);
-        assert_eq!(args, vec!["SET", "mykey", "myvalue"]);
+        assert_eq!(
+            cmd.get_packed_command(),
+            b"*3\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$7\r\nmyvalue\r\n"
+        );
     }
 
     #[test]
     fn build_set_cmd_with_ttl() {
         let cmd = build_set_cmd("mykey", "myvalue", 10);
-        let args = parse_cmd_args(&cmd);
-        assert_eq!(args, vec!["SET", "mykey", "myvalue", "EX", "10"]);
+        assert_eq!(
+            cmd.get_packed_command(),
+            b"*5\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$7\r\nmyvalue\r\n$2\r\nEX\r\n$2\r\n10\r\n"
+        );
     }
+
+    // 以下测试依赖本地 Redis，默认标记为 #[ignore]；
+    // 启动 Redis 后可通过 `cargo test -- --ignored` 运行。
 
     #[tokio::test]
     #[ignore]
@@ -261,6 +224,41 @@ mod tests {
             ttl > 0 && ttl <= 10,
             "TTL 应当被设置为正数且不超过 10 秒: got {}",
             ttl
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn set_key_updates_ttl_of_existing_key() -> Result<(), String> {
+        let conn_id = format!("key_test_update_ttl:{}", unique_id());
+        let pool = test_pool(&conn_id).await?;
+        let key = unique_key("update_ttl");
+
+        set_key_inner(&pool, conn_id.clone(), key.clone(), "first".into(), -1)
+            .await
+            .map_err(|e| format!("首次 SET 失败: {e}"))?;
+
+        let initial_ttl: i64 = redis::cmd("TTL")
+            .arg(&key)
+            .query_async(&mut pool.manager(&conn_id).unwrap())
+            .await
+            .map_err(|e| e.to_string())?;
+        assert_eq!(initial_ttl, -1, "未设置 TTL 的 key 应当永不过期");
+
+        set_key_inner(&pool, conn_id.clone(), key.clone(), "second".into(), 10)
+            .await
+            .map_err(|e| format!("更新 TTL 的 SET 失败: {e}"))?;
+
+        let updated_ttl: i64 = redis::cmd("TTL")
+            .arg(&key)
+            .query_async(&mut pool.manager(&conn_id).unwrap())
+            .await
+            .map_err(|e| e.to_string())?;
+        assert!(
+            updated_ttl > 0 && updated_ttl <= 10,
+            "更新后的 TTL 应当为正数且不超过 10 秒: got {}",
+            updated_ttl
         );
         Ok(())
     }
