@@ -24,3 +24,6 @@ bin/
 
 # --- IDE ---
 .idea/
+
+# --- 开发工作区 ---
+/.worktrees/
