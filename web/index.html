@@ -1298,6 +1298,12 @@
         .modal .modal-title i {
             color: var(--accent);
         }
+        .modal .modal-title .logo-mark {
+            width: 22px;
+            height: 22px;
+            flex-shrink: 0;
+            filter: drop-shadow(0 0 5px rgba(245, 179, 66, 0.25));
+        }
         .modal .form-group {
             margin-bottom: 16px;
         }
@@ -1458,30 +1464,35 @@
 </head>
 <body>
 
+    <!-- ===== 共享 Logo 标记（连接/主界面弹窗共用，跟随主题色） ===== -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <symbol id="md-logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="titlebar-logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="var(--accent-hover)" />
+                    <stop offset="100%" stop-color="var(--accent)" />
+                </linearGradient>
+            </defs>
+            <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#titlebar-logo-gradient)" />
+            <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#titlebar-logo-gradient)" />
+            <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            <circle cx="72" cy="72" r="18" fill="var(--bg-secondary)" stroke="var(--accent)" stroke-width="3" />
+            <text x="72" y="77" text-anchor="middle" font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-weight="700" font-size="13" fill="var(--accent)">MR</text>
+            <circle cx="86" cy="56" r="5" fill="var(--accent)" />
+            <circle cx="56" cy="86" r="5" fill="var(--accent)" />
+            <path d="M68 56 L78 60" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+            <path d="M64 68 L58 86" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+        </symbol>
+    </svg>
+
     <!-- ===== 主窗口 ===== -->
     <div class="app-window">
 
         <!-- ===== 标题栏 ===== -->
         <header class="titlebar">
             <div class="logo">
-                <svg class="logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="麦地缓存 Logo">
-                    <defs>
-                        <linearGradient id="titlebar-logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                            <stop offset="0%" stop-color="var(--accent-hover)" />
-                            <stop offset="100%" stop-color="var(--accent)" />
-                        </linearGradient>
-                    </defs>
-                    <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#titlebar-logo-gradient)" />
-                    <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#titlebar-logo-gradient)" />
-                    <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
-                    <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
-                    <circle cx="72" cy="72" r="18" fill="var(--bg-secondary)" stroke="var(--accent)" stroke-width="3" />
-                    <text x="72" y="77" text-anchor="middle" font-family="'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-weight="700" font-size="13" fill="var(--accent)">MR</text>
-                    <circle cx="86" cy="56" r="5" fill="var(--accent)" />
-                    <circle cx="56" cy="86" r="5" fill="var(--accent)" />
-                    <path d="M68 56 L78 60" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
-                    <path d="M64 78 L58 86" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
-                </svg>
+                <svg class="logo-mark" aria-label="麦地缓存 Logo"><use href="#md-logo-mark" /></svg>
                 麦地缓存
                 <span>v2.0</span>
             </div>
@@ -1597,7 +1608,7 @@
     <!-- ===== 连接对话框 ===== -->
     <div class="modal-overlay" id="connectionModal">
         <div class="modal">
-            <div class="modal-title"><i class="fas fa-crown"></i> <span id="modalTitle">新建连接</span></div>
+            <div class="modal-title"><svg class="logo-mark" aria-label="麦地连接 Logo"><use href="#md-logo-mark" /></svg> <span id="modalTitle">新建连接</span></div>
             <div class="form-group">
                 <label>连接名称</label>
                 <input type="text" id="connName" placeholder="例如: 本地开发" value="localhost" />
@@ -1647,7 +1658,7 @@
     <!-- ===== 新增 Key 对话框 ===== -->
     <div class="modal-overlay" id="addKeyModal">
         <div class="modal">
-            <div class="modal-title"><i class="fas fa-plus-circle"></i> 新增 Key</div>
+            <div class="modal-title"><svg class="logo-mark" aria-label="麦地新增Key Logo"><use href="#md-logo-mark" /></svg> 新增 Key</div>
             <div class="form-group">
                 <label>Key 名称</label>
                 <input type="text" id="addKeyName" placeholder="请输入 Key 名称" />
