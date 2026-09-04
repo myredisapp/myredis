@@ -1686,6 +1686,18 @@
         </div>
     </div>
 
+    <!-- 通用确认对话框（替代原生 confirm，避免 WebView 兼容问题） -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal" style="width: 400px;">
+            <div class="modal-title"><i class="fas fa-exclamation-triangle" style="color: var(--accent);"></i> <span id="confirmTitle">提示</span></div>
+            <div id="confirmMessage" style="margin-bottom: 24px; line-height: 1.6; color: var(--text-secondary); word-break: break-all;"></div>
+            <div class="modal-actions" style="justify-content: flex-end; gap: 10px;">
+                <button class="secondary" id="confirmCancel">取消</button>
+                <button class="primary" id="confirmOk" style="background: var(--danger, #e5484d); border-color: var(--danger, #e5484d);">删除</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // =====================================================================
         //  JavaScript — 完整的交互逻辑 (与之前相同，但颜色已由 CSS 变量控制)
@@ -1978,8 +1990,12 @@
                                 showToast('关闭连接失败: ' + err, 'error');
                             });
                         } else if (action === 'delete') {
-                            if (confirm('确定要删除此连接吗？')) {
-                                invoke('delete_connection', { connId: id }).then(() => {
+                            showConfirm(`确定要删除连接「${conn.name}」吗？`, { title: '删除连接' }).then((ok) => {
+                                if (!ok) return;
+                                invoke('delete_connection', { connId: id }).then((deleted) => {
+                                    if (deleted === false) {
+                                        showToast('未找到该连接，可能已被删除', 'error');
+                                    }
                                     onlineConns.delete(id);
                                     if (currentConn && currentConn.id === id) {
                                         currentConn = null;
@@ -1988,7 +2004,7 @@
                                 }).catch(err => {
                                     showToast('删除失败: ' + err, 'error');
                                 });
-                            }
+                            });
                         }
                     });
                 });
@@ -2624,6 +2640,41 @@
                 modal.classList.remove('open');
                 showTestStatus('', '');
             }
+
+            // ---------- 通用确认对话框（替代原生 confirm） ----------
+            let _confirmResolve = null;
+            function showConfirm(message, options = {}) {
+                const cModal = document.getElementById('confirmModal');
+                document.getElementById('confirmTitle').textContent = options.title || '提示';
+                document.getElementById('confirmMessage').textContent = message;
+                const okBtn = document.getElementById('confirmOk');
+                okBtn.textContent = options.okText || '删除';
+                if (options.danger !== false) {
+                    okBtn.style.background = 'var(--danger, #e5484d)';
+                    okBtn.style.borderColor = 'var(--danger, #e5484d)';
+                } else {
+                    okBtn.style.background = '';
+                    okBtn.style.borderColor = '';
+                }
+                cModal.classList.add('open');
+                return new Promise((resolve) => {
+                    _confirmResolve = resolve;
+                });
+            }
+            function closeConfirm(result) {
+                const cModal = document.getElementById('confirmModal');
+                cModal.classList.remove('open');
+                if (_confirmResolve) {
+                    _confirmResolve(result);
+                    _confirmResolve = null;
+                }
+            }
+            // 确认框事件绑定
+            document.getElementById('confirmOk').addEventListener('click', () => closeConfirm(true));
+            document.getElementById('confirmCancel').addEventListener('click', () => closeConfirm(false));
+            document.getElementById('confirmModal').addEventListener('click', (e) => {
+                if (e.target.id === 'confirmModal') closeConfirm(false);
+            });
 
             function saveConnection() {
                 const name = document.getElementById('connName').value.trim();
