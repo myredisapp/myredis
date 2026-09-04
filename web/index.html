@@ -1096,6 +1096,13 @@
             opacity: 0.4;
             color: var(--accent);
         }
+        .empty-state .empty-state-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 20%;
+            margin-bottom: 16px;
+            opacity: 0.9;
+        }
         .empty-state h3 {
             font-size: 16px;
             font-weight: 500;
@@ -2301,7 +2308,7 @@
                 if (!selectedKey) {
                     keyDetailEl.innerHTML = `
                         <div class="empty-state">
-                            <i class="fas fa-crown"></i>
+                            <svg class="empty-state-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="56" height="56"><defs><linearGradient id="md-favicon-gradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#f9c75e" /><stop offset="100%" stop-color="#f5b342" /></linearGradient></defs><ellipse cx="44" cy="28" rx="24" ry="9" fill="url(#md-favicon-gradient)" /><path d="M20 28 L20 70 Q20 78 44 78 Q68 78 68 70 L68 28" fill="url(#md-favicon-gradient)" /><circle cx="72" cy="72" r="20" fill="#ffffff" stroke="#f5b342" stroke-width="4" /><text x="72" y="78" text-anchor="middle" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif" font-weight="700" font-size="15" fill="#f5b342">MR</text></svg>
                             <h3>选择一个 Key</h3>
                             <p>从左侧树中点击任意 Key 查看详细内容和值</p>
                         </div>
