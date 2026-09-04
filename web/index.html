@@ -2506,13 +2506,27 @@
                 const deleteBtn = document.getElementById('detailDelete');
                 if (deleteBtn) {
                     deleteBtn.addEventListener('click', () => {
-                        if (confirm(`确定要删除 Key "${selectedKey}" 吗？`)) {
-                            appendTerminal(`删除 Key "${selectedKey}"`, 'ok');
-                            showToast('Key 已删除', 'success');
-                            selectedKey = null;
-                            renderKeyTree(keySearch.value);
-                            renderDetail();
-                        }
+                        const keyToDelete = selectedKey;
+                        if (!keyToDelete) return;
+                        showConfirm(`确定要删除 Key「${keyToDelete}」吗？此操作不可恢复。`, { title: '删除 Key' }).then((ok) => {
+                            if (!ok) return;
+                            if (!currentConn || !currentConn.id) {
+                                showToast('未连接到 Redis', 'error');
+                                return;
+                            }
+                            invoke('del_key', { connId: currentConn.id, keys: [keyToDelete] })
+                                .then((n) => {
+                                    appendTerminal(`删除 Key "${keyToDelete}"${n > 0 ? '' : '（不存在）'}`, n > 0 ? 'ok' : '');
+                                    showToast(n > 0 ? 'Key 已删除' : 'Key 不存在', n > 0 ? 'success' : 'error');
+                                    if (selectedKey === keyToDelete) selectedKey = null;
+                                    // 刷新 key 列表
+                                    return loadKeys();
+                                })
+                                .catch(err => {
+                                    console.error('删除 Key 失败', err);
+                                    showToast('删除 Key 失败: ' + err, 'error');
+                                });
+                        });
                     });
                 }
 
