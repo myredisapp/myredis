@@ -5,7 +5,8 @@
 
 use serde::Serialize;
 
-use crate::connection_pool::Pool;
+use crate::connection_pool::{Conn, Pool};
+use crate::models::{ConnType, Connection};
 
 /// 列表中的单个 key。
 #[derive(Debug, Clone, Default, Serialize)]
@@ -23,51 +24,147 @@ pub struct KeyEntry {
 /// 列出数据库中的所有 key。
 ///
 /// 使用 `SCAN` 游标遍历（非阻塞），并附带每个 key 的类型与 TTL。
+///
+/// 注意：redis-rs 对集群连接的 `SCAN` 不做多节点聚合，只会路由到随机一个
+/// 节点（见 redis-rs `cluster_routing` 中 SCAN 的路由定义），因此集群模式下
+/// 通过 `CLUSTER NODES` 枚举所有主节点、逐节点扫描后合并，避免结果时有时无。
 #[tauri::command]
 pub async fn list_keys(
     pool: tauri::State<'_, Pool>,
     conn_id: String,
 ) -> Result<Vec<KeyEntry>, String> {
-    let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
+    list_keys_inner(&pool, &conn_id).await
+}
 
+/// [`list_keys`] 的核心实现，抽成独立函数以便集成测试直接调用。
+pub async fn list_keys_inner(pool: &Pool, conn_id: &str) -> Result<Vec<KeyEntry>, String> {
+    let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
+    let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
+
+    let key_names = if conn_cfg.conn_type == ConnType::Cluster {
+        scan_cluster_key_names(&conn_cfg, &mut con).await?
+    } else {
+        scan_key_names(&mut con).await?
+    };
+
+    let mut keys: Vec<KeyEntry> = Vec::with_capacity(key_names.len());
+    for key in &key_names {
+        let ktype: String = redis::cmd("TYPE")
+            .arg(key)
+            .query_async(&mut con)
+            .await
+            .unwrap_or_else(|_| "none".to_string());
+
+        let ttl: i64 = redis::cmd("TTL")
+            .arg(key)
+            .query_async(&mut con)
+            .await
+            .unwrap_or(-1);
+
+        keys.push(KeyEntry {
+            key: key.clone(),
+            ttl: if ttl < 0 { -1 } else { ttl },
+            type_: ktype,
+        });
+    }
+
+    keys.sort_by(|a, b| a.key.cmp(&b.key));
+    Ok(keys)
+}
+
+/// 在单个连接上完整执行一轮 `SCAN`，返回所有 key 名。
+async fn scan_key_names<C: redis::aio::ConnectionLike>(
+    con: &mut C,
+) -> Result<Vec<String>, String> {
     let mut cursor = 0i64;
-    let mut keys: Vec<KeyEntry> = Vec::new();
+    let mut keys: Vec<String> = Vec::new();
     loop {
         let (next_cursor, batch): (i64, Vec<String>) = redis::cmd("SCAN")
             .arg(cursor)
             .arg("COUNT")
             .arg(500)
-            .query_async(&mut con)
+            .query_async(con)
             .await
             .map_err(|e: redis::RedisError| e.to_string())?;
         cursor = next_cursor;
-
-        for key in &batch {
-            let ktype: String = redis::cmd("TYPE")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or_else(|_| "none".to_string());
-
-            let ttl: i64 = redis::cmd("TTL")
-                .arg(key)
-                .query_async(&mut con)
-                .await
-                .unwrap_or(-1);
-
-            keys.push(KeyEntry {
-                key: key.clone(),
-                ttl: if ttl < 0 { -1 } else { ttl },
-                type_: ktype,
-            });
-        }
-
+        keys.extend(batch);
         if cursor == 0 {
             break;
         }
     }
+    Ok(keys)
+}
 
-    keys.sort_by(|a, b| a.key.cmp(&b.key));
+/// 解析 `CLUSTER NODES` 输出中的主节点地址列表（`ip:port`）。
+///
+/// - 跳过非 master 行（slave / handshake 等）与处于 fail 状态的节点。
+/// - 节点未公布地址（`ip` 为空）时回退到 `fallback_host`。
+fn parse_master_addrs(cluster_nodes: &str, fallback_host: &str) -> Vec<String> {
+    cluster_nodes
+        .lines()
+        .filter_map(|line| {
+            let cols: Vec<&str> = line.split_whitespace().collect();
+            if cols.len() < 3 {
+                return None;
+            }
+            let flags = cols[2];
+            if !flags.split(',').any(|f| f == "master") || flags.contains("fail") {
+                return None;
+            }
+            // 地址形如 `ip:port@cport` 或 `ip:port@cport,hostname`
+            let host_port = cols[1].split(',').next()?.split('@').next()?;
+            let (host, port) = host_port.rsplit_once(':')?;
+            if port.is_empty() {
+                return None;
+            }
+            let host = if host.is_empty() { fallback_host } else { host };
+            Some(format!("{host}:{port}"))
+        })
+        .collect()
+}
+
+/// 集群模式下枚举所有主节点并逐节点 `SCAN`，合并去重后返回全部 key 名。
+async fn scan_cluster_key_names(
+    conn_cfg: &Connection,
+    con: &mut Conn,
+) -> Result<Vec<String>, String> {
+    let nodes: String = redis::cmd("CLUSTER")
+        .arg("NODES")
+        .query_async(&mut *con)
+        .await
+        .map_err(|e: redis::RedisError| e.to_string())?;
+
+    let addrs = parse_master_addrs(&nodes, &conn_cfg.host);
+    if addrs.is_empty() {
+        return Err("集群中未找到可用的主节点".into());
+    }
+
+    let mut keys: Vec<String> = Vec::new();
+    for addr in addrs {
+        // parse_master_addrs 已保证 `host:port` 格式
+        let (host, port) = addr.rsplit_once(':').expect("主节点地址格式异常");
+        let port: u16 = port
+            .parse()
+            .map_err(|_| format!("主节点端口无法解析: {addr}"))?;
+        // 复用原连接配置（含用户名/密码），仅替换节点地址
+        let node_cfg = Connection {
+            host: host.to_string(),
+            port,
+            ..conn_cfg.clone()
+        };
+        let client =
+            redis::Client::open(node_cfg.to_connection_url()).map_err(|e: redis::RedisError| {
+                format!("连接集群节点 {addr} 失败: {e}")
+            })?;
+        let mut c = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|e: redis::RedisError| format!("连接集群节点 {addr} 失败: {e}"))?;
+        keys.extend(scan_key_names(&mut c).await?);
+    }
+
+    keys.sort();
+    keys.dedup();
     Ok(keys)
 }
 
@@ -110,7 +207,7 @@ async fn set_key_inner(
     }
 
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
-    let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
+    let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
 
     let cmd = build_set_cmd(&key, &value, ttl);
     let ok: String = cmd
@@ -123,7 +220,7 @@ async fn set_key_inner(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_set_cmd, set_key_inner};
+    use super::{build_set_cmd, parse_master_addrs, set_key_inner};
     use crate::connection_pool::Pool;
     use crate::models::{ConnType, Connection};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -164,6 +261,26 @@ mod tests {
     }
 
     #[test]
+    fn parse_master_addrs_picks_healthy_masters() {
+        let nodes = "abc 127.0.0.1:7001@17001 myself,master - 0 0 1 connected 0-5460\n\
+                     def 127.0.0.1:7002@17002 slave abc 0 0 1 connected\n\
+                     ghi :7003@17003 master - 0 0 2 connected 5461-10922\n\
+                     jkl 127.0.0.1:7004@17004 master,fail? - 0 0 3 connected\n\
+                     mno 127.0.0.1:7005@17005,noannounced.host master - 0 0 3 connected";
+        let addrs = parse_master_addrs(nodes, "10.0.0.1");
+        assert_eq!(
+            addrs,
+            vec!["127.0.0.1:7001", "10.0.0.1:7003", "127.0.0.1:7005"]
+        );
+    }
+
+    #[test]
+    fn parse_master_addrs_skips_empty_input() {
+        assert!(parse_master_addrs("", "127.0.0.1").is_empty());
+        assert!(parse_master_addrs("not a nodes reply", "127.0.0.1").is_empty());
+    }
+
+    #[test]
     fn build_set_cmd_without_ttl() {
         let cmd = build_set_cmd("mykey", "myvalue", -1);
         assert_eq!(
@@ -197,7 +314,7 @@ mod tests {
 
         let ttl: i64 = redis::cmd("TTL")
             .arg(&key)
-            .query_async(&mut pool.manager(&conn_id).unwrap())
+            .query_async(&mut pool.conn(&conn_id).unwrap())
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -217,7 +334,7 @@ mod tests {
 
         let ttl: i64 = redis::cmd("TTL")
             .arg(&key)
-            .query_async(&mut pool.manager(&conn_id).unwrap())
+            .query_async(&mut pool.conn(&conn_id).unwrap())
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -241,7 +358,7 @@ mod tests {
 
         let initial_ttl: i64 = redis::cmd("TTL")
             .arg(&key)
-            .query_async(&mut pool.manager(&conn_id).unwrap())
+            .query_async(&mut pool.conn(&conn_id).unwrap())
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(initial_ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -252,7 +369,7 @@ mod tests {
 
         let updated_ttl: i64 = redis::cmd("TTL")
             .arg(&key)
-            .query_async(&mut pool.manager(&conn_id).unwrap())
+            .query_async(&mut pool.conn(&conn_id).unwrap())
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -296,7 +413,7 @@ pub async fn del_key(
     keys: Vec<String>,
 ) -> Result<i64, String> {
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
-    let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
+    let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
     let mut cmd = redis::cmd("DEL");
     for k in &keys {
         cmd.arg(k);
@@ -315,7 +432,7 @@ pub async fn get_string(
     conn_id: String,
     key: String,
 ) -> Result<Option<String>, String> {
-    let mut con = pool.manager(&conn_id).map_err(|e| e.to_string())?;
+    let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
     let val: Option<String> = redis::cmd("GET")
         .arg(&key)
         .query_async(&mut con)

@@ -1836,8 +1836,12 @@
             })();
 
             // 根据当前连接刷新数据库选择框的可用状态与选中值
+            // 集群只有 db0，不支持切换数据库，直接隐藏选择器
             function refreshDbSelector() {
                 if (!dbSelect) return;
+                const isCluster = !!(currentConn && currentConn.type === 'cluster');
+                if (dbSelectorWrap) dbSelectorWrap.style.display = isCluster ? 'none' : '';
+                if (isCluster) return;
                 const online = !!(currentConn && currentConn.online);
                 dbSelect.disabled = !online;
                 let current = 0;
@@ -1850,6 +1854,11 @@
             // 切换数据库（由下拉框 change 触发）
             function onDbChange() {
                 if (!currentConn || !currentConn.id) return;
+                if (currentConn.type === 'cluster') {
+                    // 集群只有 db0，不支持切换
+                    refreshDbSelector();
+                    return;
+                }
                 if (!currentConn.online) {
                     refreshDbSelector();
                     return;
