@@ -2,7 +2,7 @@
 //!
 //! 库入口，定义 Tauri 应用并注册所有命令与状态。
 
-mod commands;
+pub mod commands;
 mod config;
 pub mod connection_pool;
 pub mod error;

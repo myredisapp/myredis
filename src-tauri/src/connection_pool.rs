@@ -10,12 +10,58 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use redis::aio::ConnectionManager;
+use redis::aio::{ConnectionLike, ConnectionManager};
+use redis::cluster_async::ClusterConnection;
+use redis::RedisFuture;
 
 use crate::error::AppError;
 use crate::models::{ConnType, Connection};
 
 type ConnMap = HashMap<String, Entry>;
+
+/// 可执行 Redis 命令的连接句柄（单机 or 集群）。
+///
+/// 单机与集群都实现了 [`redis::aio::ConnectionLike`]，命令层通过该 trait
+/// 统一执行 `query_async`，无需关心底层是单机还是集群。
+#[derive(Clone)]
+pub enum Conn {
+    /// 单机连接管理器（自动重连）
+    Single(ConnectionManager),
+    /// 集群连接
+    Cluster(ClusterConnection),
+}
+
+impl ConnectionLike for Conn {
+    fn req_packed_command<'a>(&'a mut self, cmd: &'a redis::Cmd) -> RedisFuture<'a, redis::Value> {
+        Box::pin(async move {
+            match self {
+                Conn::Single(c) => c.req_packed_command(cmd).await,
+                Conn::Cluster(c) => c.req_packed_command(cmd).await,
+            }
+        })
+    }
+
+    fn req_packed_commands<'a>(
+        &'a mut self,
+        cmd: &'a redis::Pipeline,
+        offset: usize,
+        count: usize,
+    ) -> RedisFuture<'a, Vec<redis::Value>> {
+        Box::pin(async move {
+            match self {
+                Conn::Single(c) => c.req_packed_commands(cmd, offset, count).await,
+                Conn::Cluster(c) => c.req_packed_commands(cmd, offset, count).await,
+            }
+        })
+    }
+
+    fn get_db(&self) -> i64 {
+        match self {
+            Conn::Single(c) => c.get_db(),
+            Conn::Cluster(c) => c.get_db(),
+        }
+    }
+}
 
 /// 应用全局连接池，注入 Tauri 状态 `tauri::State<Pool>`。
 pub struct Pool {
@@ -33,8 +79,8 @@ impl Default for Pool {
 /// 池中的单个连接条目。
 struct Entry {
     conn: Connection,
-    /// 单机模式的连接管理器（自动重连）
-    single: Option<ConnectionManager>,
+    /// 可执行命令的连接句柄（单机 or 集群）
+    handle: Conn,
 }
 
 /// 连接连接成功后的返回信息。
@@ -54,7 +100,7 @@ impl Pool {
     ///
     /// # 注意
     /// - 单机使用 [`ConnectionManager`]（自动重连）。
-    /// - 集群在每次命令执行时根据 nodes 建立连接。
+    /// - 集群使用 [`ClusterConnection`]，句柄同样缓存复用。
     /// - 若连接为只读，会先发送 `READONLY` 命令（对主从/集群副本生效）。
     pub async fn connect(&self, conn: &Connection) -> Result<ConnInfo, AppError> {
         match conn.conn_type {
@@ -77,12 +123,11 @@ impl Pool {
                     conn.id.clone(),
                     Entry {
                         conn: conn.clone(),
-                        single: Some(manager),
+                        handle: Conn::Single(manager),
                     },
                 );
             }
             ConnType::Cluster => {
-                // 仅校验连接是否可建立，连接本身不保存（每次命令按需新建）
                 let url = conn.to_connection_url();
                 let client =
                     redis::cluster::ClusterClient::new(vec![url]).map_err(AppError::from)?;
@@ -98,7 +143,7 @@ impl Pool {
                     conn.id.clone(),
                     Entry {
                         conn: conn.clone(),
-                        single: None,
+                        handle: Conn::Cluster(c),
                     },
                 );
             }
@@ -110,6 +155,18 @@ impl Pool {
         })
     }
 
+    /// 获取可执行命令的连接句柄（单机 or 集群）。
+    ///
+    /// 命令层应使用该方法获取连接，再通过 [`redis::aio::ConnectionLike`] 的
+    /// `query_async` 执行命令，无需关心底层是单机还是集群。
+    pub fn conn(&self, id: &str) -> Result<Conn, AppError> {
+        let guard = self.inner.lock().unwrap();
+        let entry = guard
+            .get(id)
+            .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
+        Ok(entry.handle.clone())
+    }
+
     /// 获取单机连接管理器句柄（仅单机且该连接以单机模式建立时才可用）。
     ///
     /// # Panics
@@ -119,9 +176,9 @@ impl Pool {
         let entry = guard
             .get(id)
             .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
-        match &entry.single {
-            Some(m) => Ok(m.clone()),
-            None => Err(AppError::msg("该连接不是单机模式，或连接句柄不可用")),
+        match &entry.handle {
+            Conn::Single(m) => Ok(m.clone()),
+            Conn::Cluster(_) => Err(AppError::msg("该连接不是单机模式，或连接句柄不可用")),
         }
     }
 
@@ -169,8 +226,8 @@ impl Pool {
 
     /// PING 测试连接是否存活。
     pub async fn ping(&self, id: &str) -> Result<String, AppError> {
-        let mut manager = self.manager(id)?;
-        let pong: String = redis::cmd("PING").query_async(&mut manager).await?;
+        let mut con = self.conn(id)?;
+        let pong: String = redis::cmd("PING").query_async(&mut con).await?;
         Ok(pong)
     }
 

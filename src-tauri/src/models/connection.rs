@@ -86,8 +86,15 @@ impl Connection {
     ///
     /// 用户名与密码中的特殊字符会按 RFC 3986 进行 percent-encoding，
     /// 避免 `@`、`/`、`?`、`#`、`:` 等破坏 URL 结构。
+    ///
+    /// 集群模式只有 db0，URL 不带 `/db` 段，避免集群客户端误解析。
     pub fn to_connection_url(&self) -> String {
-        let db = format!("/{}", self.db);
+        // 集群忽略逻辑数据库编号（只有 db0）
+        let db = if self.conn_type == ConnType::Cluster {
+            String::new()
+        } else {
+            format!("/{}", self.db)
+        };
         let username = self
             .username
             .as_deref()
@@ -237,6 +244,26 @@ mod tests {
         assert_eq!(
             conn.to_connection_url(),
             "redis://user%3Aname:p%40ss%3Aw%3Frd%23@127.0.0.1:6379/0"
+        );
+    }
+
+    #[test]
+    fn cluster_connection_url_omits_db() {
+        let conn = Connection {
+            id: "1".into(),
+            name: "t".into(),
+            host: "127.0.0.1".into(),
+            port: 7000,
+            conn_type: ConnType::Cluster,
+            readonly: false,
+            separator: ":".into(),
+            db: 3,
+            username: Some("user".into()),
+            password: Some("secret".into()),
+        };
+        assert_eq!(
+            conn.to_connection_url(),
+            "redis://user:secret@127.0.0.1:7000"
         );
     }
 }
