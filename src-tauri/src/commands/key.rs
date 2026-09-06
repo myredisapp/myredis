@@ -6,6 +6,7 @@
 use serde::Serialize;
 
 use crate::connection_pool::{Conn, Pool};
+use crate::error::command_error_message;
 use crate::models::{ConnType, Connection};
 
 /// 列表中的单个 key。
@@ -85,7 +86,7 @@ async fn scan_key_names<C: redis::aio::ConnectionLike>(
             .arg(500)
             .query_async(con)
             .await
-            .map_err(|e: redis::RedisError| e.to_string())?;
+            .map_err(|e: redis::RedisError| command_error_message(&e, None))?;
         cursor = next_cursor;
         keys.extend(batch);
         if cursor == 0 {
@@ -207,13 +208,14 @@ async fn set_key_inner(
     }
 
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
+    let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
 
     let cmd = build_set_cmd(&key, &value, ttl);
     let ok: String = cmd
         .query_async(&mut con)
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
 
     Ok(ok)
 }
@@ -413,6 +415,7 @@ pub async fn del_key(
     keys: Vec<String>,
 ) -> Result<i64, String> {
     pool.ensure_writable(&conn_id).map_err(|e| e.to_string())?;
+    let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
     let mut cmd = redis::cmd("DEL");
     for k in &keys {
@@ -421,7 +424,7 @@ pub async fn del_key(
     let n: i64 = cmd
         .query_async(&mut con)
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -432,11 +435,12 @@ pub async fn get_string(
     conn_id: String,
     key: String,
 ) -> Result<Option<String>, String> {
+    let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
     let val: Option<String> = redis::cmd("GET")
         .arg(&key)
         .query_async(&mut con)
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
     Ok(val)
 }
