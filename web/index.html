@@ -172,6 +172,25 @@
             user-select: none;
             flex-shrink: 0;
         }
+        .titlebar .sidebar-toggle {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        .titlebar .sidebar-toggle:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
         .titlebar .logo {
             display: flex;
             align-items: center;
@@ -371,13 +390,47 @@
         /* ========== 左侧边栏 ========== */
         .sidebar {
             width: var(--sidebar-width);
-            min-width: var(--sidebar-width);
+            min-width: 180px;
+            max-width: 480px;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             overflow: hidden;
             flex-shrink: 0;
+            transition: width 0.2s ease, min-width 0.2s ease;
+        }
+        /* 折叠态：窄图标栏，仅保留连接图标列 */
+        .sidebar.collapsed {
+            width: 52px;
+            min-width: 52px;
+            max-width: 52px;
+        }
+        .sidebar.collapsed .section-title,
+        .sidebar.collapsed .connection-item .info,
+        .sidebar.collapsed .connection-item .badge,
+        .sidebar.collapsed .connection-item .dropdown-container,
+        .sidebar.collapsed .sidebar-footer {
+            display: none;
+        }
+        .sidebar.collapsed .connection-item {
+            justify-content: center;
+            padding: 8px 6px;
+        }
+        /* 窄栏中仅保留连接图标，作为可点击的连接标识 */
+        .sidebar.collapsed .connection-item .icon {
+            display: flex;
+        }
+        .sidebar.collapsed .connection-item.active {
+            border-left-width: 3px;
+        }
+        .sidebar.collapsed .add-connection {
+            margin: 0 8px 12px;
+            font-size: 0;
+            gap: 0;
+        }
+        .sidebar.collapsed .add-connection i {
+            font-size: 16px;
         }
         .sidebar .section-title {
             font-size: 11px;
@@ -416,12 +469,13 @@
             background: var(--bg-active);
             border-left: 3px solid var(--accent);
         }
+        /* 连接图标：仅在侧栏折叠为窄栏时显示（展开态由名称与状态徽章承担） */
         .connection-item .icon {
+            display: none;
             width: 28px;
             height: 28px;
             border-radius: 6px;
             background: var(--bg-tertiary);
-            display: flex;
             align-items: center;
             justify-content: center;
             font-size: 12px;
@@ -756,12 +810,73 @@
 
         .key-tree {
             width: var(--tree-width);
-            min-width: var(--tree-width);
+            min-width: 180px;
+            max-width: 480px;
             background: var(--bg-secondary);
             border-right: 1px solid var(--border-color);
             overflow-y: auto;
             padding: 6px 0;
             flex-shrink: 0;
+        }
+
+        /* ---- 模块边界拖拽手柄 ---- */
+        .splitter {
+            flex-shrink: 0;
+            position: relative;
+            z-index: 5;
+            background: transparent;
+            transition: background 0.15s;
+            touch-action: none;
+        }
+        .splitter::before {
+            content: '';
+            position: absolute;
+            background: var(--border-color);
+            transition: background 0.15s;
+        }
+        .splitter-v {
+            width: 5px;
+            cursor: col-resize;
+        }
+        .splitter-v::before {
+            left: 2px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+        }
+        .splitter-h {
+            height: 5px;
+            cursor: row-resize;
+        }
+        .splitter-h::before {
+            top: 2px;
+            left: 0;
+            right: 0;
+            height: 1px;
+        }
+        .splitter:hover::before,
+        .splitter.dragging::before {
+            background: var(--accent);
+        }
+        .splitter:hover,
+        .splitter.dragging {
+            background: var(--accent-dim);
+        }
+        .splitter.hidden {
+            display: none;
+        }
+        .no-transition {
+            transition: none !important;
+        }
+        body.resizing-h,
+        body.resizing-h * {
+            cursor: col-resize !important;
+            user-select: none !important;
+        }
+        body.resizing-v,
+        body.resizing-v * {
+            cursor: row-resize !important;
+            user-select: none !important;
         }
         .key-tree::-webkit-scrollbar {
             width: 4px;
@@ -1117,7 +1232,8 @@
         /* ========== 终端面板 ========== */
         .terminal-panel {
             height: var(--terminal-height);
-            min-height: var(--terminal-height);
+            min-height: 100px;
+            max-height: 50vh;
             background: var(--bg-secondary);
             border-top: 1px solid var(--border-color);
             display: flex;
@@ -1429,6 +1545,8 @@
             }
             .sidebar { display: none; }
             .key-tree { display: none; }
+            /* 模块已隐藏，其边界手柄一并隐藏（终端手柄仍可用） */
+            .splitter-v { display: none; }
             .data-panel { flex-direction: column; }
             .detail-header {
                 flex-direction: column;
@@ -1498,6 +1616,7 @@
 
         <!-- ===== 标题栏 ===== -->
         <header class="titlebar">
+            <button title="折叠/展开连接列表" id="btnSidebarToggle" class="sidebar-toggle"><i class="fas fa-bars" id="sidebarToggleIcon"></i></button>
             <div class="logo">
                 <svg class="logo-mark" aria-label="麦地缓存 Logo"><use href="#md-logo-mark" /></svg>
                 麦地缓存
@@ -1530,7 +1649,7 @@
         <div class="app-body">
 
             <!-- ===== 左侧边栏 ===== -->
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
                 <div class="section-title"><i class="fas fa-plug" style="margin-right:6px;"></i> 连接</div>
                 <div class="connection-list" id="connectionList">
                     <!-- 由 JS 动态渲染 -->
@@ -1548,6 +1667,7 @@
                     </div>
                 </div>
             </aside>
+            <div class="splitter splitter-v" id="splitterSidebar"></div>
 
             <!-- ===== 主内容 ===== -->
             <main class="main-content">
@@ -1578,6 +1698,7 @@
                     <div class="key-tree" id="keyTree">
                         <!-- 由 JS 动态渲染 -->
                     </div>
+                    <div class="splitter splitter-v" id="splitterTree"></div>
 
                     <!-- Key 详情 -->
                     <div class="key-detail" id="keyDetail">
@@ -1588,6 +1709,7 @@
             </main>
 
         </div>
+        <div class="splitter splitter-h" id="splitterTerminal"></div>
 
         <!-- ===== 终端面板 ===== -->
         <div class="terminal-panel" id="terminalPanel">
@@ -1823,6 +1945,113 @@
             // Redis 逻辑数据库数量（默认 16 个：db0 - db15）
             const DB_COUNT = 16;
 
+            // ---------- 布局状态（侧栏折叠 + 模块尺寸拖拽持久化） ----------
+            const LAYOUT_KEY = 'myredis.layout';
+            const LAYOUT_DEFAULTS = {
+                sidebarCollapsed: false,
+                sidebarWidth: 270,
+                treeWidth: 320,
+                terminalHeight: 200,
+            };
+            let layoutState = { ...LAYOUT_DEFAULTS };
+            try {
+                const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}');
+                layoutState = { ...LAYOUT_DEFAULTS, ...saved };
+            } catch (e) { /* 存档损坏时回退默认值 */ }
+
+            let layoutSaveTimer = null;
+            function saveLayout() {
+                clearTimeout(layoutSaveTimer);
+                layoutSaveTimer = setTimeout(() => {
+                    try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layoutState)); } catch (e) {}
+                }, 300);
+            }
+
+            function updateSidebarToggleIcon() {
+                document.getElementById('sidebarToggleIcon').className =
+                    layoutState.sidebarCollapsed ? 'fas fa-bars-staggered' : 'fas fa-bars';
+            }
+
+            function applyLayout() {
+                const rootStyle = document.documentElement.style;
+                rootStyle.setProperty('--sidebar-width', layoutState.sidebarWidth + 'px');
+                rootStyle.setProperty('--tree-width', layoutState.treeWidth + 'px');
+                rootStyle.setProperty('--terminal-height', layoutState.terminalHeight + 'px');
+                document.getElementById('sidebar').classList.toggle('collapsed', layoutState.sidebarCollapsed);
+                // 折叠态侧栏宽度锁定为 52px，此时拖拽无意义，隐藏对应手柄
+                document.getElementById('splitterSidebar').classList.toggle('hidden', layoutState.sidebarCollapsed);
+                updateSidebarToggleIcon();
+                saveLayout();
+            }
+
+            function setLayoutSize(key, value) {
+                layoutState[key] = value;
+                applyLayout();
+            }
+
+            // 通用边界拖拽：pointerdown 起拖，pointermove 按轴向改写对应尺寸
+            function makeSplitter(handleId, options) {
+                const handle = document.getElementById(handleId);
+                if (!handle) return;
+                handle.addEventListener('pointerdown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const startPos = options.axis === 'x' ? e.clientX : e.clientY;
+                    // 以实际渲染尺寸为基准，避免状态值与渲染值不一致导致起拖跳变
+                    const startSize = options.get();
+                    const target = options.resizeTarget ? options.resizeTarget() : null;
+                    handle.classList.add('dragging');
+                    document.body.classList.add(options.axis === 'x' ? 'resizing-h' : 'resizing-v');
+                    if (target) target.classList.add('no-transition');
+                    // 手柄仅 5px 宽，不做指针捕获时指针一旦移出就会丢失 pointermove
+                    try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+
+                    function onMove(ev) {
+                        const pos = options.axis === 'x' ? ev.clientX : ev.clientY;
+                        let size = Math.round(startSize + (pos - startPos) * (options.invert ? -1 : 1));
+                        if (options.maxSize) {
+                            size = Math.min(size, options.maxSize());
+                        } else if (typeof options.max === 'number') {
+                            size = Math.min(size, options.max);
+                        }
+                        options.set(Math.max(options.min, size));
+                    }
+                    function onUp() {
+                        handle.classList.remove('dragging');
+                        document.body.classList.remove('resizing-h', 'resizing-v');
+                        handle.removeEventListener('pointermove', onMove);
+                        handle.removeEventListener('pointerup', onUp);
+                        handle.removeEventListener('pointercancel', onUp);
+                        try { handle.releasePointerCapture(e.pointerId); } catch (err) {}
+                        saveLayout();
+                        // 松手后稍等再恢复过渡，避免尺寸跳变产生动画闪烁
+                        if (target) setTimeout(() => target.classList.remove('no-transition'), 50);
+                    }
+                    handle.addEventListener('pointermove', onMove);
+                    handle.addEventListener('pointerup', onUp);
+                    handle.addEventListener('pointercancel', onUp);
+                });
+            }
+
+            makeSplitter('splitterSidebar', {
+                axis: 'x', min: 180, max: 480,
+                get: () => document.getElementById('sidebar').offsetWidth,
+                set: (v) => setLayoutSize('sidebarWidth', v),
+                resizeTarget: () => document.getElementById('sidebar'),
+            });
+            makeSplitter('splitterTree', {
+                axis: 'x', min: 180, max: 480,
+                get: () => keyTreeEl.offsetWidth,
+                set: (v) => setLayoutSize('treeWidth', v),
+            });
+            makeSplitter('splitterTerminal', {
+                axis: 'y', min: 100, invert: true,
+                maxSize: () => Math.round(window.innerHeight * 0.5),
+                get: () => terminalPanel.offsetHeight,
+                set: (v) => setLayoutSize('terminalHeight', v),
+                resizeTarget: () => terminalPanel,
+            });
+
             // 初始化数据库选择下拉选项（仅创建一次）
             (function initDbOptions() {
                 if (!dbSelect) return;
@@ -1908,6 +2137,7 @@
                     const isOnline = onlineConns.has(conn.id);
                     return `
                     <div class="connection-item ${isActive ? 'active' : ''}" data-id="${conn.id}">
+                        <div class="icon"><i class="fas fa-server"></i></div>
                         <div class="info">
                             <div class="name">${conn.name}</div>
                             <div class="host">${conn.host}:${conn.port}</div>
@@ -2810,17 +3040,25 @@
             }
 
             // ---------- 事件绑定 ----------
+            document.getElementById('btnSidebarToggle').addEventListener('click', () => {
+                layoutState.sidebarCollapsed = !layoutState.sidebarCollapsed;
+                applyLayout();
+            });
+
             let terminalCollapsed = false;
+            // 终端折叠时同步隐藏其边界手柄
+            function setTerminalCollapsed(collapsed) {
+                terminalCollapsed = collapsed;
+                terminalPanel.classList.toggle('collapsed', collapsed);
+                termChevron.className = collapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+                document.getElementById('splitterTerminal').classList.toggle('hidden', collapsed);
+            }
             document.getElementById('terminalToggle').addEventListener('click', () => {
-                terminalCollapsed = !terminalCollapsed;
-                terminalPanel.classList.toggle('collapsed', terminalCollapsed);
-                termChevron.className = terminalCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+                setTerminalCollapsed(!terminalCollapsed);
             });
             termToggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                terminalCollapsed = !terminalCollapsed;
-                terminalPanel.classList.toggle('collapsed', terminalCollapsed);
-                termChevron.className = terminalCollapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+                setTerminalCollapsed(!terminalCollapsed);
             });
 
             terminalSend.addEventListener('click', () => executeCommand(terminalInput.value));
@@ -2997,6 +3235,7 @@
             }
 
             // ---------- 初始化 ----------
+            applyLayout();
             refreshDbSelector();
             renderConnections();
             renderKeyTree();
