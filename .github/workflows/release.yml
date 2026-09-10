@@ -1,0 +1,147 @@
+name: Release
+
+# 打 tag 即触发（例如 git tag v0.2.0 && git push origin v0.2.0）。
+# 产物：macOS(arm64/x64) dmg、Linux deb/AppImage、Windows nsis/msi，并发布到 GitHub Release。
+on:
+  push:
+    tags:
+      - 'v*'
+
+# 创建 Release 并上传安装包需要写权限
+permissions:
+  contents: write
+
+# 同一个 tag 重复触发时，取消上一次未跑完的运行
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: 构建 ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # 单个平台失败不影响其他平台出包，便于定位问题
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macos-aarch64
+            target: aarch64-apple-darwin
+            bundles: app,dmg
+          - os: macos-latest
+            label: macos-x64
+            target: x86_64-apple-darwin
+            bundles: app,dmg
+          # 刻意不用 ubuntu-latest（24.04）：Linux 产物会继承构建机的 glibc 版本，
+          # 在 22.04 上打包才能兼容更老的发行版
+          - os: ubuntu-22.04
+            label: linux-x64
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,appimage
+          - os: windows-latest
+            label: windows-x64
+            target: x86_64-pc-windows-msvc
+            bundles: nsis,msi
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tauri 在 Linux 上依赖 webkit2gtk / appindicator 等系统库
+      - name: 安装 Linux 系统依赖
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            patchelf \
+            file wget
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 走官方 npm 包拿预编译的 Tauri CLI，比 cargo install 现场编译快得多。
+      # 版本与本地开发所用一致；升级 tauri crate 时这里一并调整。
+      - name: 安装 Tauri CLI
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            # runner 用户对 /usr/local 没有写权限，而 sudo 会重置 PATH 丢掉 setup-node 装的 node，
+            # 所以把 PATH 显式透传进去
+            sudo env "PATH=$PATH" npm install -g @tauri-apps/cli@2.11.3
+          else
+            npm install -g @tauri-apps/cli@2.11.3
+          fi
+          tauri --version
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      # 安装包版本号取自 tag，否则每次发版都会是仓库里写死的 0.1.0
+      - name: 同步版本号（取自 tag）
+        run: node .github/scripts/set-version.mjs "${{ github.ref_name }}"
+
+      - name: 构建并打包
+        run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      # 只收最终安装包：bundle/ 下还有 .app 目录、deb 解包目录等中间产物，整体上传会夹带大量无用文件
+      - name: 上传安装包
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.deb
+            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.AppImage
+            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.exe
+
+  # 三个平台全部构建成功后，统一建 Release；分头创建会互相抢同一个 tag
+  release:
+    name: 发布 Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: 创建 Release 并上传安装包
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"
+          # v0.2.0-beta.1 这类 tag 自动标记为预发布
+          PRERELEASE=""
+          case "$TAG" in *-*) PRERELEASE="--prerelease" ;; esac
+
+          ls -lh dist
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # 流水线重跑时覆盖已有 Release 里的安装包
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --title "$TAG" \
+              --generate-notes \
+              --verify-tag \
+              $PRERELEASE
+          fi
