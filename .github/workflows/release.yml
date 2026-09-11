@@ -137,12 +137,21 @@ jobs:
           PRERELEASE=""
           case "$TAG" in *-*) PRERELEASE="--prerelease" ;; esac
 
-          ls -lh dist
+          find dist -type f -print
+          ASSETS=()
+          while IFS= read -r -d '' ASSET; do
+            ASSETS+=("$ASSET")
+          done < <(find dist -type f -print0)
+          if ((${#ASSETS[@]} == 0)); then
+            echo "未找到可上传的安装包" >&2
+            exit 1
+          fi
+
           if gh release view "$TAG" >/dev/null 2>&1; then
             # 流水线重跑时覆盖已有 Release 里的安装包
-            gh release upload "$TAG" dist/* --clobber
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
           else
-            gh release create "$TAG" dist/* \
+            gh release create "$TAG" "${ASSETS[@]}" \
               --title "$TAG" \
               --generate-notes \
               --verify-tag \
