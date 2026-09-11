@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="autumn">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>麦地缓存 — Redis 图形化桌面管理客户端</title>
+    <meta name="description" content="麦地缓存（MaiDi Cache）是一款开源、轻量、跨平台的 Redis 图形化桌面管理客户端。连接、浏览、编辑、监控 Redis，一应俱全；内置春分、立夏、初秋、深秋、冬至五款四季主题。基于 Tauri 2 与 Rust 构建。" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='44' cy='26' rx='24' ry='9' fill='%23f5b342'/%3E%3Cpath d='M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26' fill='%23f5b342'/%3E%3Cpath d='M20 42 Q44 50 68 42' stroke='rgba(255,255,255,0.35)' stroke-width='3' fill='none'/%3E%3Cpath d='M20 60 Q44 68 68 60' stroke='rgba(255,255,255,0.35)' stroke-width='3' fill='none'/%3E%3Ccircle cx='72' cy='72' r='18' fill='%23fff' stroke='%23f5b342' stroke-width='3'/%3E%3Ctext x='72' y='77' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='13' fill='%23d4902a'%3EMR%3C/text%3E%3C/svg%3E" />
+    <style>
+        /* ============================================================
+           主题变量 —— 与 frontend/index.html 完全一致的五款四季主题
+           ============================================================ */
+
+        /* ========== 深秋（暗色金，默认） ========== */
+        :root,
+        [data-theme="autumn"] {
+            --bg-primary: #0d0b08;
+            --bg-secondary: #1a150e;
+            --bg-tertiary: #261f16;
+            --bg-hover: #33291e;
+            --bg-active: #403528;
+            --bg-input: #0d0b08;
+            --border-color: #4a3a2a;
+            --text-primary: #f5e6d3;
+            --text-secondary: #c4a88a;
+            --text-muted: #7a6550;
+            --accent: #f5b342;          /* 金黄色主色 */
+            --accent-hover: #d4902a;
+            --accent-dim: rgba(245, 179, 66, 0.18);
+            --green: #7cb84b;
+            --blue: #6a9fd8;
+            --yellow: #f5b342;
+            --purple: #b392d0;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+            color-scheme: dark;
+        }
+
+        /* ========== 初秋（亮金色） ========== */
+        [data-theme="golden"] {
+            --bg-primary: #fdf8ee;
+            --bg-secondary: #fffaf0;
+            --bg-tertiary: #fdf1d7;
+            --bg-hover: #f7e6c3;
+            --bg-active: #f0d9a8;
+            --bg-input: #fdf8ee;
+            --border-color: #e5c98f;
+            --text-primary: #3d2f14;
+            --text-secondary: #6b5622;
+            --text-muted: #a08a4e;
+            --accent: #d99a1b;          /* 暖金主色 */
+            --accent-hover: #b87f12;
+            --accent-dim: rgba(217, 154, 27, 0.16);
+            --green: #5f9e3a;
+            --blue: #4c7fc0;
+            --yellow: #d9a514;
+            --purple: #9a6fc4;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(140, 100, 30, 0.25);
+            color-scheme: light;
+        }
+
+        /* ========== 春分（清新绿） ========== */
+        [data-theme="spring"] {
+            --bg-primary: #f2f8f1;
+            --bg-secondary: #f9fcf8;
+            --bg-tertiary: #e9f4e6;
+            --bg-hover: #dcefd5;
+            --bg-active: #cde6c4;
+            --bg-input: #f9fcf8;
+            --border-color: #b5d8ab;
+            --text-primary: #1e3320;
+            --text-secondary: #44664b;
+            --text-muted: #7b9b80;
+            --accent: #4caf50;          /* 春芽绿主色 */
+            --accent-hover: #3d9440;
+            --accent-dim: rgba(76, 175, 80, 0.15);
+            --green: #4caf50;
+            --blue: #66bb6a;
+            --yellow: #d4a017;
+            --purple: #9ccc65;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(76, 130, 70, 0.18);
+            color-scheme: light;
+        }
+
+        /* ========== 立夏（晴空蓝） ========== */
+        [data-theme="summer"] {
+            --bg-primary: #eef6fd;
+            --bg-secondary: #f7fbff;
+            --bg-tertiary: #e3f0fc;
+            --bg-hover: #d0e6fa;
+            --bg-active: #bcdbf8;
+            --bg-input: #f4faff;
+            --border-color: #a8cdec;
+            --text-primary: #0f2b42;
+            --text-secondary: #2f5f8a;
+            --text-muted: #6f96b8;
+            --accent: #22a6f2;          /* 夏日晴空蓝主色 */
+            --accent-hover: #1687cc;
+            --accent-dim: rgba(34, 166, 242, 0.15);
+            --green: #2ecc9a;
+            --blue: #22a6f2;
+            --yellow: #ffc93c;
+            --purple: #9b6cc4;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(34, 110, 170, 0.16);
+            color-scheme: light;
+        }
+
+        /* ========== 冬至（明亮模式） ========== */
+        [data-theme="winter"] {
+            --bg-primary: #f5f6fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f0f2f8;
+            --bg-hover: #e7ebf5;
+            --bg-active: #dbe2f0;
+            --bg-input: #ffffff;
+            --border-color: #d3d9e5;
+            --text-primary: #1c2333;
+            --text-secondary: #455069;
+            --text-muted: #8a93a6;
+            --accent: #2563eb;          /* 冬日晴空蓝 */
+            --accent-hover: #1d4fd8;
+            --accent-dim: rgba(37, 99, 235, 0.12);
+            --green: #2f9e5f;
+            --blue: #3b82f6;
+            --yellow: #d99a14;
+            --purple: #8b5cf6;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(31, 41, 72, 0.14);
+            color-scheme: light;
+        }
+
+        /* ============================================================
+           全局
+           ============================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        html.t-anim body,
+        html.t-anim .nav,
+        html.t-anim section,
+        html.t-anim .card,
+        html.t-anim .shot-glow,
+        html.t-anim footer,
+        html.t-anim .btn,
+        html.t-anim .icon-btn,
+        html.t-anim .feature-card,
+        html.t-anim .theme-card,
+        html.t-anim .dl-card,
+        html.t-anim .app-shot,
+        html.t-anim .app-shot * {
+            transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+        }
+        body {
+            font-family: var(--font);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        ::selection { background: var(--accent-dim); color: var(--text-primary); }
+        a { color: inherit; text-decoration: none; }
+        .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+        section { scroll-margin-top: 76px; }
+        .icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+        /* 滚动显现动画 */
+        .reveal { opacity: 0; transform: translateY(18px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .reveal.in { opacity: 1; transform: none; }
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            .reveal { opacity: 1; transform: none; transition: none; }
+            html.t-anim body, html.t-anim .nav, html.t-anim section, html.t-anim .card,
+            html.t-anim .shot-glow, html.t-anim footer, html.t-anim .btn, html.t-anim .icon-btn,
+            html.t-anim .feature-card, html.t-anim .theme-card, html.t-anim .dl-card,
+            html.t-anim .app-shot, html.t-anim .app-shot * { transition: none !important; }
+        }
+
+        /* ============================================================
+           顶部导航
+           ============================================================ */
+        .nav {
+            position: sticky; top: 0; z-index: 100;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        @supports (backdrop-filter: blur(1px)) {
+            .nav {
+                background: color-mix(in srgb, var(--bg-primary) 74%, transparent);
+                backdrop-filter: blur(14px) saturate(1.15);
+                -webkit-backdrop-filter: blur(14px) saturate(1.15);
+            }
+        }
+        .nav-inner { display: flex; align-items: center; gap: 28px; height: 60px; }
+        .nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+        .nav .brand .logo-mark { width: 26px; height: 26px; display: block; }
+        .nav-links { display: flex; gap: 22px; font-size: 14px; color: var(--text-secondary); }
+        .nav-links a:hover { color: var(--accent); }
+        .nav .spacer { flex: 1; }
+        .icon-btn {
+            width: 34px; height: 32px; border-radius: 6px;
+            background: transparent; border: 1px solid var(--border-color);
+            color: var(--text-secondary); cursor: pointer; font-size: 15px;
+            display: inline-flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent); }
+        .icon-btn .icon { width: 16px; height: 16px; }
+        .nav .github-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            height: 32px; padding: 0 14px; border-radius: 6px;
+            border: 1px solid var(--border-color); color: var(--text-primary);
+            font-size: 13px; font-weight: 600; transition: all 0.2s;
+        }
+        .nav .github-btn:hover { border-color: var(--accent); background: var(--bg-hover); }
+        .nav .github-btn .icon { width: 15px; height: 15px; }
+
+        /* 主题下拉（与应用内一致） */
+        .theme-dropdown { position: relative; }
+        .theme-menu {
+            position: absolute; top: 40px; right: 0; min-width: 150px;
+            background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 6px; z-index: 200; display: none; flex-direction: column; gap: 2px;
+        }
+        .theme-menu.open { display: flex; }
+        .theme-menu-title { font-size: 11px; color: var(--text-muted); padding: 4px 8px 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .theme-option {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-radius: 6px; cursor: pointer;
+            color: var(--text-secondary); font-size: 13px; white-space: nowrap; transition: background 0.15s, color 0.15s;
+        }
+        .theme-option:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .theme-option.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+        .theme-swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(128, 128, 128, 0.25); flex-shrink: 0; }
+
+        /* ============================================================
+           Hero
+           ============================================================ */
+        .hero { position: relative; padding: 84px 0 30px; text-align: center; overflow: hidden; }
+        .hero::before {
+            content: ""; position: absolute; inset: 0; pointer-events: none;
+            background-image:
+                linear-gradient(var(--border-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: 44px 44px;
+            opacity: 0.22;
+            -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 35%, transparent 78%);
+            mask-image: radial-gradient(ellipse 85% 65% at 50% 0%, #000 35%, transparent 78%);
+        }
+        .hero .container { position: relative; }
+        .hero-pill {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 6px 16px; border-radius: 999px;
+            background: var(--accent-dim); color: var(--accent);
+            border: 1px solid var(--accent-dim);
+            font-size: 13px; font-weight: 600; letter-spacing: 0.3px;
+        }
+        .hero-pill .logo-mark { width: 16px; height: 16px; display: block; }
+        .hero h1 {
+            margin-top: 22px;
+            font-size: clamp(44px, 7vw, 68px);
+            font-weight: 800; letter-spacing: 1px; line-height: 1.15;
+        }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .tagline { margin-top: 14px; font-size: clamp(17px, 2.4vw, 21px); color: var(--text-primary); font-weight: 600; }
+        .hero .desc { margin: 14px auto 0; max-width: 640px; font-size: 15px; color: var(--text-secondary); }
+        .hero-ctas { margin-top: 30px; display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 9px;
+            height: 46px; padding: 0 26px; border-radius: 8px;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            border: 1px solid transparent; transition: all 0.2s;
+        }
+        .btn .icon { width: 17px; height: 17px; }
+        .btn-primary { background: var(--accent); color: #fff; }
+        :root[data-theme="autumn"] .btn-primary, [data-theme="autumn"] .btn-primary { color: #1a150e; }
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-ghost { background: transparent; border-color: var(--border-color); color: var(--text-primary); }
+        .btn-ghost:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+        .hero-meta { margin-top: 24px; display: flex; gap: 10px 22px; justify-content: center; flex-wrap: wrap; font-size: 13px; color: var(--text-muted); }
+        .hero-meta span { display: inline-flex; align-items: center; gap: 6px; }
+        .hero-meta .icon { width: 14px; height: 14px; }
+
+        /* ============================================================
+           应用界面预览（纯 CSS 复刻，跟随主题换肤）
+           ============================================================ */
+        .preview { position: relative; padding: 26px 0 10px; }
+        .shot-stage { position: relative; margin: 0 auto; max-width: 1060px; }
+        .shot-glow {
+            position: absolute; inset: -40px 0 -60px; pointer-events: none;
+            background: radial-gradient(58% 60% at 50% 45%, var(--accent-dim), transparent 72%);
+        }
+        .shot-scale { width: 1060px; transform-origin: top left; position: relative; }
+        .app-shot {
+            width: 1060px; border-radius: 12px; overflow: hidden;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow), 0 30px 80px rgba(0, 0, 0, 0.25);
+            display: flex; flex-direction: column;
+            font-size: 13px; line-height: 1.45;
+            text-align: left;
+        }
+        .app-shot * { min-width: 0; }
+        .app-shot .icon { stroke-width: 1.8; }
+
+        /* --- 模拟标题栏 --- */
+        .m-titlebar {
+            height: 46px; display: flex; align-items: center; gap: 12px;
+            padding: 0 14px; border-bottom: 1px solid var(--border-color);
+            background: var(--bg-secondary); flex-shrink: 0;
+        }
+        .m-titlebar .m-logo { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+        .m-titlebar .m-logo .logo-mark { width: 22px; height: 22px; display: block; }
+        .m-titlebar .m-logo .ver {
+            background: var(--accent-dim); color: var(--accent);
+            font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 4px; letter-spacing: 0.5px;
+        }
+        .m-status { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); margin-left: 8px; }
+        .m-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse-dot 2s infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .m-spacer { flex: 1; }
+        .m-tb-actions { display: flex; gap: 6px; align-items: center; }
+        .m-icon-btn {
+            width: 26px; height: 26px; border-radius: 6px; border: 1px solid transparent;
+            background: transparent; color: var(--text-secondary);
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .m-icon-btn .icon { width: 13px; height: 13px; }
+        .m-icon-btn.bordered { border-color: var(--border-color); }
+        .m-btn {
+            height: 26px; padding: 0 12px; border-radius: 6px; border: none;
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 11.5px; font-weight: 600; background: var(--accent); color: #fff;
+        }
+        [data-theme="autumn"] .app-shot .m-btn { color: #1a150e; }
+        .m-btn .icon { width: 11px; height: 11px; }
+        .m-win-controls { display: flex; gap: 5px; margin-left: 10px; }
+        .m-win-controls span { width: 11px; height: 11px; border-radius: 50%; display: block; }
+        .m-win-controls .close { background: #ff5f57; }
+        .m-win-controls .min { background: #ffbd2e; }
+        .m-win-controls .max { background: #28c840; }
+
+        /* --- 模拟主体 --- */
+        .m-body { display: flex; flex: 1; min-height: 0; height: 436px; }
+        .m-side {
+            width: 212px; flex-shrink: 0; border-right: 1px solid var(--border-color);
+            background: var(--bg-secondary); display: flex; flex-direction: column; padding: 10px;
+        }
+        .m-side-title { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 4px 8px; display: flex; align-items: center; gap: 5px; }
+        .m-side-title .icon { width: 11px; height: 11px; }
+        .m-conn { display: flex; flex-direction: column; gap: 4px; }
+        .m-conn-item {
+            display: flex; align-items: center; gap: 8px; padding: 7px 8px;
+            border-radius: 6px; border-left: 2px solid transparent; color: var(--text-secondary);
+        }
+        .m-conn-item.active { background: var(--bg-hover); border-left-color: var(--accent); color: var(--text-primary); }
+        .m-conn-item .cicon { width: 24px; height: 24px; border-radius: 6px; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .m-conn-item .cicon .icon { width: 12px; height: 12px; }
+        .m-conn-item .cinfo { flex: 1; line-height: 1.25; overflow: hidden; }
+        .m-conn-item .cname { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .m-conn-item .chost { font-size: 10px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .m-badge { font-size: 9px; padding: 1px 6px; border-radius: 4px; flex-shrink: 0; }
+        .m-badge.online { color: var(--green); background: rgba(124, 184, 75, 0.15); }
+        .m-badge.ro { color: var(--yellow); background: rgba(245, 179, 66, 0.14); }
+        .m-badge.cluster { color: var(--purple); background: rgba(179, 146, 208, 0.15); }
+        .m-add-conn {
+            margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 7px; border-radius: 6px; border: 1px dashed var(--border-color);
+            color: var(--text-secondary); font-size: 11.5px;
+        }
+        .m-add-conn .icon { width: 11px; height: 11px; }
+        .m-stats { margin-top: auto; border-top: 1px solid var(--border-color); padding-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+        .m-stat { background: var(--bg-tertiary); border-radius: 6px; padding: 5px 8px; line-height: 1.3; }
+        .m-stat .k { font-size: 10px; color: var(--text-muted); }
+        .m-stat .v { font-size: 11.5px; font-weight: 700; color: var(--text-primary); font-family: var(--mono); }
+
+        /* --- 工具栏 --- */
+        .m-main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg-primary); }
+        .m-toolbar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+        .m-db { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 11.5px; color: var(--text-secondary); }
+        .m-db .icon { width: 12px; height: 12px; color: var(--accent); }
+        .m-db b { color: var(--text-primary); font-weight: 600; }
+        .m-search { flex: 1; display: flex; align-items: center; gap: 7px; padding: 4px 10px; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-muted); font-size: 11.5px; max-width: 300px; }
+        .m-search .icon { width: 12px; height: 12px; }
+        .m-search .sep { margin-left: auto; color: var(--accent); font-family: var(--mono); font-size: 11px; border-left: 1px solid var(--border-color); padding-left: 7px; }
+        .m-toolbar .m-btn { margin-left: 0; }
+        .m-btn.ghost { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); font-weight: 500; }
+        [data-theme="autumn"] .app-shot .m-btn.ghost { color: var(--text-secondary); }
+
+        /* --- 数据面板 --- */
+        .m-data { flex: 1; display: flex; min-height: 0; }
+        .m-tree { width: 296px; flex-shrink: 0; border-right: 1px solid var(--border-color); overflow: hidden; padding: 6px 0; }
+        .m-tree-row { display: flex; align-items: center; gap: 7px; height: 27px; padding: 0 12px; color: var(--text-secondary); font-size: 12px; }
+        .m-tree-row .tw { width: 10px; height: 10px; color: var(--text-muted); flex-shrink: 0; }
+        .m-tree-row .ficon { width: 12px; height: 12px; color: var(--yellow); flex-shrink: 0; }
+        .m-tree-row .kicon { width: 11px; height: 11px; flex-shrink: 0; }
+        .m-tree-row .kname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 11.5px; }
+        .m-tree-row.indent { padding-left: 34px; }
+        .m-tree-row .tbadge { font-size: 8.5px; font-weight: 700; padding: 0 5px; border-radius: 4px; letter-spacing: 0.3px; flex-shrink: 0; }
+        .m-tree-row .ttls { font-size: 9.5px; color: var(--text-muted); font-family: var(--mono); flex-shrink: 0; }
+        .m-tree-row.selected { background: var(--accent-dim); color: var(--text-primary); box-shadow: inset 2px 0 0 var(--accent); }
+        .t-string { color: var(--green); }
+        .t-hash { color: var(--yellow); }
+        .t-list { color: var(--blue); }
+        .t-set { color: var(--purple); }
+        .bg-string { background: rgba(124, 184, 75, 0.15); }
+        .bg-hash { background: rgba(245, 179, 66, 0.15); }
+        .bg-list { background: rgba(106, 159, 216, 0.15); }
+        .bg-set { background: rgba(179, 146, 208, 0.15); }
+
+        /* --- Key 详情 --- */
+        .m-detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .m-detail-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border-color); }
+        .m-detail-head .kicon { width: 13px; height: 13px; color: var(--yellow); }
+        .m-detail-head .kname { font-family: var(--mono); font-size: 12.5px; font-weight: 700; }
+        .m-type-pill { font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 4px; letter-spacing: 0.4px; }
+        .m-ttl-pill { font-size: 9px; padding: 1px 7px; border-radius: 4px; color: var(--text-muted); border: 1px solid var(--border-color); }
+        .m-detail-sub { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10.5px; }
+        .m-detail-sub .count { color: var(--accent); font-weight: 700; }
+        .m-table { flex: 1; overflow: hidden; }
+        .m-tr { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 31px; border-bottom: 1px solid var(--border-color); }
+        .m-tr:hover { background: var(--bg-hover); }
+        .m-tr.head { height: 24px; font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+        .m-tr .fname { width: 96px; font-family: var(--mono); font-size: 11.5px; color: var(--accent); flex-shrink: 0; }
+        .m-tr .fval { flex: 1; font-family: var(--mono); font-size: 11px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .m-tr .fact { display: flex; gap: 6px; color: var(--text-muted); }
+        .m-tr .fact .icon { width: 12px; height: 12px; }
+        .m-detail-foot { padding: 6px 12px; font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .m-detail-foot .icon { width: 11px; height: 11px; color: var(--green); }
+
+        /* --- 模拟终端 --- */
+        .m-term { border-top: 1px solid var(--border-color); background: var(--bg-tertiary); flex-shrink: 0; }
+        .m-term-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; color: var(--text-secondary); font-size: 11.5px; font-weight: 600; border-bottom: 1px solid var(--border-color); }
+        .m-term-head .icon { width: 12px; height: 12px; color: var(--accent); }
+        .m-term-body { padding: 8px 12px; font-family: var(--mono); font-size: 11.5px; line-height: 1.75; }
+        .m-term-body .lp { color: var(--accent); margin-right: 8px; font-weight: 700; }
+        .m-term-body .lo { color: var(--text-secondary); }
+        .m-term-body .lo.ok { color: var(--green); }
+        .m-term-body .lo.num { color: var(--yellow); }
+        .m-term-input { display: flex; align-items: center; gap: 8px; padding: 6px 12px 10px; font-family: var(--mono); font-size: 11.5px; }
+        .m-term-input .lbl { color: var(--accent); font-weight: 700; }
+        .m-term-input .cur { flex: 1; color: var(--text-primary); display: flex; align-items: center; gap: 2px; }
+        .m-term-input .caret { display: inline-block; width: 7px; height: 13px; background: var(--accent); animation: blink 1.1s steps(1) infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+        .m-term-input .run { background: var(--accent); color: #fff; border-radius: 5px; padding: 3px 12px; font-size: 10.5px; font-weight: 700; font-family: var(--font); }
+        [data-theme="autumn"] .app-shot .m-term-input .run { color: #1a150e; }
+
+        .preview-hint { text-align: center; font-size: 12.5px; color: var(--text-muted); padding: 18px 0 0; }
+        .preview-hint .icon { width: 13px; height: 13px; color: var(--accent); vertical-align: -2px; }
+
+        /* ============================================================
+           通用区块
+           ============================================================ */
+        .section { padding: 84px 0; }
+        .section-head { text-align: center; margin-bottom: 44px; }
+        .section-head .kicker { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        .section-head h2 { margin-top: 10px; font-size: clamp(26px, 4vw, 36px); font-weight: 800; }
+        .section-head p { margin-top: 12px; color: var(--text-secondary); max-width: 560px; margin-left: auto; margin-right: auto; font-size: 15px; }
+
+        /* 特性卡片 */
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+        .feature-card {
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 26px 24px; transition: all 0.25s ease;
+        }
+        .feature-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: var(--shadow); }
+        .feature-card .ficon {
+            width: 44px; height: 44px; border-radius: 10px;
+            background: var(--accent-dim); color: var(--accent);
+            display: flex; align-items: center; justify-content: center; font-size: 20px;
+        }
+        .feature-card .ficon .icon { width: 21px; height: 21px; }
+        .feature-card h3 { margin-top: 16px; font-size: 17px; font-weight: 700; }
+        .feature-card p { margin-top: 8px; font-size: 13.5px; color: var(--text-secondary); }
+
+        /* 主题卡片 */
+        .themes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(186px, 1fr)); gap: 16px; }
+        .theme-card {
+            border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden;
+            cursor: pointer; background: var(--bg-secondary); transition: all 0.25s ease;
+            text-align: left; padding: 0; font-family: inherit; color: inherit;
+        }
+        .theme-card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: var(--shadow); }
+        .theme-card.active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim), var(--shadow); }
+        .tpv { height: 108px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+        .tpv-bar { display: flex; gap: 5px; }
+        .tpv-bar i { width: 7px; height: 7px; border-radius: 50%; background: var(--pv-accent); opacity: 0.85; }
+        .tpv-win { flex: 1; display: flex; border-radius: 7px; overflow: hidden; border: 1px solid var(--pv-border); background: var(--pv-win); }
+        .tpv-side { width: 30%; background: var(--pv-block); padding: 7px 6px; display: flex; flex-direction: column; gap: 5px; }
+        .tpv-side i { height: 5px; border-radius: 3px; background: var(--pv-accent); opacity: 0.55; display: block; }
+        .tpv-side i:first-child { opacity: 0.95; }
+        .tpv-main { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+        .tpv-main i { height: 6px; border-radius: 3px; background: var(--pv-border); display: block; }
+        .tpv-main i.hl { background: var(--pv-accent); opacity: 0.75; width: 60%; }
+        .theme-card .tinfo { padding: 13px 15px 15px; display: flex; align-items: center; gap: 9px; }
+        .theme-card .swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(128, 128, 128, 0.25); flex-shrink: 0; }
+        .theme-card .tname { font-weight: 700; font-size: 14.5px; }
+        .theme-card .tdesc { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+        .theme-card .check { margin-left: auto; color: var(--accent); width: 16px; height: 16px; visibility: hidden; }
+        .theme-card.active .check { visibility: visible; }
+        /* 每张主题卡片的固定配色（预览不随页面主题变化） */
+        .pv-spring  { --pv-accent: #4caf50; --pv-bg: #f2f8f1; --pv-win: #f9fcf8; --pv-block: #e9f4e6; --pv-border: #b5d8ab; }
+        .pv-summer  { --pv-accent: #22a6f2; --pv-bg: #eef6fd; --pv-win: #f7fbff; --pv-block: #e3f0fc; --pv-border: #a8cdec; }
+        .pv-golden  { --pv-accent: #d99a1b; --pv-bg: #fdf8ee; --pv-win: #fffaf0; --pv-block: #fdf1d7; --pv-border: #e5c98f; }
+        .pv-autumn  { --pv-accent: #f5b342; --pv-bg: #0d0b08; --pv-win: #1a150e; --pv-block: #261f16; --pv-border: #4a3a2a; }
+        .pv-winter  { --pv-accent: #2563eb; --pv-bg: #f5f6fa; --pv-win: #ffffff; --pv-block: #f0f2f8; --pv-border: #d3d9e5; }
+        .theme-card .tpv { background: var(--pv-bg); }
+
+        /* 下载区 */
+        .dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+        .dl-card {
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 26px 24px; text-align: center; transition: all 0.25s ease;
+        }
+        .dl-card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: var(--shadow); }
+        .dl-card .os { width: 52px; height: 52px; margin: 0 auto; border-radius: 12px; background: var(--accent-dim); color: var(--accent); display: flex; align-items: center; justify-content: center; }
+        .dl-card .os .icon { width: 26px; height: 26px; }
+        .dl-card h3 { margin-top: 14px; font-size: 17px; font-weight: 700; }
+        .dl-card .fmt { margin-top: 6px; font-size: 12.5px; color: var(--text-muted); font-family: var(--mono); }
+        .dl-card .btn { margin-top: 16px; height: 40px; padding: 0 20px; font-size: 13.5px; }
+        .source-block { margin-top: 34px; text-align: center; }
+        .source-block .stitle { font-size: 13px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px; }
+        .code-window {
+            margin: 14px auto 0; max-width: 640px; text-align: left;
+            background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: 10px; overflow: hidden;
+        }
+        .code-window .cw-head { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 11.5px; }
+        .code-window .cw-head .icon { width: 13px; height: 13px; }
+        .code-window pre { padding: 16px 18px; font-family: var(--mono); font-size: 13px; line-height: 1.9; color: var(--text-primary); overflow-x: auto; }
+        .code-window .cmt { color: var(--text-muted); }
+        .code-window .cmd { color: var(--accent); }
+
+        /* 页脚 */
+        footer { border-top: 1px solid var(--border-color); padding: 40px 0 46px; margin-top: 20px; }
+        .footer-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .footer-inner .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+        .footer-inner .brand .logo-mark { width: 24px; height: 24px; display: block; }
+        .footer-inner .fnote { font-size: 12.5px; color: var(--text-muted); }
+        .footer-inner .spacer { flex: 1; }
+        .footer-links { display: flex; gap: 18px; font-size: 13px; color: var(--text-secondary); }
+        .footer-links a:hover { color: var(--accent); }
+        .footer-bottom { margin-top: 18px; font-size: 12px; color: var(--text-muted); }
+
+        /* 响应式 */
+        @media (max-width: 860px) {
+            .nav-links { display: none; }
+            .hero { padding-top: 56px; }
+            .section { padding: 60px 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== SVG 图标与 Logo 精灵 ===== -->
+    <svg style="display:none" aria-hidden="true">
+        <defs>
+            <linearGradient id="md-logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="var(--accent-hover)" />
+                <stop offset="100%" stop-color="var(--accent)" />
+            </linearGradient>
+        </defs>
+        <!-- 麦地缓存 Logo（跟随主题色） -->
+        <symbol id="md-logo" viewBox="0 0 100 100">
+            <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#md-logo-gradient)" />
+            <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#md-logo-gradient)" />
+            <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            <circle cx="72" cy="72" r="18" fill="#ffffff" stroke="var(--accent)" stroke-width="3" />
+            <text x="72" y="77" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-weight="700" font-size="13" fill="var(--accent)">MR</text>
+            <circle cx="86" cy="56" r="5" fill="var(--accent)" />
+            <circle cx="56" cy="86" r="5" fill="var(--accent)" />
+            <path d="M68 56 L78 60" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+            <path d="M64 78 L58 86" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+        </symbol>
+        <!-- 通用线性图标 -->
+        <symbol id="i-menu" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></symbol>
+        <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+        <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><path d="m21 2-2 2"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><path d="m19 4-3.5 3.5"/><path d="M13.39 9.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+        <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.35.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.26 5.66.41.36.78 1.05.78 2.13v3.16c0 .3.2.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+        <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+        <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
+        <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+        <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+        <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+    </svg>
+
+    <!-- ===== 顶部导航 ===== -->
+    <nav class="nav">
+        <div class="container nav-inner">
+            <a class="brand" href="#top">
+                <svg class="logo-mark" aria-label="麦地缓存 Logo"><use href="#md-logo" /></svg>
+                麦地缓存
+            </a>
+            <div class="nav-links">
+                <a href="#features">特性</a>
+                <a href="#themes">主题</a>
+                <a href="#download">下载</a>
+                <a href="https://github.com/myredisapp/myredis/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener">文档</a>
+            </div>
+            <div class="spacer"></div>
+            <div class="theme-dropdown">
+                <button title="切换主题" id="btnTheme" class="icon-btn" aria-haspopup="menu" aria-expanded="false" aria-label="切换主题">
+                    <svg class="icon" aria-hidden="true"><use href="#i-sun" /></svg>
+                </button>
+                <div class="theme-menu" id="themeMenu" role="menu" aria-label="选择主题">
+                    <div class="theme-menu-title">选择主题</div>
+                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="spring"><span class="theme-swatch" style="background:#4caf50"></span>春分</div>
+                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="summer"><span class="theme-swatch" style="background:#22a6f2"></span>立夏</div>
+                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="golden"><span class="theme-swatch" style="background:#d99a1b"></span>初秋</div>
+                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="autumn"><span class="theme-swatch" style="background:#f5b342"></span>深秋</div>
+                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="winter"><span class="theme-swatch" style="background:#f5f6fa"></span>冬至</div>
+                </div>
+            </div>
+            <a class="github-btn" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">
+                <svg class="icon" aria-hidden="true"><use href="#i-github" /></svg>
+                GitHub
+            </a>
+        </div>
+    </nav>
+
+    <!-- ===== Hero ===== -->
+    <header class="hero" id="top">
+        <div class="container">
+            <span class="hero-pill">
+                <svg class="logo-mark" aria-hidden="true"><use href="#md-logo" /></svg>
+                开源免费 · Tauri 2 + Rust 打造
+            </span>
+            <h1>麦地<span class="accent">缓存</span></h1>
+            <p class="tagline">像打理一片麦地一样，打理你的 Redis。</p>
+            <p class="desc">
+                麦地缓存是一款轻量、跨平台的 Redis 图形化桌面管理客户端。
+                连接、浏览、编辑、监控一应俱全，还内置五款「四季」主题，陪伴你每一次与数据的相遇。
+            </p>
+            <div class="hero-ctas">
+                <a class="btn btn-primary" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">
+                    <svg class="icon" aria-hidden="true"><use href="#i-download" /></svg>
+                    下载最新版本
+                </a>
+                <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">
+                    <svg class="icon" aria-hidden="true"><use href="#i-github" /></svg>
+                    GitHub 源码
+                </a>
+            </div>
+            <div class="hero-meta">
+                <span><svg class="icon" aria-hidden="true"><use href="#i-monitor" /></svg>macOS · Windows · Linux</span>
+                <span><svg class="icon" aria-hidden="true"><use href="#i-zap" /></svg>Tauri 2 · Rust · 原生 JS</span>
+                <span><svg class="icon" aria-hidden="true"><use href="#i-sun" /></svg>五款四季主题</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== 应用界面预览 ===== -->
+    <section class="preview">
+        <div class="container">
+            <div class="shot-stage">
+                <div class="shot-glow" aria-hidden="true"></div>
+                <div class="shot-scale" id="shotScale">
+                    <!-- 以下为纯 HTML/CSS 复刻的应用界面，随主题换肤 -->
+                    <div class="app-shot" aria-hidden="true" role="img" aria-label="麦地缓存应用界面预览">
+                        <!-- 标题栏 -->
+                        <div class="m-titlebar">
+                            <span class="m-icon-btn"><svg class="icon"><use href="#i-menu" /></svg></span>
+                            <div class="m-logo">
+                                <svg class="logo-mark"><use href="#md-logo" /></svg>
+                                麦地缓存
+                                <span class="ver">v0.1.0</span>
+                            </div>
+                            <div class="m-status"><span class="dot"></span>已连接 · localhost:6379</div>
+                            <div class="m-spacer"></div>
+                            <div class="m-tb-actions">
+                                <span class="m-icon-btn bordered"><svg class="icon"><use href="#i-sun" /></svg></span>
+                                <span class="m-icon-btn"><svg class="icon"><use href="#i-refresh" /></svg></span>
+                                <span class="m-icon-btn"><svg class="icon"><use href="#i-trash" /></svg></span>
+                                <span class="m-btn"><svg class="icon"><use href="#i-plus" /></svg>新建连接</span>
+                            </div>
+                            <div class="m-win-controls"><span class="close"></span><span class="min"></span><span class="max"></span></div>
+                        </div>
+                        <!-- 主体 -->
+                        <div class="m-body">
+                            <!-- 侧边栏 -->
+                            <div class="m-side">
+                                <div class="m-side-title"><svg class="icon"><use href="#i-plug" /></svg>连接</div>
+                                <div class="m-conn">
+                                    <div class="m-conn-item active">
+                                        <span class="cicon"><svg class="icon"><use href="#i-db" /></svg></span>
+                                        <span class="cinfo"><span class="cname">本地开发</span><br/><span class="chost">localhost:6379</span></span>
+                                        <span class="m-badge online">已连接</span>
+                                    </div>
+                                    <div class="m-conn-item">
+                                        <span class="cicon"><svg class="icon"><use href="#i-db" /></svg></span>
+                                        <span class="cinfo"><span class="cname">生产环境</span><br/><span class="chost">prod.redis.internal:6379</span></span>
+                                        <span class="m-badge ro">只读</span>
+                                    </div>
+                                    <div class="m-conn-item">
+                                        <span class="cicon"><svg class="icon"><use href="#i-db" /></svg></span>
+                                        <span class="cinfo"><span class="cname">订单集群</span><br/><span class="chost">cluster.node:6379</span></span>
+                                        <span class="m-badge cluster">集群</span>
+                                    </div>
+                                </div>
+                                <div class="m-add-conn"><svg class="icon"><use href="#i-plus" /></svg>添加连接</div>
+                                <div class="m-stats">
+                                    <div class="m-stat"><div class="k">磁盘</div><div class="v">12.4 GB</div></div>
+                                    <div class="m-stat"><div class="k">内存</div><div class="v">156 MB</div></div>
+                                    <div class="m-stat"><div class="k">连接数</div><div class="v">8</div></div>
+                                    <div class="m-stat"><div class="k">Key 总数</div><div class="v">1,204</div></div>
+                                </div>
+                            </div>
+                            <!-- 主内容 -->
+                            <div class="m-main">
+                                <div class="m-toolbar">
+                                    <div class="m-db"><svg class="icon"><use href="#i-db" /></svg><b>Db0</b></div>
+                                    <div class="m-search"><svg class="icon"><use href="#i-search" /></svg>user:*<span class="sep">/</span></div>
+                                    <span class="m-btn ghost"><svg class="icon"><use href="#i-plus" /></svg>新增 Key</span>
+                                    <span class="m-btn ghost"><svg class="icon"><use href="#i-download" /></svg>导入</span>
+                                    <span class="m-btn ghost"><svg class="icon"><use href="#i-upload" /></svg>导出</span>
+                                </div>
+                                <div class="m-data">
+                                    <!-- Key 树 -->
+                                    <div class="m-tree">
+                                        <div class="m-tree-row"><svg class="icon tw"><use href="#i-chev-d" /></svg><svg class="icon ficon"><use href="#i-folder" /></svg><span class="kname">user</span></div>
+                                        <div class="m-tree-row indent selected"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">user:1001</span><span class="tbadge t-hash bg-hash">HASH</span></div>
+                                        <div class="m-tree-row indent"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">user:1002</span><span class="tbadge t-hash bg-hash">HASH</span></div>
+                                        <div class="m-tree-row indent"><span class="tw"></span><svg class="icon kicon t-string"><use href="#i-key" /></svg><span class="kname">user:settings</span><span class="tbadge t-string bg-string">STR</span></div>
+                                        <div class="m-tree-row"><svg class="icon tw"><use href="#i-chev-r" /></svg><svg class="icon ficon"><use href="#i-folder" /></svg><span class="kname">cache</span></div>
+                                        <div class="m-tree-row"><svg class="icon tw"><use href="#i-chev-r" /></svg><svg class="icon ficon"><use href="#i-folder" /></svg><span class="kname">queue</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-string"><use href="#i-key" /></svg><span class="kname">session:a3f9c2</span><span class="tbadge t-string bg-string">STR</span><span class="ttls">1793s</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-list"><use href="#i-key" /></svg><span class="kname">queue:emails</span><span class="tbadge t-list bg-list">LIST</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-set"><use href="#i-key" /></svg><span class="kname">config:limits</span><span class="tbadge t-set bg-set">SET</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">cache:hot</span><span class="tbadge t-hash bg-hash">ZSET</span></div>
+                                    </div>
+                                    <!-- Key 详情 -->
+                                    <div class="m-detail">
+                                        <div class="m-detail-head">
+                                            <svg class="icon kicon"><use href="#i-key" /></svg>
+                                            <span class="kname">user:1001</span>
+                                            <span class="m-type-pill t-hash bg-hash">HASH</span>
+                                            <span class="m-ttl-pill">永久有效</span>
+                                            <span class="m-spacer"></span>
+                                            <span class="m-icon-btn"><svg class="icon"><use href="#i-refresh" /></svg></span>
+                                            <span class="m-icon-btn"><svg class="icon"><use href="#i-trash" /></svg></span>
+                                            <span class="m-btn"><svg class="icon"><use href="#i-edit" /></svg>编辑</span>
+                                        </div>
+                                        <div class="m-detail-sub">
+                                            共 <span class="count">4</span> 个字段 · SCAN 分页加载
+                                            <span class="m-spacer"></span>
+                                            <span class="m-btn ghost"><svg class="icon"><use href="#i-plus" /></svg>新增字段</span>
+                                            <span class="m-btn"><svg class="icon"><use href="#i-check" /></svg>保存修改</span>
+                                        </div>
+                                        <div class="m-table">
+                                            <div class="m-tr head"><span class="fname" style="color:inherit">字段</span><span class="fval">值</span><span class="fact">操作</span></div>
+                                            <div class="m-tr"><span class="fname">name</span><span class="fval">"张三"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">age</span><span class="fval">"28"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">email</span><span class="fval">"zhangsan@example.com"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">city</span><span class="fval">"杭州"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">tags</span><span class="fval">"vip,new"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                        </div>
+                                        <div class="m-detail-foot"><svg class="icon"><use href="#i-shield" /></svg>只读模式下写操作将被拦截，保护生产数据</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 终端 -->
+                        <div class="m-term">
+                            <div class="m-term-head"><svg class="icon"><use href="#i-terminal" /></svg>终端<span class="m-spacer"></span><span class="m-icon-btn"><svg class="icon"><use href="#i-trash" /></svg></span><span class="m-icon-btn"><svg class="icon"><use href="#i-chev-d" /></svg></span></div>
+                            <div class="m-term-body">
+                                <div><span class="lp">&gt;</span><span class="lo">PING</span></div>
+                                <div><span class="lp">&gt;</span><span class="lo ok">PONG</span></div>
+                                <div><span class="lp">&gt;</span><span class="lo">DBSIZE</span></div>
+                                <div><span class="lp">&gt;</span><span class="lo num">(integer) 1204</span></div>
+                            </div>
+                            <div class="m-term-input">
+                                <span class="lbl">redis&gt;</span>
+                                <span class="cur">GET session:a3f9c2<span class="caret"></span></span>
+                                <span class="run">执行</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <p class="preview-hint">
+                <svg class="icon" aria-hidden="true"><use href="#i-sun" /></svg>
+                以上为真实界面布局的等比还原 —— 顶部调色盘切换主题，预览会跟着换装
+            </p>
+        </div>
+    </section>
+
+    <!-- ===== 特性 ===== -->
+    <section class="section" id="features">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="kicker">Features</div>
+                <h2>为日常 Redis 工作而生</h2>
+                <p>从连接到编辑、从监控到备份，把高频操作都装进一个轻巧的桌面应用。</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card reveal">
+                    <div class="ficon"><svg class="icon" aria-hidden="true"><use href="#i-db" /></svg></div>
+                    <h3>多连接管理</h3>
+                    <p>单机与集群模式随切随连，支持密码 / ACL 认证、只读保护与自定义 Key 分隔符；连接配置本地持久化，重启即用。</p>
+                </div>
+                <div class="feature-card reveal">
+                    <div class="ficon"><svg class="icon" aria-hidden="true"><use href="#i-key" /></svg></div>
+                    <h3>全类型 Key 编辑</h3>
+                    <p>String、Hash、List、Set、Zset 五大类型可视化浏览与编辑，TTL 一目了然，改完即存。</p>
+                </div>
+                <div class="feature-card reveal">
+                    <div class="ficon"><svg class="icon" aria-hidden="true"><use href="#i-terminal" /></svg></div>
+                    <h3>内置终端</h3>
+                    <p>不离开客户端直接执行 Redis 命令，命令转发至后端真实执行，输出与界面状态实时同步。</p>
+                </div>
+                <div class="feature-card reveal">
+                    <div class="ficon"><svg class="icon" aria-hidden="true"><use href="#i-activity" /></svg></div>
+                    <h3>服务器监控</h3>
+                    <p>内存、连接数、Key 总数、磁盘占用等关键指标实时展示，服务器健康状态一眼可知。</p>
+                </div>
+                <div class="feature-card reveal">
+                    <div class="ficon"><svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg></div>
+                    <h3>安全浏览</h3>
+                    <p>基于 SCAN 游标分页加载 Key，拒绝 KEYS * 阻塞生产实例；只读连接为线上数据加一道保险。</p>
+                </div>
+                <div class="feature-card reveal">
+                    <div class="ficon"><svg class="icon" aria-hidden="true"><use href="#i-copy" /></svg></div>
+                    <h3>导入 / 导出</h3>
+                    <p>Key 数据一键备份与迁移，配合通配符搜索精准圈定范围，环境间搬数据不再手忙脚乱。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== 主题 ===== -->
+    <section class="section" id="themes">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="kicker">Themes</div>
+                <h2>五款四季主题，总有一片属于你的麦田</h2>
+                <p>应用内置春分、立夏、初秋、深秋、冬至五款主题，深浅色兼备。本主页与应用同款——点击卡片即刻换装。</p>
+            </div>
+            <div class="themes-grid reveal">
+                <button class="theme-card" type="button" data-theme-value="spring">
+                    <div class="tpv pv-spring"><div class="tpv-bar"><i></i><i></i><i></i></div><div class="tpv-win"><div class="tpv-side"><i></i><i></i><i></i></div><div class="tpv-main"><i class="hl"></i><i></i><i></i></div></div></div>
+                    <div class="tinfo"><span class="swatch" style="background:#4caf50"></span><span><span class="tname">春分</span><div class="tdesc">清新芽绿 · 万物生长</div></span><svg class="icon check" aria-hidden="true"><use href="#i-check" /></svg></div>
+                </button>
+                <button class="theme-card" type="button" data-theme-value="summer">
+                    <div class="tpv pv-summer"><div class="tpv-bar"><i></i><i></i><i></i></div><div class="tpv-win"><div class="tpv-side"><i></i><i></i><i></i></div><div class="tpv-main"><i class="hl"></i><i></i><i></i></div></div></div>
+                    <div class="tinfo"><span class="swatch" style="background:#22a6f2"></span><span><span class="tname">立夏</span><div class="tdesc">晴空湛蓝 · 明快清爽</div></span><svg class="icon check" aria-hidden="true"><use href="#i-check" /></svg></div>
+                </button>
+                <button class="theme-card" type="button" data-theme-value="golden">
+                    <div class="tpv pv-golden"><div class="tpv-bar"><i></i><i></i><i></i></div><div class="tpv-win"><div class="tpv-side"><i></i><i></i><i></i></div><div class="tpv-main"><i class="hl"></i><i></i><i></i></div></div></div>
+                    <div class="tinfo"><span class="swatch" style="background:#d99a1b"></span><span><span class="tname">初秋</span><div class="tdesc">暖金麦色 · 沉稳温润</div></span><svg class="icon check" aria-hidden="true"><use href="#i-check" /></svg></div>
+                </button>
+                <button class="theme-card active" type="button" data-theme-value="autumn">
+                    <div class="tpv pv-autumn"><div class="tpv-bar"><i></i><i></i><i></i></div><div class="tpv-win"><div class="tpv-side"><i></i><i></i><i></i></div><div class="tpv-main"><i class="hl"></i><i></i><i></i></div></div></div>
+                    <div class="tinfo"><span class="swatch" style="background:#f5b342"></span><span><span class="tname">深秋</span><div class="tdesc">暗金夜色 · 默认主题</div></span><svg class="icon check" aria-hidden="true"><use href="#i-check" /></svg></div>
+                </button>
+                <button class="theme-card" type="button" data-theme-value="winter">
+                    <div class="tpv pv-winter"><div class="tpv-bar"><i></i><i></i><i></i></div><div class="tpv-win"><div class="tpv-side"><i></i><i></i><i></i></div><div class="tpv-main"><i class="hl"></i><i></i><i></i></div></div></div>
+                    <div class="tinfo"><span class="swatch" style="background:#2563eb"></span><span><span class="tname">冬至</span><div class="tdesc">晴日雪白 · 简洁明亮</div></span><svg class="icon check" aria-hidden="true"><use href="#i-check" /></svg></div>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== 下载 ===== -->
+    <section class="section" id="download">
+        <div class="container">
+            <div class="section-head reveal">
+                <div class="kicker">Download</div>
+                <h2>三大平台，开箱即用</h2>
+                <p>安装包由 GitHub Actions 自动构建发布（myredis-&lt;版本&gt;-&lt;平台&gt;），点击前往 Release 页面获取最新版本。</p>
+            </div>
+            <div class="dl-grid reveal">
+                <div class="dl-card">
+                    <div class="os"><svg class="icon" aria-hidden="true"><use href="#i-box" /></svg></div>
+                    <h3>macOS</h3>
+                    <div class="fmt">.dmg · Universal（Apple Silicon / Intel）</div>
+                    <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">获取安装包</a>
+                </div>
+                <div class="dl-card">
+                    <div class="os"><svg class="icon" aria-hidden="true"><use href="#i-box" /></svg></div>
+                    <h3>Windows</h3>
+                    <div class="fmt">.msi / .exe 安装向导</div>
+                    <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">获取安装包</a>
+                </div>
+                <div class="dl-card">
+                    <div class="os"><svg class="icon" aria-hidden="true"><use href="#i-box" /></svg></div>
+                    <h3>Linux</h3>
+                    <div class="fmt">.deb / .AppImage</div>
+                    <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">获取安装包</a>
+                </div>
+            </div>
+            <div class="source-block reveal">
+                <div class="stitle">或者，从源码开始</div>
+                <div class="code-window">
+                    <div class="cw-head"><svg class="icon" aria-hidden="true"><use href="#i-terminal" /></svg>构建源码</div>
+                    <pre><span class="cmt"># 克隆仓库</span>
+<span class="cmd">git clone</span> https://github.com/myredisapp/myredis.git
+<span class="cmd">cd</span> myredis
+
+<span class="cmt"># 本地开发调试（需先安装 Rust 与 Tauri CLI：cargo install tauri-cli）</span>
+<span class="cmd">cargo tauri</span> dev
+
+<span class="cmt"># 构建各平台安装包</span>
+<span class="cmd">cargo tauri</span> build</pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== 页脚 ===== -->
+    <footer>
+        <div class="container">
+            <div class="footer-inner">
+                <span class="brand">
+                    <svg class="logo-mark" aria-hidden="true"><use href="#md-logo" /></svg>
+                    麦地缓存
+                </span>
+                <span class="fnote">Redis 图形化桌面管理客户端 · 基于 Tauri 2 与 Rust 构建</span>
+                <span class="spacer"></span>
+                <div class="footer-links">
+                    <a href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">GitHub</a>
+                    <a href="https://github.com/myredisapp/myredis/releases" target="_blank" rel="noopener">Releases</a>
+                    <a href="https://github.com/myredisapp/myredis/issues" target="_blank" rel="noopener">反馈问题</a>
+                </div>
+            </div>
+            <div class="footer-bottom">© <span id="year">2026</span> myredisapp · 春分 / 立夏 / 初秋 / 深秋 / 冬至，愿有一款主题合你时节。</div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            'use strict';
+
+            /* ==================== 主题切换（与应用内同款交互） ==================== */
+            var THEME_KEY = 'myredis_home_theme';
+            var root = document.documentElement;
+            var themeBtn = document.getElementById('btnTheme');
+            var themeMenu = document.getElementById('themeMenu');
+
+            function applyTheme(name) {
+                root.setAttribute('data-theme', name);
+                document.querySelectorAll('.theme-option').forEach(function (opt) {
+                    var on = opt.getAttribute('data-theme-value') === name;
+                    opt.classList.toggle('active', on);
+                    opt.setAttribute('aria-checked', on ? 'true' : 'false');
+                });
+                document.querySelectorAll('.theme-card').forEach(function (card) {
+                    card.classList.toggle('active', card.getAttribute('data-theme-value') === name);
+                });
+            }
+
+            // 启动时恢复：URL hash 主题 > 本地保存 > 默认深秋
+            var initial = (location.hash || '').replace('#', '');
+            var known = ['spring', 'summer', 'golden', 'autumn', 'winter'];
+            if (known.indexOf(initial) === -1) initial = null;
+            try {
+                if (!initial) initial = localStorage.getItem(THEME_KEY);
+            } catch (e) { /* 隐私模式下忽略 */ }
+            applyTheme(known.indexOf(initial) !== -1 ? initial : 'autumn');
+
+            themeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = themeMenu.classList.toggle('open');
+                themeBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            document.addEventListener('click', function () {
+                themeMenu.classList.remove('open');
+                themeBtn.setAttribute('aria-expanded', 'false');
+            });
+            themeMenu.addEventListener('click', function (e) {
+                var opt = e.target.closest('.theme-option');
+                if (!opt) return;
+                var name = opt.getAttribute('data-theme-value') || 'autumn';
+                applyTheme(name);
+                try { localStorage.setItem(THEME_KEY, name); } catch (err) { /* 忽略 */ }
+                themeMenu.classList.remove('open');
+            });
+
+            // 主题卡片同样可以换装
+            document.querySelectorAll('.theme-card').forEach(function (card) {
+                card.addEventListener('click', function () {
+                    var name = card.getAttribute('data-theme-value');
+                    applyTheme(name);
+                    try { localStorage.setItem(THEME_KEY, name); } catch (err) { /* 忽略 */ }
+                });
+            });
+
+            /* ==================== 界面预览等比缩放（适配窄屏） ==================== */
+            var stage = document.querySelector('.shot-stage');
+            var shot = document.getElementById('shotScale');
+            var DESIGN_W = 1060;
+            function fitShot() {
+                var w = stage.clientWidth;
+                var s = Math.min(1, w / DESIGN_W);
+                shot.style.transform = 'scale(' + s + ')';
+                stage.style.height = (shot.offsetHeight * s) + 'px';
+            }
+            fitShot();
+            if ('ResizeObserver' in window) {
+                new ResizeObserver(fitShot).observe(stage);
+            } else {
+                window.addEventListener('resize', fitShot);
+            }
+
+            /* ==================== 滚动显现 ==================== */
+            var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            var revealEls = document.querySelectorAll('.reveal');
+            if (reduced || !('IntersectionObserver' in window)) {
+                revealEls.forEach(function (el) { el.classList.add('in'); });
+            } else {
+                var io = new IntersectionObserver(function (entries) {
+                    entries.forEach(function (en) {
+                        if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+                    });
+                }, { threshold: 0.12 });
+                revealEls.forEach(function (el) { io.observe(el); });
+            }
+
+            /* ==================== 杂项 ==================== */
+            document.getElementById('year').textContent = new Date().getFullYear();
+            // 首帧渲染后再开启过渡，避免载入时闪变
+            requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.add('t-anim'); }); });
+        })();
+    </script>
+</body>
+</html>
