@@ -3,6 +3,8 @@ name: Release
 # 打 tag 即触发（例如 git tag v0.2.0 && git push origin v0.2.0）。
 # 产物：macOS(universal) dmg、Linux deb/AppImage、Windows nsis/msi，并发布到 GitHub Release。
 # 安装包一律命名为 myredis-<tag>-<platform>.<ext>，见 .github/scripts/rename-artifacts.mjs
+# 构建前先用 check-deploy-env 快速校验部署凭据 / SSH 连通 / scp 试传（fail-fast），
+# 发布 Release 后再把 web/index.html 通过 scp 推到服务器。
 on:
   push:
     tags:
@@ -21,8 +23,34 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # fail-fast 前置闸门：在多平台构建矩阵之前校验部署环境，让缺失/配错的
+  # 凭据在几秒内失败，而不是等几十分钟构建跑完才暴露。
+  # 见 .github/scripts/check-deploy-env.sh
+  check-deploy-env:
+    name: 检查部署环境
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 SSH 工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-client sshpass
+
+      - name: 校验环境变量、SSH 连接与 SCP 上传
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          WEB_DEPLOY_PATH: ${{ vars.WEB_DEPLOY_PATH }}
+        run: bash .github/scripts/check-deploy-env.sh
+
   build:
     name: 构建 ${{ matrix.label }}
+    needs: check-deploy-env
     runs-on: ${{ matrix.os }}
     strategy:
       # 单个平台失败不影响其他平台出包，便于定位问题
@@ -164,3 +192,57 @@ jobs:
               --verify-tag \
               $PRERELEASE
           fi
+
+  # Release 建好后把官网静态页推到服务器。web/index.html 是自包含单文件
+  # （图标等资源全部内联），上传这一个文件即可。
+  deploy-web:
+    name: 发布网站静态页面
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: 安装 SSH 工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-client sshpass
+
+      - name: 上传 web/index.html 到服务器
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          WEB_DEPLOY_PATH: ${{ vars.WEB_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+
+          : "${SSH_HOST:?请配置 secret: SSH_HOST（服务器 IP 或域名）}"
+          : "${SSH_USERNAME:?请配置 secret: SSH_USERNAME（SSH 登录用户名）}"
+
+          PORT="${SSH_PORT:-22}"
+          TARGET_DIR="${WEB_DEPLOY_PATH:?请配置变量: WEB_DEPLOY_PATH（部署目标目录，例如 /var/www/myredis）}"
+
+          # 端口用 -o 传（不要用 -p）：小写 -p 在 scp 里是"保留时间戳"，
+          # 不是"端口"——会把端口号当成源文件吞掉。
+          SSH_OPTS=(-o "Port=$PORT" -o StrictHostKeyChecking=accept-new)
+
+          if [ -n "${SSH_PRIVATE_KEY:-}" ]; then
+            KEY_FILE="$(mktemp)"
+            printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
+            chmod 600 "$KEY_FILE"
+            SSH_OPTS+=(-i "$KEY_FILE" -o IdentitiesOnly=yes)
+            ssh "${SSH_OPTS[@]}" "$SSH_USERNAME@$SSH_HOST" "mkdir -p '$TARGET_DIR'"
+            scp "${SSH_OPTS[@]}" web/index.html "$SSH_USERNAME@$SSH_HOST:$TARGET_DIR/index.html"
+          elif [ -n "${SSH_PASSWORD:-}" ]; then
+            export SSHPASS="$SSH_PASSWORD"
+            sshpass -e ssh "${SSH_OPTS[@]}" "$SSH_USERNAME@$SSH_HOST" "mkdir -p '$TARGET_DIR'"
+            sshpass -e scp "${SSH_OPTS[@]}" web/index.html "$SSH_USERNAME@$SSH_HOST:$TARGET_DIR/index.html"
+          else
+            echo "::error::缺少认证凭据：请配置 SSH_PRIVATE_KEY 或 SSH_PASSWORD"
+            exit 1
+          fi
+
+          echo "已部署到 $SSH_USERNAME@$SSH_HOST:$TARGET_DIR/index.html"
