@@ -1,7 +1,8 @@
 name: Release
 
 # 打 tag 即触发（例如 git tag v0.2.0 && git push origin v0.2.0）。
-# 产物：macOS(arm64/x64) dmg、Linux deb/AppImage、Windows nsis/msi，并发布到 GitHub Release。
+# 产物：macOS(universal) dmg、Linux deb/AppImage、Windows nsis/msi，并发布到 GitHub Release。
+# 安装包一律命名为 myredis-<tag>-<platform>.<ext>，见 .github/scripts/rename-artifacts.mjs
 on:
   push:
     tags:
@@ -28,23 +29,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # 出单个 universal 包：用户不用先分辨自己是 Apple Silicon 还是 Intel。
+          # 代价是 arm64/x64 各编译一遍（见 rust-targets），tauri 用 lipo 合成。
           - os: macos-latest
-            label: macos-aarch64
-            target: aarch64-apple-darwin
-            bundles: app,dmg
-          - os: macos-latest
-            label: macos-x64
-            target: x86_64-apple-darwin
+            label: macos-universal
+            target: universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
             bundles: app,dmg
           # 刻意不用 ubuntu-latest（24.04）：Linux 产物会继承构建机的 glibc 版本，
           # 在 22.04 上打包才能兼容更老的发行版
           - os: ubuntu-22.04
             label: linux-x64
             target: x86_64-unknown-linux-gnu
+            rust-targets: x86_64-unknown-linux-gnu
             bundles: deb,appimage
           - os: windows-latest
             label: windows-x64
             target: x86_64-pc-windows-msvc
+            rust-targets: x86_64-pc-windows-msvc
             bundles: nsis,msi
     steps:
       - uses: actions/checkout@v7
@@ -85,7 +87,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.rust-targets }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -101,19 +103,24 @@ jobs:
       - name: 构建并打包
         run: tauri build --target ${{ matrix.target }} --bundles "${{ matrix.bundles }}"
 
-      # 只收最终安装包：bundle/ 下还有 .app 目录、deb 解包目录等中间产物，整体上传会夹带大量无用文件
+      # tauri 按 productName 命名安装包（macOS / Windows 是中文「麦地缓存」，Linux 是 maidi-cache），
+      # 发布出来既不统一也不好认，上传前统一改成 myredis-<tag>-<platform>.<ext>。
+      # bundles 传进去是让脚本只认本平台该有的产物，不去动别的扩展名。
+      # 这一行刻意不换行、并显式指定 bash：Windows runner 默认 shell 是 PowerShell，续行符和引号规则都不同
+      - name: 规范化安装包文件名
+        shell: bash
+        run: node .github/scripts/rename-artifacts.mjs "src-tauri/target/${{ matrix.target }}/release/bundle" "${{ github.ref_name }}" "${{ matrix.label }}" "${{ matrix.bundles }}"
+
+      # 只收最终安装包：bundle/ 下还有 .app 目录、deb 解包目录等中间产物，整体上传会夹带大量无用文件。
+      # 改名步骤把安装包统一成 myredis-<tag>-<platform>.<ext>，所以这里按新名收，
+      # 改名没生效时下面的 if-no-files-found 会直接把流水线拦下来
       - name: 上传安装包
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.label }}
           if-no-files-found: error
           retention-days: 7
-          path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.deb
-            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.AppImage
-            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.msi
-            src-tauri/target/${{ matrix.target }}/release/bundle/*/*.exe
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/*/myredis-*
 
   # 三个平台全部构建成功后，统一建 Release；分头创建会互相抢同一个 tag
   release:

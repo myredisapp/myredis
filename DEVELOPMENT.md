@@ -206,3 +206,48 @@ tauri-bundler 自带的 `languages.json`（`en-US → 1252`，`zh-CN → 936`）
 `麦地缓存_<版本>_x64_zh-CN.msi`。可选语言受那份 `languages.json` 限制，写错会 panic 并列出全部可用值。
 
 NSIS 不受影响（走 UTF-16），macOS / Linux 忽略 `bundle.windows`。
+
+### 8.5 Release 上的安装包名（`.github/scripts/rename-artifacts.mjs`）
+
+本地 `tauri build` 的产物名由 `productName` 决定，于是 macOS / Windows 出来是 `麦地缓存_<版本>_<架构>.dmg`、
+`麦地缓存_<版本>_x64-setup.exe`，Linux 是 `maidi-cache_<版本>_amd64.deb`。这套名字发布到下载页上既不好认
+也不统一，所以 CI 在**打包之后、上传 artifact 之前**多跑一步改名，统一成：
+
+```
+myredis-<tag>-<platform>.<ext>
+```
+
+| 平台 label | 产物 |
+| --- | --- |
+| `macos-universal` | `myredis-v0.2.0-macos-universal.dmg` |
+| `linux-x64` | `myredis-v0.2.0-linux-x64.deb`、`myredis-v0.2.0-linux-x64.AppImage` |
+| `windows-x64` | `myredis-v0.2.0-windows-x64.exe`、`myredis-v0.2.0-windows-x64.msi` |
+
+几个容易踩的点：
+
+- **只改发布产物，不改 `productName`**：应用名、窗口标题、安装目录仍是「麦地缓存」，本地打包的输出名也不变。
+  上面 §8.1 / §8.4 描述的命名行为依然成立，改名只发生在 CI 上传前。
+- **扩展名原样保留**：`.AppImage` 不能写成 `.appimage`，否则下载后无法识别。
+- **按 `matrix.bundles` 限定要认的扩展名**：脚本只会处理本 job 声明要打的 kind，不会去动别的扩展名。
+  某个 kind 没产出文件就报错退出 —— 宁可让流水线失败，也不要发出一个少包的 Release。
+- **`bundle/` 不递归扫描**：下一层（`dmg` / `deb` / `appimage` / `nsis` / `msi`）才是最终安装包，
+  更深层是 tauri 的临时产物；`.AppImage.tar.gz` 这类附属文件不在白名单里，会被原样留下、不参与上传。
+- **`shell: bash` 不能省**：Windows runner 默认 shell 是 PowerShell，续行符与引号规则都和 bash 不同。
+- 脚本是 Node 而不是内联 shell，和 `set-version.mjs` 一致，也能在本地直接跑：
+
+```bash
+node .github/scripts/rename-artifacts.mjs <bundleDir> <tag> <platform> <bundles>
+node .github/scripts/rename-artifacts.mjs \
+  src-tauri/target/universal-apple-darwin/release/bundle v0.2.0 macos-universal app,dmg
+```
+
+### 8.6 macOS 出 universal 单包
+
+matrix 里 macOS 只有一项（`universal-apple-darwin`），不再分别出 arm64 / x64 两个 dmg：
+用户不用先分辨自己的机器是 Apple Silicon 还是 Intel，下载页上也少一个包。
+
+代价是 rust 侧要装 `aarch64-apple-darwin` 与 `x86_64-apple-darwin` 两个 target（matrix 的
+`rust-targets` 字段），代码编译两遍，由 tauri 调 `lipo` 合成。需要同时装多个 target 的平台就填逗号分隔的列表，
+只装一个的平台照常填单个值 —— `dtolnay/rust-toolchain` 的 `targets` 直接吃这个字段。
+
+Linux 仍刻意留在 `ubuntu-22.04`：产物会继承构建机的 glibc 版本，在 22.04 上打包才能兼容更老的发行版。
