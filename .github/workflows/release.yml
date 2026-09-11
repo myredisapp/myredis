@@ -47,7 +47,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             bundles: nsis,msi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Tauri 在 Linux 上依赖 webkit2gtk / appindicator 等系统库
       - name: 安装 Linux 系统依赖
@@ -64,9 +64,10 @@ jobs:
             patchelf \
             file wget
 
-      - uses: actions/setup-node@v4
+      # node-version 与本地开发保持一致；node 20 已 EOL，且 24.x 的 npm 不再打印 punycode 弃用告警
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
 
       # 走官方 npm 包拿预编译的 Tauri CLI，比 cargo install 现场编译快得多。
       # 版本与本地开发所用一致；升级 tauri crate 时这里一并调整。
@@ -95,12 +96,14 @@ jobs:
       - name: 同步版本号（取自 tag）
         run: node .github/scripts/set-version.mjs "${{ github.ref_name }}"
 
+      # bundles 的值必须加引号：Windows runner 的默认 shell 是 PowerShell，
+      # 未加引号的 nsis,msi 会被它当成数组、展开成一个参数 "nsis msi" 传给 tauri，报 invalid value。
       - name: 构建并打包
-        run: tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+        run: tauri build --target ${{ matrix.target }} --bundles "${{ matrix.bundles }}"
 
       # 只收最终安装包：bundle/ 下还有 .app 目录、deb 解包目录等中间产物，整体上传会夹带大量无用文件
       - name: 上传安装包
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.label }}
           if-no-files-found: error
@@ -118,9 +121,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

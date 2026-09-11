@@ -1,9 +1,4 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  // Linux 打包会把这个名字直接当成软件包名（deb 的 Package 字段、rpm 的 Name、AppImage 文件名）。
-  // tauri 自己用 ar 拼 .deb（不调用 dpkg-deb），所以中文名不会让构建失败，但会产出装不上的包：
-  //   dpkg: error: parsing file ... invalid package name ... must start with an alphanumeric character
-  // dpkg 只接受 [a-z0-9][a-z0-9+.-]* 形式的包名，因此这里单独把 Linux 的包名覆盖成 ASCII。
-  // macOS / Windows 仍沿用 tauri.conf.json 里的中文名，窗口标题也依然是「麦地缓存」。
   "productName": "maidi-cache"
 }
