@@ -145,3 +145,64 @@ cargo tauri dev
 前端页面会加载 `web/index.html`（当前为「后端连通性演示」页面）：
 - 输入连接名 / 主机 / 端口，点「连接」测试并保存连接。
 - 在「已保存连接」列表可对连接执行 PING。
+
+## 8. 打包约定
+
+### 8.1 Linux 包名必须是 ASCII（`src-tauri/tauri.linux.conf.json`）
+
+Linux 打包会把 `productName` 直接当成软件包名（deb 的 `Package` 字段、rpm 的 `Name`、AppImage 文件名）。
+tauri 自己用 `ar` 拼 `.deb`（不调用 `dpkg-deb`），所以中文名不会让构建失败，但会产出装不上的包：
+
+```
+dpkg: error: parsing file ... invalid package name ... must start with an alphanumeric character
+```
+
+dpkg 只接受 `[a-z0-9][a-z0-9+.-]*` 形式的包名，因此该文件把 Linux 的包名单独覆盖成 `maidi-cache`。
+macOS / Windows 仍沿用 `tauri.conf.json` 里的中文名，窗口标题也依然是「麦地缓存」。
+
+### 8.2 `tauri.<平台>.conf.json` 里不能写注释
+
+`tauri.conf.json` 解析失败时会回退到 JSON5（容忍注释），但**平台覆盖文件不会**：tauri-build 默认只启用
+`config-json` feature，平台文件一律走 serde_json 严格解析。写入 `//` 注释会让 Linux 构建直接失败：
+
+```
+unable to parse JSON Tauri config file at src-tauri/tauri.linux.conf.json
+because key must be a string at line 3 column 3
+```
+
+同样原因，把它改名成 `tauri.linux.conf.json5` 也不行 —— 该 feature 未启用时文件会被**静默忽略**，
+包名退回中文，产出一个装不上的包（比构建失败更难发现）。原因说明写在本文件，不要写回 JSON。
+
+`tauri.conf.json` 虽然能被 tauri 回退成 JSON5 解析（容忍注释），但 CI 的 `.github/scripts/set-version.mjs`
+是用 `JSON.parse` 读它的，加了注释会让「同步版本号」这步直接崩掉，所以主配置同样只能写严格 JSON。
+
+### 8.3 Windows 上 `--bundles` 的值必须加引号
+
+Windows runner 的默认 shell 是 PowerShell，未加引号的 `nsis,msi` 会被它当成数组、展开成单个参数
+`nsis msi` 传给 tauri，报 `invalid value 'nsis msi'`。CI 里已写成 `--bundles "${{ matrix.bundles }}"`。
+
+### 8.4 MSI 的码页必须放得下中文名（`bundle.windows.wix.language`）
+
+Windows 上 WiX 默认语言是 `en-US`，对应码页 1252（Latin-1），放不下「麦地缓存」这类中日韩字符，
+`light.exe` 会失败。tauri 只抛出这一行，看不到 WiX 的具体原因：
+
+```
+Error failed to bundle project: `failed to run ...\WixTools314\light.exe`
+```
+
+真正的错误要用 `tauri build --verbose` 才会显示：
+
+```
+error LGHT0311 : A string was provided with characters that are not available in the specified
+database code page '1252'. Either change these characters to ones that exist in the database's
+code page, or update the database's code page by modifying one of the following attributes:
+Product/@Codepage, Module/@Codepage, Patch/@Codepage, PatchCreation/@Codepage, or
+WixLocalization/@Codepage.
+```
+
+tauri 生成的 `main.wxs` 里写的是 `<Package SummaryCodepage="!(loc.TauriCodepage)">`，这个值取自
+tauri-bundler 自带的 `languages.json`（`en-US → 1252`，`zh-CN → 936`）。所以在 `tauri.conf.json` 里声明
+`bundle.windows.wix.language = "zh-CN"` 即可把码页换成 936（GBK），中文名正常写进 MSI，安装包名也变成
+`麦地缓存_<版本>_x64_zh-CN.msi`。可选语言受那份 `languages.json` 限制，写错会 panic 并列出全部可用值。
+
+NSIS 不受影响（走 UTF-16），macOS / Linux 忽略 `bundle.windows`。
