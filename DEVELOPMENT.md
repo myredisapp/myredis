@@ -142,7 +142,7 @@ cd src-tauri
 cargo tauri dev
 ```
 
-前端页面会加载 `web/index.html`（当前为「后端连通性演示」页面）：
+前端页面会加载 `frontend/index.html`（当前为「后端连通性演示」页面）：
 - 输入连接名 / 主机 / 端口，点「连接」测试并保存连接。
 - 在「已保存连接」列表可对连接执行 PING。
 

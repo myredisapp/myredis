@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 为 `web/index.html` 增加标题栏折叠按钮（窄图标栏形态）和三条可拖拽的模块边界（连接列表宽度、Key 树宽度、终端高度），布局状态持久化到 localStorage。
+**Goal:** 为 `frontend/index.html` 增加标题栏折叠按钮（窄图标栏形态）和三条可拖拽的模块边界（连接列表宽度、Key 树宽度、终端高度），布局状态持久化到 localStorage。
 
 **Architecture:** 布局尺寸由 CSS 变量 `--sidebar-width` / `--tree-width` / `--terminal-height` 控制（已存在）。在模块边界插入透明拖拽手柄，用 Pointer Events 更新对应 CSS 变量；`min-width`/`max-width`/`min-height`/`max-height` 在 CSS 层兜底约束。折叠通过 `.sidebar.collapsed` 类切换。状态读写集中在 `LAYOUT_KEY = 'myredis.layout'`。
 
-**Tech Stack:** 原生 HTML/CSS/JS（单文件 `web/index.html`），无新依赖，不涉及 Rust 侧。
+**Tech Stack:** 原生 HTML/CSS/JS（单文件 `frontend/index.html`），无新依赖，不涉及 Rust 侧。
 
 **设计文档:** `docs/superpowers/specs/2026-09-07-sidebar-collapse-resizable-layout-design.md`
 
 ## Global Constraints
 
-- 只修改 `web/index.html` 一个文件；不改 Rust 代码、不改 `tauri.conf.json`。
+- 只修改 `frontend/index.html` 一个文件；不改 Rust 代码、不改 `tauri.conf.json`。
 - localStorage key 固定为 `myredis.layout`，值为 `{ sidebarCollapsed, sidebarWidth, treeWidth, terminalHeight }`。
 - 横向边界约束：min 180px，max 480px；终端高度约束：min 100px，max 50% 视口高度。
 - 折叠态侧栏宽度 52px。
@@ -23,7 +23,7 @@
 页面在纯浏览器中即可渲染布局（`invoke` 失败只会弹 Toast，不影响布局功能）：
 
 ```bash
-open web/index.html        # macOS 用默认浏览器打开
+open frontend/index.html        # macOS 用默认浏览器打开
 ```
 
 在 DevTools Console 中检查持久化值：
@@ -37,7 +37,7 @@ JSON.parse(localStorage.getItem('myredis.layout'))
 ### Task 1: 布局状态模块 + 侧栏折叠按钮
 
 **Files:**
-- Modify: `web/index.html`（CSS 约 372-381 行的 `.sidebar` 规则；标题栏 HTML 约 1500-1505 行；侧栏 HTML 约 1533 行；JS 约 1824 行 `DB_COUNT` 之后插入新模块；初始化区约 2999-3005 行）
+- Modify: `frontend/index.html`（CSS 约 372-381 行的 `.sidebar` 规则；标题栏 HTML 约 1500-1505 行；侧栏 HTML 约 1533 行；JS 约 1824 行 `DB_COUNT` 之后插入新模块；初始化区约 2999-3005 行）
 
 **Interfaces:**
 - Consumes: 无（首个任务）。
@@ -50,7 +50,7 @@ JSON.parse(localStorage.getItem('myredis.layout'))
 
 - [ ] **Step 1: CSS — 改造 `.sidebar` 规则并新增折叠态样式**
 
-在 `web/index.html` 中找到 `.sidebar` 规则（原内容）：
+在 `frontend/index.html` 中找到 `.sidebar` 规则（原内容）：
 
 ```css
         .sidebar {
@@ -219,7 +219,7 @@ JSON.parse(localStorage.getItem('myredis.layout'))
 - [ ] **Step 6: 手动验证**
 
 ```bash
-open web/index.html
+open frontend/index.html
 ```
 
 预期：
@@ -231,7 +231,7 @@ open web/index.html
 - [ ] **Step 7: Commit**
 
 ```bash
-git add web/index.html
+git add frontend/index.html
 git commit -m "feat: 标题栏按钮折叠/展开连接列表（窄图标栏）"
 ```
 
@@ -240,7 +240,7 @@ git commit -m "feat: 标题栏按钮折叠/展开连接列表（窄图标栏）"
 ### Task 2: 拖拽手柄基础设施 + 连接列表与 Key 树宽度拖拽
 
 **Files:**
-- Modify: `web/index.html`（CSS：`.key-tree` 规则约 757-765 行后新增手柄样式块；HTML：`</aside>` 与 key-tree 之后各插入手柄，约 1550、1580 行；JS：`makeSplitter` 及调用，插在 Task 1 的布局模块之后）
+- Modify: `frontend/index.html`（CSS：`.key-tree` 规则约 757-765 行后新增手柄样式块；HTML：`</aside>` 与 key-tree 之后各插入手柄，约 1550、1580 行；JS：`makeSplitter` 及调用，插在 Task 1 的布局模块之后）
 
 **Interfaces:**
 - Consumes: Task 1 的 `layoutState`、`saveLayout`、`applyLayout`。
@@ -433,7 +433,7 @@ git commit -m "feat: 标题栏按钮折叠/展开连接列表（窄图标栏）"
 - [ ] **Step 5: 手动验证**
 
 ```bash
-open web/index.html
+open frontend/index.html
 ```
 
 预期：
@@ -445,7 +445,7 @@ open web/index.html
 - [ ] **Step 6: Commit**
 
 ```bash
-git add web/index.html
+git add frontend/index.html
 git commit -m "feat: 连接列表与 Key 树边界支持拖拽调宽并持久化"
 ```
 
@@ -454,7 +454,7 @@ git commit -m "feat: 连接列表与 Key 树边界支持拖拽调宽并持久化
 ### Task 3: 终端高度拖拽 + 整体回归
 
 **Files:**
-- Modify: `web/index.html`（CSS：`.terminal-panel` 规则约 1118-1128 行；HTML：`app-body` 结束与终端面板之间约 1590 行；JS：终端折叠/展开两个既有事件处理约 2813-2824 行）
+- Modify: `frontend/index.html`（CSS：`.terminal-panel` 规则约 1118-1128 行；HTML：`app-body` 结束与终端面板之间约 1590 行；JS：终端折叠/展开两个既有事件处理约 2813-2824 行）
 
 **Interfaces:**
 - Consumes: Task 1 的 `layoutState`、`saveLayout`、`applyLayout`、`updateSidebarToggleIcon`；Task 2 的 `makeSplitter(handleId, options)`（本任务以 `axis: 'y'` + `invert: true` 调用）。
@@ -581,7 +581,7 @@ git commit -m "feat: 连接列表与 Key 树边界支持拖拽调宽并持久化
 - [ ] **Step 4: 手动验证（整体回归清单）**
 
 ```bash
-open web/index.html
+open frontend/index.html
 ```
 
 逐项确认：
@@ -594,6 +594,6 @@ open web/index.html
 - [ ] **Step 5: Commit**
 
 ```bash
-git add web/index.html
+git add frontend/index.html
 git commit -m "feat: 终端面板高度支持拖拽调整并持久化"
 ```

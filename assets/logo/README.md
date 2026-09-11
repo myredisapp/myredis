@@ -7,7 +7,7 @@
 | 文件 | 用途 |
 |---|---|
 | `logo.svg` | 主 Logo 源文件，使用 CSS 变量控制颜色，可直接编辑 |
-| `logo-themed.svg` | 主题自适应版本，会跟随 `web/index.html` 的 `--accent` 变量自动变色 |
+| `logo-themed.svg` | 主题自适应版本，会跟随 `frontend/index.html` 的 `--accent` 变量自动变色 |
 | `favicon.svg` | 浏览器标签页图标源文件，小尺寸优化 |
 | `icon-source.svg` | Tauri 桌面应用图标源文件，固定深秋色，用于生成所有平台图标 |
 
@@ -47,7 +47,7 @@
 
 ## 如何替换标题栏图标
 
-项目标题栏图标位于 `web/index.html` 的 `.titlebar .logo i` 元素。
+项目标题栏图标位于 `frontend/index.html` 的 `.titlebar .logo i` 元素。
 
 当前已替换为内联 SVG。如需换回 Font Awesome 图标，把：
 

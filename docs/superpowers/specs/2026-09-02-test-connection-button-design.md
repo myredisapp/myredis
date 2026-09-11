@@ -44,7 +44,7 @@
 
 ### 前端改动
 
-**`web/index.html`** 连接对话框（`connectionModal`）底部：
+**`frontend/index.html`** 连接对话框（`connectionModal`）底部：
 
 1. 在 `modal-actions` 区域左侧增加「测试连接」按钮，id 为 `modalTest`。
 2. 在按钮右侧增加状态文字 `<span id="testStatus"></span>`。

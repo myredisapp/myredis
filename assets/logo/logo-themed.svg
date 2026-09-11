@@ -3,7 +3,7 @@
   文件：assets/logo/logo-themed.svg
   说明：
     - 直接使用页面主题 CSS 变量 --accent 与 --accent-hover。
-    - 当该 SVG 以内联方式放入 web/index.html 时，会自动跟随用户切换的四季主题。
+    - 当该 SVG 以内联方式放入 frontend/index.html 时，会自动跟随用户切换的四季主题。
     - 如需在独立文件中预览，请在 <style> 中给 --accent 与 --accent-hover 设置默认值。
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">

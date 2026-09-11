@@ -5,7 +5,7 @@
 
 ## 背景
 
-`web/index.html` 的界面布局由三个 CSS 变量控制尺寸：`--sidebar-width`（左侧连接列表）、`--tree-width`（中间 Key 树）、`--terminal-height`（底部终端面板）。目前这些值固定，用户无法调整，连接列表也无法折叠。本设计为应用增加侧栏折叠按钮和模块边界拖拽调宽能力。
+`frontend/index.html` 的界面布局由三个 CSS 变量控制尺寸：`--sidebar-width`（左侧连接列表）、`--tree-width`（中间 Key 树）、`--terminal-height`（底部终端面板）。目前这些值固定，用户无法调整，连接列表也无法折叠。本设计为应用增加侧栏折叠按钮和模块边界拖拽调宽能力。
 
 ## 需求
 
@@ -20,7 +20,7 @@
 
 采用「CSS 变量 + 原生指针事件」实现：拖拽手柄用 `pointerdown / pointermove / pointerup` 更新对应 CSS 变量，不引入第三方库、不做额外组件抽象。
 
-所有改动集中在 `web/index.html`（CSS + JS），不涉及 Rust 侧。
+所有改动集中在 `frontend/index.html`（CSS + JS），不涉及 Rust 侧。
 
 ## 详细设计
 

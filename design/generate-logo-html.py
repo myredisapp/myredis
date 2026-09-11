@@ -328,7 +328,7 @@ def main():
   {top_section}
   <aside class="usage">
     <h3>使用建议</h3>
-    <p>主预览采用项目默认主题“深秋”。如果某个变体符合预期，可以直接告诉我编号，我会导出对应 SVG 并替换进 web/index.html 标题栏。</p>
+    <p>主预览采用项目默认主题“深秋”。如果某个变体符合预期，可以直接告诉我编号，我会导出对应 SVG 并替换进 frontend/index.html 标题栏。</p>
   </aside>
 </main>
 </body>

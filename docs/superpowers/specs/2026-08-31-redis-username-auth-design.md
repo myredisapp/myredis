@@ -36,7 +36,7 @@
 
 ### 前端改动
 
-**`web/index.html`** 中已存在 `connUser` 输入框，按现有 `password` 字段的对称方式打通：
+**`frontend/index.html`** 中已存在 `connUser` 输入框，按现有 `password` 字段的对称方式打通：
 
 - `loadConnections()`：将后端返回的 `c.username` 映射到前端连接对象。
 - `openModal(conn)`：编辑连接时回填 `conn.username`。

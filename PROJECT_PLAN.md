@@ -389,7 +389,7 @@ where
 #### 4.5.5 前端错误展示（统一入口）
 
 ```js
-// web/src/main.js 中统一错误处理
+// frontend/src/main.js 中统一错误处理
 async function callCommand(cmd, args) {
     try {
         return await invoke(cmd, args);
@@ -427,7 +427,7 @@ directories = "5"            # 跨平台数据目录
 ```text
 myredis/
 ├── Cargo.toml
-├── index.html -> web/index.html   # 前端入口（已存在，迁移）
+├── index.html -> frontend/index.html   # 前端入口（已存在，迁移）
 ├── src-tauri/
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
@@ -442,7 +442,7 @@ myredis/
 │   │   └── service/        # 业务逻辑层
 │   │       └── mod.rs
 │   └── ...
-└── web/                   # 前端静态资源
+└── frontend/                   # 前端静态资源
     └── index.html
 ```
 
@@ -529,8 +529,8 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 
 **决策：坚持原生 JS**，不引入 React / Vue / 构建工具。
 
-- 现状前端文件保持单文件 `web/index.html`，通过 `@tauri-apps/api` 调后端命令。
-- 若后续复杂度上升，再在 `web/` 内引入 vitest 测试 / esbuild 打包，但与桌面客户端解耦,不影响本轮。
+- 现状前端文件保持单文件 `frontend/index.html`，通过 `@tauri-apps/api` 调后端命令。
+- 若后续复杂度上升，再在 `frontend/` 内引入 vitest 测试 / esbuild 打包，但与桌面客户端解耦,不影响本轮。
 
 ### 9.6 已确认的需求核对
 

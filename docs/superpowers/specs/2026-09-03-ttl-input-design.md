@@ -74,7 +74,7 @@
 
 ### 3.2 前端改动
 
-**文件：** `web/index.html`
+**文件：** `frontend/index.html`
 
 #### 3.2.1 新增 Key 对话框
 
@@ -150,6 +150,6 @@
 | 文件 | 变更类型 |
 |------|----------|
 | `src-tauri/src/commands/key.rs` | 修改 `set_key` 签名与实现 |
-| `web/index.html` | 新增 TTL 输入框、编辑逻辑、校验 |
+| `frontend/index.html` | 新增 TTL 输入框、编辑逻辑、校验 |
 
 无新增依赖。

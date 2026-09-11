@@ -65,7 +65,7 @@ assets/logo/
 
 ### 3. 修改标题栏内联 Logo
 
-`web/index.html` 标题栏中的 Logo 是内联 SVG，搜索 `class="logo-mark"` 即可找到。
+`frontend/index.html` 标题栏中的 Logo 是内联 SVG，搜索 `class="logo-mark"` 即可找到。
 
 如需替换为新的 SVG，直接替换该 `<svg>...</svg>` 块即可。
 

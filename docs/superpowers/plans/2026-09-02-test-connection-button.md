@@ -220,7 +220,7 @@
 ### Task 3: 前端连接对话框增加测试连接按钮与状态显示
 
 **Files:**
-- Modify: `web/index.html`
+- Modify: `frontend/index.html`
 
 **Interfaces:**
 - Consumes: Tauri `invoke('test_connection', { conn })`
@@ -228,7 +228,7 @@
 
 - [ ] **Step 1: Add button and status elements**
 
-  在 `web/index.html` 中定位到连接对话框的 `modal-actions` 区域（约第 1605-1608 行），替换为：
+  在 `frontend/index.html` 中定位到连接对话框的 `modal-actions` 区域（约第 1605-1608 行），替换为：
   ```html
   <div class="modal-actions">
       <button class="secondary" id="modalTest">测试连接</button>
@@ -259,7 +259,7 @@
 
 - [ ] **Step 3: Implement testConnection and showStatus helpers**
 
-  在 `web/index.html` 的 `<script>` 中，`saveConnection()` 函数之后添加：
+  在 `frontend/index.html` 的 `<script>` 中，`saveConnection()` 函数之后添加：
   ```javascript
   function showTestStatus(msg, type) {
       const el = document.getElementById('testStatus');
@@ -352,7 +352,7 @@
 - [ ] **Step 6: Commit**
 
   ```bash
-  git add web/index.html
+  git add frontend/index.html
   git commit -m "feat: 连接对话框增加测试连接按钮与状态显示"
   ```
 
