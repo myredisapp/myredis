@@ -345,7 +345,7 @@
         .m-win-controls .max { background: #28c840; }
 
         /* --- 模拟主体 --- */
-        .m-body { display: flex; flex: 1; min-height: 0; height: 436px; }
+        .m-body { display: flex; flex: 1; min-height: 0; height: 500px; }
         .m-side {
             width: 212px; flex-shrink: 0; border-right: 1px solid var(--border-color);
             background: var(--bg-secondary); display: flex; flex-direction: column; padding: 10px;
@@ -411,6 +411,7 @@
         .bg-hash { background: rgba(245, 179, 66, 0.15); }
         .bg-list { background: rgba(106, 159, 216, 0.15); }
         .bg-set { background: rgba(179, 146, 208, 0.15); }
+        .bg-zset { background: rgba(232, 169, 74, 0.15); }
 
         /* --- Key 详情 --- */
         .m-detail { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -746,7 +747,13 @@
                                         <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-string"><use href="#i-key" /></svg><span class="kname">session:a3f9c2</span><span class="tbadge t-string bg-string">STR</span><span class="ttls">1793s</span></div>
                                         <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-list"><use href="#i-key" /></svg><span class="kname">queue:emails</span><span class="tbadge t-list bg-list">LIST</span></div>
                                         <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-set"><use href="#i-key" /></svg><span class="kname">config:limits</span><span class="tbadge t-set bg-set">SET</span></div>
-                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">cache:hot</span><span class="tbadge t-hash bg-hash">ZSET</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">cache:hot</span><span class="tbadge t-hash bg-zset">ZSET</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">geo:drivers</span><span class="tbadge t-hash bg-zset">ZSET</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-hash"><use href="#i-key" /></svg><span class="kname">config:features</span><span class="tbadge t-hash bg-hash">HASH</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-string"><use href="#i-key" /></svg><span class="kname">session:b7e1d4</span><span class="tbadge t-string bg-string">STR</span><span class="ttls">3547s</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-list"><use href="#i-key" /></svg><span class="kname">queue:delayed</span><span class="tbadge t-list bg-list">LIST</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-string"><use href="#i-key" /></svg><span class="kname">rate:login:ip</span><span class="tbadge t-string bg-string">STR</span><span class="ttls">58s</span></div>
+                                        <div class="m-tree-row"><span class="tw"></span><svg class="icon kicon t-string"><use href="#i-key" /></svg><span class="kname">order:1001:flag</span><span class="tbadge t-string bg-string">STR</span></div>
                                     </div>
                                     <!-- Key 详情 -->
                                     <div class="m-detail">
@@ -761,7 +768,7 @@
                                             <span class="m-btn"><svg class="icon"><use href="#i-edit" /></svg>编辑</span>
                                         </div>
                                         <div class="m-detail-sub">
-                                            共 <span class="count">4</span> 个字段 · SCAN 分页加载
+                                            共 <span class="count">10</span> 个字段 · SCAN 分页加载
                                             <span class="m-spacer"></span>
                                             <span class="m-btn ghost"><svg class="icon"><use href="#i-plus" /></svg>新增字段</span>
                                             <span class="m-btn"><svg class="icon"><use href="#i-check" /></svg>保存修改</span>
@@ -773,6 +780,11 @@
                                             <div class="m-tr"><span class="fname">email</span><span class="fval">"zhangsan@example.com"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
                                             <div class="m-tr"><span class="fname">city</span><span class="fval">"杭州"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
                                             <div class="m-tr"><span class="fname">tags</span><span class="fval">"vip,new"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">level</span><span class="fval">"5"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">status</span><span class="fval">"active"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">last_login</span><span class="fval">"2026-09-11 21:36"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">phone</span><span class="fval">"138****6688"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
+                                            <div class="m-tr"><span class="fname">remark</span><span class="fval">"核心客户，优先支持"</span><span class="fact"><svg class="icon"><use href="#i-edit" /></svg><svg class="icon"><use href="#i-trash" /></svg></span></div>
                                         </div>
                                         <div class="m-detail-foot"><svg class="icon"><use href="#i-shield" /></svg>只读模式下写操作将被拦截，保护生产数据</div>
                                     </div>
@@ -787,6 +799,8 @@
                                 <div><span class="lp">&gt;</span><span class="lo ok">PONG</span></div>
                                 <div><span class="lp">&gt;</span><span class="lo">DBSIZE</span></div>
                                 <div><span class="lp">&gt;</span><span class="lo num">(integer) 1204</span></div>
+                                <div><span class="lp">&gt;</span><span class="lo">TTL session:a3f9c2</span></div>
+                                <div><span class="lp">&gt;</span><span class="lo num">(integer) 1793</span></div>
                             </div>
                             <div class="m-term-input">
                                 <span class="lbl">redis&gt;</span>
