@@ -514,6 +514,7 @@
         /* 下载区 */
         .dl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
         .dl-card {
+            position: relative;
             background: var(--bg-secondary); border: 1px solid var(--border-color);
             border-radius: 12px; padding: 26px 24px; text-align: center; transition: all 0.25s ease;
         }
@@ -523,6 +524,19 @@
         .dl-card h3 { margin-top: 14px; font-size: 17px; font-weight: 700; }
         .dl-card .fmt { margin-top: 6px; font-size: 12.5px; color: var(--text-muted); font-family: var(--mono); }
         .dl-card .btn { margin-top: 16px; height: 40px; padding: 0 20px; font-size: 13.5px; }
+        .dl-badge {
+            position: absolute; top: 14px; right: 14px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+            padding: 3px 10px; border-radius: 999px;
+            background: var(--accent-dim); color: var(--accent);
+        }
+        .dl-card.recommended { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+        .dl-card.recommended:hover { box-shadow: 0 0 0 2px var(--accent-dim), var(--shadow); }
+        .dl-alt { margin-top: 12px; font-size: 12px; color: var(--text-muted); }
+        .dl-alt a { color: var(--text-secondary); border-bottom: 1px dashed var(--border-color); padding-bottom: 1px; cursor: pointer; }
+        .dl-alt a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+        .ver-num { color: var(--accent); font-weight: 700; font-family: var(--mono); }
+        .btn .ver-pill { font-size: 12px; font-weight: 700; letter-spacing: 0.3px; padding: 2px 9px; border-radius: 999px; background: rgba(127, 127, 127, 0.22); }
         .source-block { margin-top: 34px; text-align: center; }
         .source-block .stitle { font-size: 13px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px; }
         .code-window {
@@ -546,6 +560,8 @@
         .footer-links { display: flex; gap: 18px; font-size: 13px; color: var(--text-secondary); }
         .footer-links a:hover { color: var(--accent); }
         .footer-bottom { margin-top: 18px; font-size: 12px; color: var(--text-muted); }
+        .footer-bottom + .footer-bottom { margin-top: 6px; }
+        .footer-bottom a:hover { color: var(--accent); }
 
         /* 响应式 */
         @media (max-width: 860px) {
@@ -653,9 +669,10 @@
                 连接、浏览、编辑、监控一应俱全，还内置五款「四季」主题，陪伴你每一次与数据的相遇。
             </p>
             <div class="hero-ctas">
-                <a class="btn btn-primary" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">
+                <a class="btn btn-primary" href="#download">
                     <svg class="icon" aria-hidden="true"><use href="#i-download" /></svg>
                     下载最新版本
+                    <span class="ver-pill" id="heroVersion">__RELEASE_TAG__</span>
                 </a>
                 <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">
                     <svg class="icon" aria-hidden="true"><use href="#i-github" /></svg>
@@ -900,26 +917,37 @@
             <div class="section-head reveal">
                 <div class="kicker">Download</div>
                 <h2>三大平台，开箱即用</h2>
-                <p>安装包由 GitHub Actions 自动构建发布（myredis-&lt;版本&gt;-&lt;平台&gt;），点击前往 Release 页面获取最新版本。</p>
+                <p>最新版本 <span class="ver-num" id="dlVersion">__RELEASE_TAG__</span> · 安装包由 GitHub Actions 基于 tag 自动构建（myredis-&lt;版本&gt;-&lt;平台&gt;），点击对应平台即可直接下载。</p>
             </div>
             <div class="dl-grid reveal">
-                <div class="dl-card">
+                <!-- 下载直链与版本号由流水线在发布时注入当前 tag，文件名与 release.yml 的 rename-artifacts.mjs 保持一致 -->
+                <div class="dl-card" data-platform="macos">
+                    <span class="dl-badge" hidden title="已根据你的操作系统自动推荐">推荐</span>
                     <div class="os"><svg class="icon" aria-hidden="true"><use href="#i-box" /></svg></div>
                     <h3>macOS</h3>
                     <div class="fmt">.dmg · Universal（Apple Silicon / Intel）</div>
-                    <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">获取安装包</a>
+                    <a class="btn btn-primary dl-btn" data-asset="macos-universal.dmg"
+                       href="https://github.com/myredisapp/myredis/releases/download/__RELEASE_TAG__/myredis-__RELEASE_TAG__-macos-universal.dmg">直接下载</a>
                 </div>
-                <div class="dl-card">
+                <div class="dl-card" data-platform="windows">
+                    <span class="dl-badge" hidden title="已根据你的操作系统自动推荐">推荐</span>
                     <div class="os"><svg class="icon" aria-hidden="true"><use href="#i-box" /></svg></div>
                     <h3>Windows</h3>
-                    <div class="fmt">.msi / .exe 安装向导</div>
-                    <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">获取安装包</a>
+                    <div class="fmt">.exe 安装向导 / .msi</div>
+                    <a class="btn btn-primary dl-btn" data-asset="windows-x64.exe"
+                       href="https://github.com/myredisapp/myredis/releases/download/__RELEASE_TAG__/myredis-__RELEASE_TAG__-windows-x64.exe">直接下载</a>
+                    <div class="dl-alt">其他格式：<a data-asset="windows-x64.msi"
+                       href="https://github.com/myredisapp/myredis/releases/download/__RELEASE_TAG__/myredis-__RELEASE_TAG__-windows-x64.msi">.msi 安装包</a></div>
                 </div>
-                <div class="dl-card">
+                <div class="dl-card" data-platform="linux">
+                    <span class="dl-badge" hidden title="已根据你的操作系统自动推荐">推荐</span>
                     <div class="os"><svg class="icon" aria-hidden="true"><use href="#i-box" /></svg></div>
                     <h3>Linux</h3>
                     <div class="fmt">.deb / .AppImage</div>
-                    <a class="btn btn-ghost" href="https://github.com/myredisapp/myredis/releases/latest" target="_blank" rel="noopener">获取安装包</a>
+                    <a class="btn btn-primary dl-btn" data-asset="linux-x64.deb"
+                       href="https://github.com/myredisapp/myredis/releases/download/__RELEASE_TAG__/myredis-__RELEASE_TAG__-linux-x64.deb">直接下载</a>
+                    <div class="dl-alt">其他格式：<a data-asset="linux-x64.AppImage"
+                       href="https://github.com/myredisapp/myredis/releases/download/__RELEASE_TAG__/myredis-__RELEASE_TAG__-linux-x64.AppImage">.AppImage（免安装）</a></div>
                 </div>
             </div>
             <div class="source-block reveal">
@@ -957,6 +985,7 @@
                 </div>
             </div>
             <div class="footer-bottom">© <span id="year">2026</span> myredisapp · 春分 / 立夏 / 初秋 / 深秋 / 冬至，愿有一款主题合你时节。</div>
+            <div class="footer-bottom"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">湘ICP备17012851号-8</a></div>
         </div>
     </footer>
 
@@ -1047,6 +1076,63 @@
                     });
                 }, { threshold: 0.12 });
                 revealEls.forEach(function (el) { io.observe(el); });
+            }
+
+            /* ==================== 版本号与直链下载 ==================== */
+            // 发布时流水线会把占位符统一替换为当前 tag（版本展示与下载直链都由 tag 推导）；
+            // 本地直接打开时占位符仍在，退回查询 GitHub 最新 Release。
+            var DOWNLOAD_BASE = 'https://github.com/myredisapp/myredis/releases/download/';
+            var RELEASE_TAG = '__RELEASE_TAG__';
+            var TAG_RE = /^[0-9A-Za-z.+-]+$/;
+
+            function assetUrl(tag, asset) {
+                return DOWNLOAD_BASE + tag + '/myredis-' + tag + '-' + asset;
+            }
+
+            function applyRelease(tag) {
+                if (!tag || !TAG_RE.test(tag)) return false;
+                ['heroVersion', 'dlVersion'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) el.textContent = tag;
+                });
+                document.querySelectorAll('[data-asset]').forEach(function (a) {
+                    a.setAttribute('href', assetUrl(tag, a.getAttribute('data-asset')));
+                });
+                return true;
+            }
+
+            // 按访问者的操作系统推荐平台；识别不出时默认推荐 Windows（用户面最广）
+            function detectPlatform() {
+                var ua = navigator.userAgent || '';
+                if (/Macintosh|Mac OS X/i.test(ua)) return 'macos';
+                if (/Windows/i.test(ua)) return 'windows';
+                if (/Linux/i.test(ua) && !/Android/i.test(ua)) return 'linux';
+                return 'windows';
+            }
+
+            var recCard = document.querySelector('.dl-card[data-platform="' + detectPlatform() + '"]');
+            if (recCard) {
+                recCard.classList.add('recommended');
+                var recBadge = recCard.querySelector('.dl-badge');
+                if (recBadge) recBadge.hidden = false;
+                var recBtn = recCard.querySelector('.dl-btn');
+                document.querySelectorAll('.dl-card .dl-btn').forEach(function (btn) {
+                    var on = btn === recBtn;
+                    btn.classList.toggle('btn-primary', on);
+                    btn.classList.toggle('btn-ghost', !on);
+                });
+            }
+
+            if (!applyRelease(RELEASE_TAG)) {
+                fetch('https://api.github.com/repos/myredisapp/myredis/releases/latest')
+                    .then(function (r) { return r.ok ? r.json() : null; })
+                    .then(function (d) { if (d && d.tag_name) applyRelease(d.tag_name); })
+                    .catch(function () {
+                        // 查不到版本时退回 Release 列表页，保证链接始终可用
+                        document.querySelectorAll('[data-asset]').forEach(function (a) {
+                            a.setAttribute('href', 'https://github.com/myredisapp/myredis/releases/latest');
+                        });
+                    });
             }
 
             /* ==================== 杂项 ==================== */

@@ -4,7 +4,7 @@ name: Release
 # 产物：macOS(universal) dmg、Linux deb/AppImage、Windows nsis/msi，并发布到 GitHub Release。
 # 安装包一律命名为 myredis-<tag>-<platform>.<ext>，见 .github/scripts/rename-artifacts.mjs
 # 构建前先用 check-deploy-env 快速校验部署凭据 / SSH 连通 / scp 试传（fail-fast），
-# 发布 Release 后再把 web/index.html 通过 scp 推到服务器。
+# 发布 Release 后先把当前 tag 注入 web/index.html（页面展示版本号 + 推导直链下载地址），再通过 scp 推到服务器。
 on:
   push:
     tags:
@@ -207,6 +207,28 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y openssh-client sshpass
+
+      # web/index.html 里的版本号与下载直链来自占位符，发布前统一替换成当前 tag，
+      # 保证页面上展示的版本与本次 Release 产物严格一致（本地预览时页面会回退查询 GitHub API）
+      - name: 注入版本号（tag → 页面展示与直链下载地址）
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          # 与 rename-artifacts.mjs 的校验一致：tag 只含这些字符才能安全用作文件名、URL 与 sed 替换值
+          if ! [[ "$TAG" =~ ^[0-9A-Za-z.+-]+$ ]]; then
+            echo "::error::tag \"$TAG\" 含非法字符，无法注入 web/index.html"
+            exit 1
+          fi
+          if ! grep -q '__RELEASE_TAG__' web/index.html; then
+            echo "::error::web/index.html 中找不到 __RELEASE_TAG__ 占位符，请检查页面模板"
+            exit 1
+          fi
+          sed -i "s/__RELEASE_TAG__/${TAG}/g" web/index.html
+          if grep -q '__RELEASE_TAG__' web/index.html; then
+            echo "::error::__RELEASE_TAG__ 替换不彻底，请检查页面模板"
+            exit 1
+          fi
+          echo "已把版本号 ${TAG} 注入 web/index.html"
 
       - name: 上传 web/index.html 到服务器
         env:
