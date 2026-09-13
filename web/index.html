@@ -1123,17 +1123,50 @@
                 });
             }
 
-            if (!applyRelease(RELEASE_TAG)) {
-                fetch('https://api.github.com/repos/myredisapp/myredis/releases/latest')
-                    .then(function (r) { return r.ok ? r.json() : null; })
-                    .then(function (d) { if (d && d.tag_name) applyRelease(d.tag_name); })
-                    .catch(function () {
-                        // 查不到版本时退回 Release 列表页，保证链接始终可用
-                        document.querySelectorAll('[data-asset]').forEach(function (a) {
-                            a.setAttribute('href', 'https://github.com/myredisapp/myredis/releases/latest');
-                        });
-                    });
+            var RELEASES_PAGE = 'https://github.com/myredisapp/myredis/releases';
+            var RELEASES_API = 'https://api.github.com/repos/myredisapp/myredis/releases';
+
+            // 带超时的请求：api.github.com 在部分网络下会长时间挂起，不能让它无限期阻塞链接修正
+            function fetchJson(url) {
+                return new Promise(function (resolve, reject) {
+                    var timer = setTimeout(function () { reject(new Error('timeout')); }, 4000);
+                    fetch(url).then(function (r) {
+                        clearTimeout(timer);
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    }).then(resolve, reject);
+                });
             }
+
+            // 实在拿不到版本号时，直链退回 Releases 列表页，保证点击永远不会落到无效地址
+            function linksToReleasesPage() {
+                document.querySelectorAll('[data-asset]').forEach(function (a) {
+                    a.setAttribute('href', RELEASES_PAGE);
+                });
+            }
+
+            var releaseReady = applyRelease(RELEASE_TAG);
+            if (!releaseReady) {
+                // 占位符未被流水线替换（本地预览场景）：查 GitHub 最新 Release 补全直链；
+                // latest 只认正式版，仓库只有预发布版时退回取列表第一条
+                fetchJson(RELEASES_API + '/latest')
+                    .catch(function () { return fetchJson(RELEASES_API + '?per_page=1'); })
+                    .then(function (d) {
+                        var tag = Array.isArray(d) ? (d[0] && d[0].tag_name) : (d && d.tag_name);
+                        releaseReady = applyRelease(tag);
+                        if (!releaseReady) linksToReleasesPage();
+                    })
+                    .catch(linksToReleasesPage);
+            }
+
+            // 兜底闸门：直链未就绪前点「直接下载」一律转去 Releases 页面，绝不跳到占位符地址
+            document.addEventListener('click', function (e) {
+                if (releaseReady) return;
+                var a = e.target && e.target.closest ? e.target.closest('a[data-asset]') : null;
+                if (!a) return;
+                e.preventDefault();
+                location.href = RELEASES_PAGE;
+            });
 
             /* ==================== 杂项 ==================== */
             document.getElementById('year').textContent = new Date().getFullYear();
