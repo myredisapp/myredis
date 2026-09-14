@@ -64,6 +64,23 @@ pub fn run() {
             commands::key::set_key,
             commands::key::del_key,
             commands::key::get_string,
+            commands::key_content::get_hash,
+            commands::key_content::get_list,
+            commands::key_content::get_set,
+            commands::key_content::get_zset,
+            commands::key_content::set_key_ttl,
+            commands::key_content::hash_set_field,
+            commands::key_content::hash_del_fields,
+            commands::key_content::list_set_element,
+            commands::key_content::list_del_element,
+            commands::key_content::list_push_element,
+            commands::key_content::set_add_member,
+            commands::key_content::set_del_member,
+            commands::key_content::zset_add_member,
+            commands::key_content::zset_del_member,
+            commands::terminal::execute_command,
+            commands::import_export::export_keys,
+            commands::import_export::import_keys,
         ])
         .run(tauri::generate_context!())
         .expect("启动麦地缓存失败");

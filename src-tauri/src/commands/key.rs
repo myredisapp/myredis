@@ -74,9 +74,7 @@ pub async fn list_keys_inner(pool: &Pool, conn_id: &str) -> Result<Vec<KeyEntry>
 }
 
 /// 在单个连接上完整执行一轮 `SCAN`，返回所有 key 名。
-async fn scan_key_names<C: redis::aio::ConnectionLike>(
-    con: &mut C,
-) -> Result<Vec<String>, String> {
+async fn scan_key_names<C: redis::aio::ConnectionLike>(con: &mut C) -> Result<Vec<String>, String> {
     let mut cursor = 0i64;
     let mut keys: Vec<String> = Vec::new();
     loop {
@@ -153,10 +151,8 @@ async fn scan_cluster_key_names(
             port,
             ..conn_cfg.clone()
         };
-        let client =
-            redis::Client::open(node_cfg.to_connection_url()).map_err(|e: redis::RedisError| {
-                format!("连接集群节点 {addr} 失败: {e}")
-            })?;
+        let client = redis::Client::open(node_cfg.to_connection_url())
+            .map_err(|e: redis::RedisError| format!("连接集群节点 {addr} 失败: {e}"))?;
         let mut c = client
             .get_multiplexed_async_connection()
             .await

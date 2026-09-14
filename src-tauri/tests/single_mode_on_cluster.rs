@@ -161,7 +161,10 @@ async fn single_mode_write_pins_to_connected_node() {
         .expect_err("单机模式写入其他节点 slot 的 key 应返回 MOVED 错误")
         .to_string();
     println!("单机模式写 foreign key 的报错: {err}");
-    assert!(err.to_uppercase().contains("MOVED"), "错误应为 MOVED，实际: {err}");
+    assert!(
+        err.to_uppercase().contains("MOVED"),
+        "错误应为 MOVED，实际: {err}"
+    );
     // 集群视角也应读不到（证明真的没有写入任何节点）
     let v: Option<String> = redis::cmd("GET")
         .arg(&foreign_key)
@@ -184,7 +187,10 @@ async fn single_mode_write_pins_to_connected_node() {
         .await
         .expect_err("foreign key 不应落在直连节点上")
         .to_string();
-    assert!(err.to_uppercase().contains("MOVED"), "错误应为 MOVED，实际: {err}");
+    assert!(
+        err.to_uppercase().contains("MOVED"),
+        "错误应为 MOVED，实际: {err}"
+    );
 
     // 清理
     let _: i64 = redis::cmd("DEL")
