@@ -728,10 +728,20 @@
                     保存会按当前编辑器里的内容整体写回这个 Key。改 TTL 时如果顺便改动了值，两者会一起生效。
                 </div>
 
-                <h3>其他类型</h3>
+                <h3>其他类型（Hash / List / Set / ZSet）</h3>
                 <p>
-                    详情区会按 Key 的实际类型选择展示方式：Hash、List、Set 会以字段/元素列表的形式呈现，ZSet、Stream 等类型目前提示「暂不支持此类型」。
-                    这些类型的字段内容还在开发中，字段级的新增、修改、删除请暂用别的工具（或内置终端做只读查询）。具体进度见<a class="link" href="#status">功能现状</a>。
+                    详情区会按 Key 的实际类型选择展示方式：Hash、List、Set、ZSet 会以字段/元素列表的形式呈现，
+                    每一行都可以直接修改、删除，底部虚线行用于新增：
+                </p>
+                <ul>
+                    <li><strong>Hash</strong>：显示全部字段与值，可改值、删字段、加字段。</li>
+                    <li><strong>List</strong>：按下标显示全部元素，可改值、删元素，可在左端或右端插入新元素。</li>
+                    <li><strong>Set</strong>：显示全部成员，可改成员名（等价于删旧加新）、删成员、加成员。</li>
+                    <li><strong>ZSet</strong>：显示成员与分值，可改成员名与分值、删成员、加成员。</li>
+                </ul>
+                <p>
+                    这些类型的修改是<strong>即时保存</strong>的（点行内的 <i class="fas fa-check"></i> 即写入服务器），
+                    顶部的「保存」按钮只负责 TTL。Stream 等其余类型仍提示「暂不支持此类型」。
                 </p>
             </section>
 
@@ -764,27 +774,27 @@
                 <h2><span class="num">07</span>内置终端</h2>
                 <p>
                     窗口底部是内置终端面板，在这里输入命令按 <span class="kbd">Enter</span> 执行。点面板标题栏或右侧箭头可以折叠，
-                    拖动面板上沿还能调整高度。
+                    拖动面板上沿还能调整高度。命令会<strong>真实转发到已连接的 Redis 服务器</strong>执行，
+                    结果按 redis-cli 风格展示（<code>OK</code>、<code>(nil)</code>、<code>(integer) N</code>、数组逐行输出）。
                 </p>
                 <div class="table-wrap">
                     <table>
                         <thead><tr><th>命令</th><th>当前行为</th></tr></thead>
                         <tbody>
-                            <tr><td><code>PING</code></td><td>返回 <code>PONG</code></td></tr>
-                            <tr><td><code>DBSIZE</code></td><td>返回当前已加载的 Key 数量</td></tr>
-                            <tr><td><code>GET key</code></td><td>从已加载的列表里读取该 Key 的 String 值</td></tr>
-                            <tr><td><code>KEYS pattern</code></td><td>在已加载的列表里按通配符匹配，例如 <code>KEYS user:*</code></td></tr>
-                            <tr><td><code>INFO</code></td><td>返回一段示例信息（非服务器真实 INFO）</td></tr>
-                            <tr><td><code>SET key value</code></td><td>打印 <code>OK</code>，但不会真正写入服务器</td></tr>
-                            <tr><td><code>FLUSHDB</code></td><td>打印 <code>OK (模拟清空)</code>，但不会真正清空</td></tr>
-                            <tr><td><code>HELP</code></td><td>列出终端支持的命令</td></tr>
+                            <tr><td><code>PING</code></td><td>返回服务器真实的 <code>PONG</code></td></tr>
+                            <tr><td><code>GET / HGETALL / LRANGE / SMEMBERS / ZRANGE …</code></td><td>直接在服务器上执行并返回真实结果</td></tr>
+                            <tr><td><code>KEYS pattern</code></td><td>真实执行（会阻塞生产实例，慎用），例如 <code>KEYS user:*</code></td></tr>
+                            <tr><td><code>INFO</code> / <code>DBSIZE</code></td><td>返回服务器真实信息</td></tr>
+                            <tr><td><code>SET key value</code> 等写命令</td><td>真实写入服务器；<strong>只读连接下会被拦截</strong></td></tr>
+                            <tr><td><code>FLUSHDB</code></td><td>真实清空当前数据库，<strong>不可恢复</strong></td></tr>
+                            <tr><td><code>HELP</code></td><td>显示终端使用说明</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="note warn">
-                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>写操作请走界面，不要用终端</div>
-                    终端目前是<strong>本地模拟执行</strong>：它不会把命令转发到服务器，<code>SET</code>、<code>FLUSHDB</code> 等写命令只会打印结果，
-                    服务器上的数据不会有任何变化。要写入数据请用详情区的「保存」或工具栏的「新增 Key」。
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>终端会直接改数据</div>
+                    终端不是模拟执行：写命令会立刻落到服务器。<code>FLUSHDB</code> 这类危险命令执行前请三思；
+                    只读连接下写命令会被直接拒绝。日常查看建议优先用详情区。
                 </div>
             </section>
 
@@ -905,16 +915,16 @@
                     <li>单机 / 集群连接，支持 ACL 用户名、密码、只读保护，连接配置本地持久化</li>
                     <li>Key 列表浏览、关键字搜索、按自定义分隔符折叠文件夹</li>
                     <li>String 类型值的查看、编辑、保存、复制、JSON 格式化</li>
-                    <li>TTL 查看与修改（<code>-1</code> 表示永不过期）</li>
+                    <li>Hash / List / Set / ZSet 内容的加载与字段级新增、修改、删除</li>
+                    <li>TTL 查看与修改（<code>-1</code> 表示永不过期，任意类型均可改）</li>
                     <li>新增 String Key、删除 Key（带确认）</li>
+                    <li>内置终端：命令真实转发到服务器执行，结果按 redis-cli 风格展示</li>
+                    <li>Key 导入 / 导出（JSON 格式，导入前确认覆盖策略）</li>
                     <li>服务器指标：内存、连接数、Key 总数、磁盘占用</li>
                     <li>五款四季主题、面板拖拽与布局记忆</li>
                 </ul>
                 <h3>仍在开发中</h3>
                 <ul>
-                    <li><strong>Hash / List / Set / ZSet 的字段级内容</strong>：目前这些类型的字段内容尚未从服务器加载，详情区会显示为「空 Hash / 空 List / 空 Set」，字段级的新增、修改、删除还不能在这里完成。</li>
-                    <li><strong>内置终端的真实命令转发</strong>：当前为本地模拟执行，只覆盖一小部分常用命令，写命令不会落到服务器。</li>
-                    <li><strong>导入 / 导出</strong>：工具栏上的两个按钮目前只会给出「功能（模拟）」提示，尚未实现，请不要依赖它备份数据。</li>
                     <li><strong>连接配置的导入导出</strong>：暂未提供，跨机器迁移需要手动复制 <code>connections.json</code>。</li>
                 </ul>
             </section>
@@ -959,19 +969,23 @@
                 </details>
 
                 <details class="faq">
-                    <summary>为什么 Hash / List / Set 的详情是空的？</summary>
+                    <summary>为什么 Hash / List / Set / ZSet 的详情是空的？</summary>
                     <div class="faq-body">
                         <p>
-                            当前版本只加载了 String 类型的内容，其余类型暂时只显示类型与 TTL，字段内容会显示成空。
-                            这是已知的功能缺口，正在进行中，详见<a class="link" href="#status">功能现状</a>。
+                            选中 Key 后详情区会异步从服务器加载字段内容，加载完成前会短暂显示「加载中」。
+                            如果一直为空，点详情区的「刷新」重新加载；仍不对就检查终端里 <code>TYPE key</code> 的实际类型。
                         </p>
                     </div>
                 </details>
 
                 <details class="faq">
-                    <summary>点了「导入」「导出」只有一条提示？</summary>
+                    <summary>「导入」「导出」是什么格式？</summary>
                     <div class="faq-body">
-                        <p>这两个功能还没实现，目前点击只会给出「功能（模拟）」的提示。请暂时不要用它做数据备份。</p>
+                        <p>
+                            导出会把<strong>当前数据库的全部 Key</strong>（String / Hash / List / Set / ZSet，含 TTL）
+                            下载为一个 JSON 文件；导入选择该文件后，会提示「已存在的同名 Key 将被覆盖」，
+                            确认后开始导入并报告成功 / 跳过 / 失败的数量。Stream 等类型暂不参与导出。
+                        </p>
                     </div>
                 </details>
 

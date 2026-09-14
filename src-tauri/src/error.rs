@@ -153,10 +153,7 @@ mod tests {
     fn moved_error_with_direct_connection_mentions_it() {
         let err = moved_error("7253 127.0.0.1:7102");
         let msg = command_error_message(&err, Some(&direct_conn()));
-        assert!(
-            msg.contains("127.0.0.1:7002"),
-            "应点明当前直连节点: {msg}"
-        );
+        assert!(msg.contains("127.0.0.1:7002"), "应点明当前直连节点: {msg}");
     }
 
     #[test]
@@ -184,7 +181,10 @@ mod tests {
     fn redirect_error_without_detail_falls_back_gracefully() {
         let err = redis::RedisError::from((redis::ErrorKind::Moved, "unknown error"));
         let msg = command_error_message(&err, None);
-        assert!(msg.contains("集群模式"), "无重定向信息时也应给出建议: {msg}");
+        assert!(
+            msg.contains("集群模式"),
+            "无重定向信息时也应给出建议: {msg}"
+        );
     }
 
     #[test]

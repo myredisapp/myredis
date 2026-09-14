@@ -114,8 +114,12 @@ async fn cluster_get_server_info_and_scan() {
     assert!(!info.redis_version.is_empty(), "应解析出版本号");
     println!(
         "cluster info: version={} os={} uptime={}s mem={} clients={} keys={}",
-        info.redis_version, info.os, info.uptime_seconds, info.used_memory,
-        info.connected_clients, info.db_keys
+        info.redis_version,
+        info.os,
+        info.uptime_seconds,
+        info.used_memory,
+        info.connected_clients,
+        info.db_keys
     );
 
     // list_keys 应能列出探针 key；修复前 SCAN 只扫随机一个节点，结果时有时无
@@ -172,12 +176,7 @@ async fn cluster_list_keys_stable_and_complete() {
         let entries = maidi_cache_lib::commands::key::list_keys_inner(&pool, "cluster_list_keys")
             .await
             .expect("list_keys 失败");
-        snapshots.push(
-            entries
-                .iter()
-                .map(|e| e.key.clone())
-                .collect::<Vec<_>>(),
-        );
+        snapshots.push(entries.iter().map(|e| e.key.clone()).collect::<Vec<_>>());
     }
     for (i, snap) in snapshots.iter().enumerate().skip(1) {
         assert_eq!(

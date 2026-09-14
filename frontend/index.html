@@ -1136,51 +1136,96 @@
             color: var(--accent);
             background: var(--accent-dim);
         }
-        .detail-body .value-editor .hash-view {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 8px;
-        }
-        .detail-body .value-editor .hash-view .field {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--bg-input);
-            padding: 6px 12px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            font-size: 13px;
-        }
-        .detail-body .value-editor .hash-view .field .fkey {
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-        .detail-body .value-editor .hash-view .field .fval {
-            color: var(--text-primary);
-        }
-        .detail-body .value-editor .list-view {
+        /* 集合类型（Hash / List / Set / ZSet）字段级编辑表格 */
+        .detail-body .value-editor .coll-view {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
         }
-        .detail-body .value-editor .list-view .item {
+        .detail-body .value-editor .coll-row {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             background: var(--bg-input);
-            padding: 4px 12px;
-            border-radius: 4px;
             border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 10px;
             font-size: 13px;
         }
-        .detail-body .value-editor .list-view .item .idx {
+        .detail-body .value-editor .coll-row .idx {
             color: var(--text-muted);
             font-size: 11px;
-            width: 28px;
+            width: 36px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+        .detail-body .value-editor .coll-row .coll-key {
+            color: var(--text-secondary);
+            font-weight: 500;
+            flex-shrink: 0;
+            max-width: 220px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .detail-body .value-editor .coll-input {
+            background: transparent;
+            border: none;
+            border-bottom: 1px solid transparent;
+            color: var(--text-primary);
+            font-size: 13px;
+            padding: 3px 2px;
+            outline: none;
+            min-width: 60px;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+        .detail-body .value-editor .coll-input:focus {
+            border-bottom-color: var(--accent);
+        }
+        .detail-body .value-editor .coll-input.grow {
+            flex: 1;
+            min-width: 0;
+        }
+        .detail-body .value-editor .coll-input.coll-score {
+            width: 90px;
             flex-shrink: 0;
         }
-        .detail-body .value-editor .list-view .item .val {
-            color: var(--text-primary);
+        .detail-body .value-editor .coll-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            width: 26px;
+            height: 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.15s;
+        }
+        .detail-body .value-editor .coll-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+        .detail-body .value-editor .coll-btn.danger:hover:not(:disabled) {
+            border-color: #e06c75;
+            color: #e06c75;
+            background: rgba(224, 108, 117, 0.12);
+        }
+        .detail-body .value-editor .coll-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .detail-body .value-editor .coll-add {
+            border-style: dashed;
+        }
+        .detail-body .value-editor .coll-empty {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 12px;
         }
         .detail-body .value-footer {
             padding: 10px 20px;
@@ -1722,7 +1767,7 @@
                 </div>
             </div>
             <div class="terminal-body" id="terminalBody">
-                <div class="line"><span class="prompt">></span><span class="output ok">Redis 终端已就绪 (模拟)</span></div>
+                <div class="line"><span class="prompt">></span><span class="output ok">Redis 终端已就绪</span></div>
                 <div class="line"><span class="prompt">></span><span class="output">输入命令并按 Enter 执行</span></div>
             </div>
             <div class="terminal-input-row">
@@ -1914,6 +1959,10 @@
             // Key 树数据：初始为空，连接后由后端返回的真实数据重建
             let KEY_DATA = {};
             let allKeys = [];
+            // 集合类型最近一次加载的内容缓存（key|type → 数据），用于复制与大小统计
+            const contentCache = {};
+            // 各集合类型对应的内容读取命令
+            const COLL_READ_CMD = { hash: 'get_hash', list: 'get_list', set: 'get_set', zset: 'get_zset' };
 
             // ---------- 状态 ----------
             let currentConn = CONNECTIONS[0];
@@ -2610,54 +2659,23 @@
                             })
                             .catch(() => { /* 忽略 */ });
                     }
-                } else if (typeClass === 'hash') {
-                    const obj = item.value || {};
-                    const fields = Object.entries(obj);
+                } else if (typeClass === 'hash' || typeClass === 'list' || typeClass === 'set' || typeClass === 'zset') {
+                    // 集合类型：先占位，随后由 wireCollView 从后端拉取内容渲染
                     valueHtml = `
-                        <div class="hash-view">
-                            ${fields.map(([k, v]) => `
-                                <div class="field">
-                                    <span class="fkey">${k}</span>
-                                    <span class="fval">${v}</span>
-                                </div>
-                            `).join('')}
-                            ${fields.length === 0 ? '<div style="color:var(--text-muted);grid-column:1/3;text-align:center;padding:12px;">空 Hash</div>' : ''}
-                        </div>
-                    `;
-                } else if (typeClass === 'list') {
-                    const arr = item.value || [];
-                    valueHtml = `
-                        <div class="list-view">
-                            ${arr.map((v, i) => `
-                                <div class="item">
-                                    <span class="idx">${i}</span>
-                                    <span class="val">${v}</span>
-                                </div>
-                            `).join('')}
-                            ${arr.length === 0 ? '<div style="color:var(--text-muted);text-align:center;padding:12px;">空 List</div>' : ''}
-                        </div>
-                    `;
-                } else if (typeClass === 'set') {
-                    const arr = item.value || [];
-                    valueHtml = `
-                        <div class="list-view">
-                            ${arr.map((v, i) => `
-                                <div class="item">
-                                    <span class="idx">${i + 1}</span>
-                                    <span class="val">${v}</span>
-                                </div>
-                            `).join('')}
-                            ${arr.length === 0 ? '<div style="color:var(--text-muted);text-align:center;padding:12px;">空 Set</div>' : ''}
-                        </div>
+                        <div id="collView" class="coll-view" data-type="${typeClass}"><div class="coll-empty">加载中…</div></div>
                     `;
                 } else {
                     valueHtml = `
-                        <div style="color:var(--text-muted);padding:12px;">暂不支持此类型</div>
+                        <div class="coll-empty">暂不支持此类型</div>
                     `;
                 }
 
                 const ttlDisplay = ttl === -1 ? '永不过期' : `${ttl}s`;
                 const ttlDisabled = readonlyConn ? ' disabled' : '';
+                // 内容大小：string 取列表值，集合类型取最近一次加载到的内容
+                const cachedForSize = contentCache[selectedKey + '|' + typeClass];
+                const sizeSource = typeClass === 'string' ? item.value : cachedForSize;
+                const sizeBytes = sizeSource ? JSON.stringify(sizeSource).length : 0;
 
                 keyDetailEl.innerHTML = `
                     <div class="detail-header">
@@ -2684,7 +2702,7 @@
                                 <span><i class="far fa-file"></i> 类型: ${typeLabel}</span>
                                 <span><i class="far fa-clock"></i> TTL: ${ttlDisplay}</span>
                             </div>
-                            <span>大小: ${item.value ? JSON.stringify(item.value).length : 0} 字节</span>
+                            <span>大小: ${sizeBytes} 字节</span>
                         </div>
                     </div>
                 `;
@@ -2701,12 +2719,6 @@
                             appendTerminal(`保存 Key "${selectedKey}" 失败: 当前为只读连接，禁止写操作`, 'error');
                             return;
                         }
-                        const editor = document.getElementById('valueEditor');
-                        if (!editor) {
-                            showToast('此类型不支持直接修改', 'info');
-                            return;
-                        }
-                        const value = editor.value;
                         const ttlInput = document.getElementById('detailTtl');
                         const ttlResult = parseTtl(ttlInput ? ttlInput.value : '-1');
                         if (!ttlResult.ok) {
@@ -2714,6 +2726,31 @@
                             if (ttlInput) ttlInput.focus();
                             return;
                         }
+                        // 集合类型：字段级修改在表格行内即时保存，顶部「保存」只负责 TTL
+                        if (typeClass !== 'string') {
+                            saveBtn.disabled = true;
+                            invoke('set_key_ttl', { connId: currentConn.id, key: selectedKey, ttl: ttlResult.ttl })
+                                .then(() => {
+                                    showToast('TTL 已更新', 'success');
+                                    appendTerminal(ttlResult.ttl > 0 ? `EXPIRE ${selectedKey} ${ttlResult.ttl} → OK` : `PERSIST ${selectedKey} → OK`, 'ok');
+                                    if (KEY_DATA[selectedKey]) KEY_DATA[selectedKey].ttl = ttlResult.ttl;
+                                    loadKeys();
+                                })
+                                .catch(err => {
+                                    showToast('TTL 更新失败: ' + err, 'error');
+                                    appendTerminal(`修改 TTL 失败: ${err}`, 'error');
+                                })
+                                .finally(() => {
+                                    saveBtn.disabled = false;
+                                });
+                            return;
+                        }
+                        const editor = document.getElementById('valueEditor');
+                        if (!editor) {
+                            showToast('此类型不支持直接修改', 'info');
+                            return;
+                        }
+                        const value = editor.value;
                         saveBtn.disabled = true;
                         invoke('set_key', { connId: currentConn.id, key: selectedKey, value: value, ttl: ttlResult.ttl })
                             .then(() => {
@@ -2769,11 +2806,12 @@
                     });
                 }
 
-                // 获取当前详情展示的文本值（string 取编辑器内容，其它类型取序列化结果）
+                // 获取当前详情展示的文本值（string 取编辑器内容，集合类型取最近一次加载的内容）
                 const currentDetailValue = () => {
                     const editor = document.getElementById('valueEditor');
                     if (editor) return editor.value;
-                    return item.value != null ? JSON.stringify(item.value, null, 2) : '';
+                    const cached = contentCache[selectedKey + '|' + typeClass];
+                    return cached != null ? JSON.stringify(cached, null, 2) : '';
                 };
 
                 const formatBtn = document.getElementById('editorFormat');
@@ -2800,6 +2838,260 @@
                         }
                     });
                 }
+
+                // 集合类型：加载并渲染字段级编辑表格
+                if (typeClass === 'hash' || typeClass === 'list' || typeClass === 'set' || typeClass === 'zset') {
+                    wireCollView(typeClass);
+                }
+            }
+
+            // ---------- 集合类型（Hash / List / Set / ZSet）字段级编辑 ----------
+            // 从后端加载 key 内容并渲染可编辑表格；key 切换后异步返回时做校验
+            function wireCollView(type) {
+                const view = document.getElementById('collView');
+                if (!view || !currentConn || !currentConn.id) return;
+                const key = selectedKey;
+                invoke(COLL_READ_CMD[type], { connId: currentConn.id, key })
+                    .then((data) => {
+                        if (selectedKey !== key) return;
+                        contentCache[key + '|' + type] = data;
+                        renderCollRows(view, type, key, data);
+                    })
+                    .catch((err) => {
+                        if (selectedKey !== key) return;
+                        view.innerHTML = `<div class="coll-empty">加载失败：${escapeHtml(String(err))}</div>`;
+                    });
+            }
+
+            function renderCollRows(view, type, key, data) {
+                const readonly = !!(currentConn && currentConn.online && currentConn.readonly);
+                const dis = readonly ? ' disabled' : '';
+                const btn = (act, attrs, icon, title) =>
+                    `<button class="coll-btn${act.endsWith('del') ? ' danger' : ''}" data-act="${act}" ${attrs} title="${title}"${dis}><i class="fas fa-${icon}"></i></button>`;
+                let rows = '';
+                let emptyTip = '';
+                if (type === 'hash') {
+                    const arr = data || [];
+                    rows = arr.map((it, i) => `
+                        <div class="coll-row">
+                            <span class="coll-key" title="${escapeHtml(it.field)}">${escapeHtml(it.field)}</span>
+                            <input class="coll-input grow" id="collVal${i}" value="${escapeHtml(it.value)}"${dis} />
+                            ${btn('hset', `data-field="${escapeHtml(it.field)}" data-input="collVal${i}"`, 'check', '保存字段')}
+                            ${btn('hdel', `data-field="${escapeHtml(it.field)}"`, 'trash-alt', '删除字段')}
+                        </div>`).join('');
+                    rows += `
+                        <div class="coll-row coll-add">
+                            <input class="coll-input" id="collAddKey" placeholder="字段名"${dis} />
+                            <input class="coll-input grow" id="collAddVal" placeholder="字段值"${dis} />
+                            ${btn('hadd', '', 'plus', '添加字段')}
+                        </div>`;
+                    if (!arr.length) emptyTip = '<div class="coll-empty">空 Hash</div>';
+                } else if (type === 'list') {
+                    const arr = data || [];
+                    rows = arr.map((it) => `
+                        <div class="coll-row">
+                            <span class="idx">${it.index}</span>
+                            <input class="coll-input grow" id="collVal${it.index}" value="${escapeHtml(it.value)}"${dis} />
+                            ${btn('lset', `data-idx="${it.index}" data-input="collVal${it.index}"`, 'check', '保存元素')}
+                            ${btn('ldel', `data-val="${escapeHtml(it.value)}"`, 'trash-alt', '删除元素')}
+                        </div>`).join('');
+                    rows += `
+                        <div class="coll-row coll-add">
+                            <input class="coll-input grow" id="collAddVal" placeholder="新元素"${dis} />
+                            ${btn('lpush', '', 'angle-left', '左端插入')}
+                            ${btn('rpush', '', 'angle-right', '右端插入')}
+                        </div>`;
+                    if (!arr.length) emptyTip = '<div class="coll-empty">空 List</div>';
+                } else if (type === 'set') {
+                    const arr = data || [];
+                    rows = arr.map((it, i) => `
+                        <div class="coll-row">
+                            <span class="idx">${i + 1}</span>
+                            <input class="coll-input grow" id="collVal${i}" value="${escapeHtml(it)}"${dis} />
+                            ${btn('sset', `data-old="${escapeHtml(it)}" data-input="collVal${i}"`, 'check', '保存成员（改名）')}
+                            ${btn('sdel', `data-val="${escapeHtml(it)}"`, 'trash-alt', '删除成员')}
+                        </div>`).join('');
+                    rows += `
+                        <div class="coll-row coll-add">
+                            <input class="coll-input grow" id="collAddVal" placeholder="新成员"${dis} />
+                            ${btn('sadd', '', 'plus', '添加成员')}
+                        </div>`;
+                    if (!arr.length) emptyTip = '<div class="coll-empty">空 Set</div>';
+                } else if (type === 'zset') {
+                    const arr = data || [];
+                    rows = arr.map((it, i) => `
+                        <div class="coll-row">
+                            <span class="idx">${i + 1}</span>
+                            <input class="coll-input grow" id="collMember${i}" value="${escapeHtml(it.member)}"${dis} />
+                            <input class="coll-input coll-score" id="collScore${i}" value="${it.score}"${dis} />
+                            ${btn('zset', `data-old="${escapeHtml(it.member)}" data-i="${i}"`, 'check', '保存成员与分值')}
+                            ${btn('zdel', `data-val="${escapeHtml(it.member)}"`, 'trash-alt', '删除成员')}
+                        </div>`).join('');
+                    rows += `
+                        <div class="coll-row coll-add">
+                            <input class="coll-input grow" id="collAddKey" placeholder="成员"${dis} />
+                            <input class="coll-input coll-score" id="collAddScore" placeholder="分值" value="0"${dis} />
+                            ${btn('zadd', '', 'plus', '添加成员')}
+                        </div>`;
+                    if (!arr.length) emptyTip = '<div class="coll-empty">空 ZSet</div>';
+                }
+                view.innerHTML = emptyTip + rows;
+                view.querySelectorAll('[data-act]').forEach(el => {
+                    el.addEventListener('click', () => runCollAction(el, type, key));
+                });
+            }
+
+            // 执行字段级编辑操作，成功后刷新当前内容区
+            function runCollAction(el, type, key) {
+                if (!currentConn || !currentConn.id) return;
+                if (currentConn.readonly) {
+                    showToast('只读连接，禁止写操作', 'error');
+                    return;
+                }
+                const act = el.dataset.act;
+                const connId = currentConn.id;
+                const valOf = (id) => {
+                    const input = document.getElementById(id);
+                    return input ? input.value : '';
+                };
+                const require = (v, msg, focusId) => {
+                    if (v !== '') return true;
+                    showToast(msg, 'error');
+                    const f = document.getElementById(focusId);
+                    if (f) f.focus();
+                    return false;
+                };
+                const finish = (p, echoOk, echoErr) => {
+                    Promise.resolve(p)
+                        .then(() => {
+                            showToast('已保存', 'success');
+                            appendTerminal(echoOk, 'ok');
+                            wireCollView(type);
+                        })
+                        .catch((err) => {
+                            showToast('操作失败: ' + err, 'error');
+                            appendTerminal(`${echoErr}: ${err}`, 'error');
+                        });
+                };
+
+                if (act === 'hset') {
+                    const field = el.dataset.field;
+                    const value = valOf(el.dataset.input);
+                    if (!require(value, '请输入字段值', el.dataset.input)) return;
+                    finish(
+                        invoke('hash_set_field', { connId, key, field, value }),
+                        `HSET ${key} ${field} "${value}" → OK`,
+                        `HSET ${key} ${field}`
+                    );
+                } else if (act === 'hdel') {
+                    const field = el.dataset.field;
+                    finish(
+                        invoke('hash_del_fields', { connId, key, fields: [field] }),
+                        `HDEL ${key} ${field} → OK`,
+                        `HDEL ${key} ${field}`
+                    );
+                } else if (act === 'hadd') {
+                    const field = valOf('collAddKey');
+                    const value = valOf('collAddVal');
+                    if (!require(field, '请输入字段名', 'collAddKey')) return;
+                    if (!require(value, '请输入字段值', 'collAddVal')) return;
+                    finish(
+                        invoke('hash_set_field', { connId, key, field, value }),
+                        `HSET ${key} ${field} "${value}" → OK`,
+                        `HSET ${key} ${field}`
+                    );
+                } else if (act === 'lset') {
+                    const index = parseInt(el.dataset.idx, 10);
+                    const value = valOf(el.dataset.input);
+                    if (!require(value, '请输入元素值', el.dataset.input)) return;
+                    finish(
+                        invoke('list_set_element', { connId, key, index, value }),
+                        `LSET ${key} ${index} "${value}" → OK`,
+                        `LSET ${key} ${index}`
+                    );
+                } else if (act === 'ldel') {
+                    const value = el.dataset.val;
+                    finish(
+                        invoke('list_del_element', { connId, key, value }),
+                        `LREM ${key} 1 "${value}" → OK`,
+                        `LREM ${key} "${value}"`
+                    );
+                } else if (act === 'lpush' || act === 'rpush') {
+                    const value = valOf('collAddVal');
+                    if (!require(value, '请输入新元素', 'collAddVal')) return;
+                    const left = act === 'lpush';
+                    finish(
+                        invoke('list_push_element', { connId, key, value, left }),
+                        `${left ? 'LPUSH' : 'RPUSH'} ${key} "${value}" → OK`,
+                        `${left ? 'LPUSH' : 'RPUSH'} ${key}`
+                    );
+                } else if (act === 'sadd') {
+                    const member = valOf('collAddVal');
+                    if (!require(member, '请输入新成员', 'collAddVal')) return;
+                    finish(
+                        invoke('set_add_member', { connId, key, member }),
+                        `SADD ${key} "${member}" → OK`,
+                        `SADD ${key} "${member}"`
+                    );
+                } else if (act === 'sset') {
+                    const old = el.dataset.old;
+                    const member = valOf(el.dataset.input);
+                    if (!require(member, '请输入成员', el.dataset.input)) return;
+                    // Set 成员不可原地修改：先加新值，再删旧值（同名时跳过删除）
+                    finish(
+                        invoke('set_add_member', { connId, key, member }).then(() => {
+                            if (member === old) return Promise.resolve();
+                            return invoke('set_del_member', { connId, key, member: old });
+                        }),
+                        `SREM ${key} "${old}" + SADD ${key} "${member}" → OK`,
+                        `修改 Set 成员`
+                    );
+                } else if (act === 'sdel') {
+                    const member = el.dataset.val;
+                    finish(
+                        invoke('set_del_member', { connId, key, member }),
+                        `SREM ${key} "${member}" → OK`,
+                        `SREM ${key} "${member}"`
+                    );
+                } else if (act === 'zadd') {
+                    const member = valOf('collAddKey');
+                    const score = parseFloat(valOf('collAddScore'));
+                    if (!require(member, '请输入成员', 'collAddKey')) return;
+                    if (!isFinite(score)) {
+                        showToast('分值必须是数字', 'error');
+                        return;
+                    }
+                    finish(
+                        invoke('zset_add_member', { connId, key, member, score }),
+                        `ZADD ${key} ${score} "${member}" → OK`,
+                        `ZADD ${key} ${score} "${member}"`
+                    );
+                } else if (act === 'zset') {
+                    const i = el.dataset.i;
+                    const old = el.dataset.old;
+                    const member = valOf('collMember' + i);
+                    const score = parseFloat(valOf('collScore' + i));
+                    if (!require(member, '请输入成员', 'collMember' + i)) return;
+                    if (!isFinite(score)) {
+                        showToast('分值必须是数字', 'error');
+                        return;
+                    }
+                    finish(
+                        invoke('zset_add_member', { connId, key, member, score }).then(() => {
+                            if (member === old) return Promise.resolve();
+                            return invoke('zset_del_member', { connId, key, member: old });
+                        }),
+                        `ZADD ${key} ${score} "${member}" → OK`,
+                        `修改 ZSet 成员`
+                    );
+                } else if (act === 'zdel') {
+                    const member = el.dataset.val;
+                    finish(
+                        invoke('zset_del_member', { connId, key, member }),
+                        `ZREM ${key} "${member}" → OK`,
+                        `ZREM ${key} "${member}"`
+                    );
+                }
             }
 
             // ---------- 终端 ----------
@@ -2815,46 +3107,30 @@
             function executeCommand(cmd) {
                 const trimmed = cmd.trim();
                 if (!trimmed) return;
-                appendTerminal(trimmed, '');
-                const lower = trimmed.toLowerCase();
-                if (lower === 'ping') {
-                    appendTerminal('PONG', 'ok');
-                } else if (lower === 'info') {
-                    appendTerminal('# Server\nredis_version: 7.2.4\nuptime: 3 days\nconnected_clients: 12', '');
-                } else if (lower === 'dbsize') {
-                    appendTerminal(`(integer) ${allKeys.length}`, 'ok');
-                } else if (lower.startsWith('get ')) {
-                    const key = trimmed.slice(4).trim();
-                    const found = allKeys.find(k => k.key === key);
-                    if (found && found.type === 'string') {
-                        appendTerminal(found.value || '(nil)', 'ok');
-                    } else {
-                        appendTerminal('(nil)', '');
-                    }
-                } else if (lower.startsWith('set ')) {
-                    const parts = trimmed.slice(4).trim().split(' ');
-                    if (parts.length >= 2) {
-                        appendTerminal('OK', 'ok');
-                    } else {
-                        appendTerminal('ERR wrong number of arguments', 'error');
-                    }
-                } else if (lower.startsWith('keys ')) {
-                    const pattern = trimmed.slice(5).trim();
-                    const matched = allKeys.filter(k => {
-                        if (pattern === '*') return true;
-                        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-                        return regex.test(k.key);
-                    });
-                    appendTerminal(matched.map(k => k.key).join('\n') || '(empty array)', '');
-                } else if (lower === 'flushdb') {
-                    appendTerminal('OK (模拟清空)', 'ok');
-                } else if (lower === 'help') {
-                    appendTerminal('支持命令: PING, INFO, DBSIZE, GET key, SET key value, KEYS pattern, FLUSHDB, HELP', '');
-                } else {
-                    appendTerminal(`ERR 未知命令或模拟未实现: "${trimmed}"`, 'error');
-                }
+                appendTerminal(escapeHtml(trimmed), '');
                 terminalInput.value = '';
-                terminalInput.focus();
+                if (trimmed.toLowerCase() === 'help') {
+                    appendTerminal('命令直接转发到已连接的 Redis 服务器执行，例如 PING / GET key / HGETALL key / INFO / DBSIZE。只读连接会拦截写命令。', '');
+                    terminalInput.focus();
+                    return;
+                }
+                if (!currentConn || !currentConn.id || !currentConn.online) {
+                    appendTerminal('未连接 Redis 服务器，请先建立连接', 'error');
+                    terminalInput.focus();
+                    return;
+                }
+                terminalSend.disabled = true;
+                invoke('execute_command', { connId: currentConn.id, line: trimmed })
+                    .then((text) => {
+                        appendTerminal(escapeHtml(text || '(空结果)'), '');
+                    })
+                    .catch((err) => {
+                        appendTerminal(escapeHtml(String(err)), 'error');
+                    })
+                    .finally(() => {
+                        terminalSend.disabled = false;
+                        terminalInput.focus();
+                    });
             }
 
             // ---------- 模态框 ----------
@@ -3197,13 +3473,84 @@
             addKeyTtlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitAddKey(); });
             addKeyModal.addEventListener('click', (e) => { if (e.target === addKeyModal) closeAddKeyModal(); });
 
+            let importFileInput = null;
             document.getElementById('btnImport').addEventListener('click', () => {
-                showToast('导入功能 (模拟)', 'info');
-                appendTerminal('执行导入操作 (模拟)', '');
+                if (!currentConn || !currentConn.online) {
+                    showToast('请先连接 Redis 服务器', 'error');
+                    return;
+                }
+                if (currentConn.readonly) {
+                    showToast('只读连接，禁止写操作', 'error');
+                    return;
+                }
+                if (!importFileInput) {
+                    importFileInput = document.createElement('input');
+                    importFileInput.type = 'file';
+                    importFileInput.accept = '.json,application/json';
+                    importFileInput.style.display = 'none';
+                    document.body.appendChild(importFileInput);
+                    importFileInput.addEventListener('change', () => {
+                        const file = importFileInput.files && importFileInput.files[0];
+                        importFileInput.value = '';
+                        if (!file) return;
+                        showConfirm(`将从「${file.name}」导入 Key，已存在的同名 Key 将被覆盖。继续吗？`, { title: '导入 Key', okText: '导入' }).then((ok) => {
+                            if (!ok) return;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                invoke('import_keys', { connId: currentConn.id, content: String(reader.result), overwrite: true })
+                                    .then((res) => {
+                                        const failed = res.failed ? res.failed.length : 0;
+                                        const msg = `导入完成：成功 ${res.imported}，跳过 ${res.skipped}，失败 ${failed}`;
+                                        showToast(msg, failed > 0 ? 'error' : 'success');
+                                        appendTerminal(`IMPORT → ${msg}`, failed > 0 ? 'error' : 'ok');
+                                        if (failed > 0) {
+                                            res.failed.slice(0, 5).forEach(f => appendTerminal(`  失败 ${f.key}: ${f.error}`, 'error'));
+                                        }
+                                        loadKeys();
+                                    })
+                                    .catch((err) => {
+                                        showToast('导入失败: ' + err, 'error');
+                                        appendTerminal(`IMPORT 失败: ${err}`, 'error');
+                                    });
+                            };
+                            reader.readAsText(file);
+                        });
+                    });
+                }
+                importFileInput.click();
             });
             document.getElementById('btnExport').addEventListener('click', () => {
-                showToast('导出功能 (模拟)', 'info');
-                appendTerminal('执行导出操作 (模拟)', '');
+                if (!currentConn || !currentConn.online) {
+                    showToast('请先连接 Redis 服务器', 'error');
+                    return;
+                }
+                if (!allKeys.length) {
+                    showToast('当前数据库没有 Key 可导出', 'info');
+                    return;
+                }
+                const btn = document.getElementById('btnExport');
+                btn.disabled = true;
+                invoke('export_keys', { connId: currentConn.id, keys: allKeys.map(k => k.key) })
+                    .then((text) => {
+                        const blob = new Blob([text], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `maidi-export-${new Date().toISOString().slice(0, 10)}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        showToast(`已导出 ${allKeys.length} 个 Key`, 'success');
+                        appendTerminal(`EXPORT ${allKeys.length} keys → OK`, 'ok');
+                    })
+                    .catch((err) => {
+                        showToast('导出失败: ' + err, 'error');
+                        appendTerminal(`EXPORT 失败: ${err}`, 'error');
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                    });
             });
 
             // ---------- 初始化 ----------
