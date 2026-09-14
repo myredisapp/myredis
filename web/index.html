@@ -212,14 +212,18 @@
         }
         .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent); }
         .icon-btn .icon { width: 16px; height: 16px; }
-        .nav .github-btn {
-            display: inline-flex; align-items: center; gap: 8px;
-            height: 32px; padding: 0 14px; border-radius: 6px;
-            border: 1px solid var(--border-color); color: var(--text-primary);
-            font-size: 13px; font-weight: 600; transition: all 0.2s;
+        /* 右上角图标组：两个独立、无边框的图标按钮 */
+        .nav .nav-actions { display: flex; align-items: center; gap: 6px; }
+        .nav .nav-actions .icon-btn,
+        .nav .nav-actions .github-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; height: 32px; border: none; border-radius: 6px;
+            background: transparent; color: var(--text-secondary);
+            cursor: pointer; transition: all 0.2s;
         }
-        .nav .github-btn:hover { border-color: var(--accent); background: var(--bg-hover); }
-        .nav .github-btn .icon { width: 15px; height: 15px; }
+        .nav .nav-actions .icon-btn:hover,
+        .nav .nav-actions .github-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav .nav-actions .github-btn .icon { width: 15px; height: 15px; }
 
         /* 主题下拉（与应用内一致） */
         .theme-dropdown { position: relative; }
@@ -565,6 +569,8 @@
         .footer-bottom { margin-top: 18px; font-size: 12px; color: var(--text-muted); }
         .footer-bottom + .footer-bottom { margin-top: 6px; }
         .footer-bottom a:hover { color: var(--accent); }
+        .footer-bottom .beian { display: inline-flex; align-items: center; gap: 6px; }
+        .footer-bottom .beian .icon { width: 16px; height: 16px; color: var(--blue); }
 
         /* 响应式 */
         @media (max-width: 860px) {
@@ -613,6 +619,7 @@
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
         <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.35.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.26 5.66.41.36.78 1.05.78 2.13v3.16c0 .3.2.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></symbol>
         <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+        <symbol id="i-police" viewBox="0 0 24 24"><path d="M12 2.4 20.4 5.2v6.5c0 5.1-3.6 8.9-8.4 10.2-4.8-1.3-8.4-5.1-8.4-10.2V5.2Z"/><path d="M12 6.6 13 9.22l2.8.14-2.18 1.77.73 2.71L12 12.3l-2.35 1.54.73-2.71L8.2 9.36l2.8-.14Z" fill="currentColor" stroke="none"/></symbol>
         <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
         <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
         <symbol id="i-edit" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
@@ -639,23 +646,24 @@
                 <a href="https://github.com/myredisapp/myredis/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener">文档</a>
             </div>
             <div class="spacer"></div>
-            <div class="theme-dropdown">
-                <button title="切换主题" id="btnTheme" class="icon-btn" aria-haspopup="menu" aria-expanded="false" aria-label="切换主题">
-                    <svg class="icon" aria-hidden="true"><use href="#i-sun" /></svg>
-                </button>
-                <div class="theme-menu" id="themeMenu" role="menu" aria-label="选择主题">
-                    <div class="theme-menu-title">选择主题</div>
-                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="spring"><span class="theme-swatch" style="background:#4caf50"></span>春分</div>
-                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="summer"><span class="theme-swatch" style="background:#22a6f2"></span>立夏</div>
-                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="golden"><span class="theme-swatch" style="background:#d99a1b"></span>初秋</div>
-                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="autumn"><span class="theme-swatch" style="background:#f5b342"></span>深秋</div>
-                    <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="winter"><span class="theme-swatch" style="background:#f5f6fa"></span>冬至</div>
+            <div class="nav-actions">
+                <div class="theme-dropdown">
+                    <button title="切换主题" id="btnTheme" class="icon-btn" aria-haspopup="menu" aria-expanded="false" aria-label="切换主题">
+                        <svg class="icon" aria-hidden="true"><use href="#i-sun" /></svg>
+                    </button>
+                    <div class="theme-menu" id="themeMenu" role="menu" aria-label="选择主题">
+                        <div class="theme-menu-title">选择主题</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="spring"><span class="theme-swatch" style="background:#4caf50"></span>春分</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="summer"><span class="theme-swatch" style="background:#22a6f2"></span>立夏</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="golden"><span class="theme-swatch" style="background:#d99a1b"></span>初秋</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="autumn"><span class="theme-swatch" style="background:#f5b342"></span>深秋</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="winter"><span class="theme-swatch" style="background:#f5f6fa"></span>冬至</div>
+                    </div>
                 </div>
+                <a class="github-btn" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener" title="GitHub 仓库" aria-label="GitHub 仓库">
+                    <svg class="icon" aria-hidden="true"><use href="#i-github" /></svg>
+                </a>
             </div>
-            <a class="github-btn" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">
-                <svg class="icon" aria-hidden="true"><use href="#i-github" /></svg>
-                GitHub
-            </a>
         </div>
     </nav>
 
@@ -989,7 +997,7 @@
                 </div>
             </div>
             <div class="footer-bottom">© <span id="year">2026</span> myredisapp · 春分 / 立夏 / 初秋 / 深秋 / 冬至，愿有一款主题合你时节。</div>
-            <div class="footer-bottom"><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">湘ICP备17012851号-8</a></div>
+            <div class="footer-bottom"><span class="beian"><svg class="icon" aria-hidden="true"><use href="#i-police" /></svg><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">湘ICP备17012851号-8</a></span></div>
         </div>
     </footer>
 
