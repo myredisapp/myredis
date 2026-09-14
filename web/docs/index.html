@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="autumn">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>使用文档 — 麦地缓存</title>
+    <meta name="description" content="麦地缓存（MaiDi Cache）使用文档：安装、连接 Redis、浏览与编辑 Key、只读模式、集群模式、内置终端与常见问题。" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='44' cy='26' rx='24' ry='9' fill='%23f5b342'/%3E%3Cpath d='M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26' fill='%23f5b342'/%3E%3Cpath d='M20 42 Q44 50 68 42' stroke='rgba(255,255,255,0.35)' stroke-width='3' fill='none'/%3E%3Cpath d='M20 60 Q44 68 68 60' stroke='rgba(255,255,255,0.35)' stroke-width='3' fill='none'/%3E%3Ccircle cx='72' cy='72' r='18' fill='%23fff' stroke='%23f5b342' stroke-width='3'/%3E%3Ctext x='72' y='77' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='13' fill='%23d4902a'%3EMR%3C/text%3E%3C/svg%3E" />
+    <style>
+        /* ============================================================
+           主题变量 —— 与首页 web/index.html 完全一致的五款四季主题
+           （两页共用 localStorage 键 myredis_home_theme，切换后互相同步）
+           ============================================================ */
+
+        /* ========== 深秋（暗色金，默认） ========== */
+        :root,
+        [data-theme="autumn"] {
+            --bg-primary: #0d0b08;
+            --bg-secondary: #1a150e;
+            --bg-tertiary: #261f16;
+            --bg-hover: #33291e;
+            --bg-active: #403528;
+            --bg-input: #0d0b08;
+            --border-color: #4a3a2a;
+            --text-primary: #f5e6d3;
+            --text-secondary: #c4a88a;
+            --text-muted: #7a6550;
+            --accent: #f5b342;
+            --accent-hover: #d4902a;
+            --accent-dim: rgba(245, 179, 66, 0.18);
+            --green: #7cb84b;
+            --blue: #6a9fd8;
+            --yellow: #f5b342;
+            --purple: #b392d0;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+            --code-bg: #12100c;
+            color-scheme: dark;
+        }
+
+        /* ========== 初秋（亮金色） ========== */
+        [data-theme="golden"] {
+            --bg-primary: #fdf8ee;
+            --bg-secondary: #fffaf0;
+            --bg-tertiary: #fdf1d7;
+            --bg-hover: #f7e6c3;
+            --bg-active: #f0d9a8;
+            --bg-input: #fdf8ee;
+            --border-color: #e5c98f;
+            --text-primary: #3d2f14;
+            --text-secondary: #6b5622;
+            --text-muted: #a08a4e;
+            --accent: #d99a1b;
+            --accent-hover: #b87f12;
+            --accent-dim: rgba(217, 154, 27, 0.16);
+            --green: #5f9e3a;
+            --blue: #4c7fc0;
+            --yellow: #d9a514;
+            --purple: #9a6fc4;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(140, 100, 30, 0.25);
+            --code-bg: #fbf3e2;
+            color-scheme: light;
+        }
+
+        /* ========== 春分（清新绿） ========== */
+        [data-theme="spring"] {
+            --bg-primary: #f2f8f1;
+            --bg-secondary: #f9fcf8;
+            --bg-tertiary: #e9f4e6;
+            --bg-hover: #dcefd5;
+            --bg-active: #cde6c4;
+            --bg-input: #f9fcf8;
+            --border-color: #b5d8ab;
+            --text-primary: #1e3320;
+            --text-secondary: #44664b;
+            --text-muted: #7b9b80;
+            --accent: #4caf50;
+            --accent-hover: #3d9440;
+            --accent-dim: rgba(76, 175, 80, 0.15);
+            --green: #4caf50;
+            --blue: #66bb6a;
+            --yellow: #d4a017;
+            --purple: #9ccc65;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(76, 130, 70, 0.18);
+            --code-bg: #f4faf2;
+            color-scheme: light;
+        }
+
+        /* ========== 立夏（晴空蓝） ========== */
+        [data-theme="summer"] {
+            --bg-primary: #eef6fd;
+            --bg-secondary: #f7fbff;
+            --bg-tertiary: #e3f0fc;
+            --bg-hover: #d0e6fa;
+            --bg-active: #bcdbf8;
+            --bg-input: #f4faff;
+            --border-color: #a8cdec;
+            --text-primary: #0f2b42;
+            --text-secondary: #2f5f8a;
+            --text-muted: #6f96b8;
+            --accent: #22a6f2;
+            --accent-hover: #1687cc;
+            --accent-dim: rgba(34, 166, 242, 0.15);
+            --green: #2ecc9a;
+            --blue: #22a6f2;
+            --yellow: #ffc93c;
+            --purple: #9b6cc4;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(34, 110, 170, 0.16);
+            --code-bg: #f0f8ff;
+            color-scheme: light;
+        }
+
+        /* ========== 冬至（明亮模式） ========== */
+        [data-theme="winter"] {
+            --bg-primary: #f5f6fa;
+            --bg-secondary: #ffffff;
+            --bg-tertiary: #f0f2f8;
+            --bg-hover: #e7ebf5;
+            --bg-active: #dbe2f0;
+            --bg-input: #ffffff;
+            --border-color: #d3d9e5;
+            --text-primary: #1c2333;
+            --text-secondary: #455069;
+            --text-muted: #8a93a6;
+            --accent: #2563eb;
+            --accent-hover: #1d4fd8;
+            --accent-dim: rgba(37, 99, 235, 0.12);
+            --green: #2f9e5f;
+            --blue: #3b82f6;
+            --yellow: #d99a14;
+            --purple: #8b5cf6;
+            --radius: 8px;
+            --shadow: 0 8px 32px rgba(31, 41, 72, 0.14);
+            --code-bg: #f7f9fd;
+            color-scheme: light;
+        }
+
+        /* ============================================================
+           全局
+           ============================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        html.t-anim body,
+        html.t-anim .nav,
+        html.t-anim .toc a,
+        html.t-anim .step,
+        html.t-anim table,
+        html.t-anim th,
+        html.t-anim td,
+        html.t-anim pre,
+        html.t-anim .note,
+        html.t-anim .kbd,
+        html.t-anim footer,
+        html.t-anim .icon-btn {
+            transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease;
+        }
+        body {
+            font-family: var(--font);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.65;
+            overflow-x: hidden;
+        }
+        ::selection { background: var(--accent-dim); color: var(--text-primary); }
+        a { color: inherit; text-decoration: none; }
+        .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+        .icon { width: 1em; height: 1em; display: inline-block; vertical-align: -0.125em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+        #md-logo-gradient .md-logo-stop-top { stop-color: var(--accent-hover); }
+        #md-logo-gradient .md-logo-stop-bottom { stop-color: var(--accent); }
+
+        @media (prefers-reduced-motion: reduce) {
+            html { scroll-behavior: auto; }
+            html.t-anim body, html.t-anim .nav, html.t-anim .toc a, html.t-anim .step,
+            html.t-anim table, html.t-anim th, html.t-anim td, html.t-anim pre,
+            html.t-anim .note, html.t-anim .kbd, html.t-anim footer,
+            html.t-anim .icon-btn { transition: none !important; }
+        }
+
+        /* ============================================================
+           顶部导航（与首页一致）
+           ============================================================ */
+        .nav {
+            position: sticky; top: 0; z-index: 100;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        @supports (backdrop-filter: blur(1px)) {
+            .nav {
+                background: color-mix(in srgb, var(--bg-primary) 74%, transparent);
+                backdrop-filter: blur(14px) saturate(1.15);
+                -webkit-backdrop-filter: blur(14px) saturate(1.15);
+            }
+        }
+        .nav-inner { display: flex; align-items: center; gap: 28px; height: 60px; }
+        .nav .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; }
+        .nav .brand .logo-mark { width: 26px; height: 26px; display: block; }
+        .nav-links { display: flex; gap: 22px; font-size: 14px; color: var(--text-secondary); }
+        .nav-links a:hover { color: var(--accent); }
+        .nav .spacer { flex: 1; }
+        .icon-btn {
+            width: 34px; height: 32px; border-radius: 6px;
+            background: transparent; border: 1px solid var(--border-color);
+            color: var(--text-secondary); cursor: pointer; font-size: 15px;
+            display: inline-flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--accent); }
+        .icon-btn .icon { width: 16px; height: 16px; }
+        .nav .nav-actions { display: flex; align-items: center; gap: 6px; }
+        .nav .nav-actions .icon-btn,
+        .nav .nav-actions .github-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; height: 32px; border: none; border-radius: 6px;
+            background: transparent; color: var(--text-secondary);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .nav .nav-actions .icon-btn:hover,
+        .nav .nav-actions .github-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav .nav-actions .github-btn .icon { width: 15px; height: 15px; }
+        /* 本页就是文档页，图标高亮表示「当前所在」 */
+        .nav .nav-actions .icon-btn.current { color: var(--accent); }
+
+        /* 主题下拉 */
+        .theme-dropdown { position: relative; }
+        .theme-menu {
+            position: absolute; top: 40px; right: 0; min-width: 150px;
+            background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: var(--radius); box-shadow: var(--shadow);
+            padding: 6px; z-index: 200; display: none; flex-direction: column; gap: 2px;
+        }
+        .theme-menu.open { display: flex; }
+        .theme-menu-title { font-size: 11px; color: var(--text-muted); padding: 4px 8px 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .theme-option {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px; border-radius: 6px; cursor: pointer;
+            color: var(--text-secondary); font-size: 13px; white-space: nowrap; transition: background 0.15s, color 0.15s;
+        }
+        .theme-option:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .theme-option.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+        .theme-swatch { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(128, 128, 128, 0.25); flex-shrink: 0; }
+
+        /* ============================================================
+           文档布局：左侧目录 + 正文
+           ============================================================ */
+        /* 仅供屏幕阅读器：顶部大标题块已去掉，h1 仍需存在 */
+        .sr-only {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+            overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+        }
+        .docs {
+            display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 46px;
+            padding: 38px 0 72px; align-items: start;
+        }
+        .toc { position: sticky; top: 80px; font-size: 13.5px; max-height: calc(100vh - 108px); overflow-y: auto; }
+        .toc-title {
+            font-size: 11px; font-weight: 700; color: var(--text-muted);
+            letter-spacing: 1.4px; text-transform: uppercase; padding: 0 10px 8px;
+        }
+        .toc a {
+            display: block; padding: 6px 10px; border-radius: 6px;
+            border-left: 2px solid transparent; color: var(--text-secondary);
+        }
+        .toc a:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .toc a.active { color: var(--accent); background: var(--accent-dim); border-left-color: var(--accent); font-weight: 600; }
+
+        .doc-body { min-width: 0; }
+        .doc-section {
+            scroll-margin-top: 78px;
+            padding-bottom: 30px; margin-bottom: 34px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .doc-section:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .doc-section > h2 {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 23px; font-weight: 800; letter-spacing: 0.3px;
+        }
+        .doc-section > h2 .num {
+            flex-shrink: 0;
+            min-width: 30px; height: 30px; padding: 0 8px;
+            border-radius: 8px; background: var(--accent-dim); color: var(--accent);
+            font-size: 14px; font-weight: 800; font-family: var(--mono);
+            display: inline-flex; align-items: center; justify-content: center;
+        }
+        .doc-section > p { margin-top: 12px; color: var(--text-secondary); }
+        .doc-section h3 { margin-top: 26px; font-size: 16.5px; font-weight: 700; }
+        .doc-section h4 { margin-top: 18px; font-size: 14.5px; font-weight: 700; color: var(--text-secondary); }
+        .doc-section p + p { margin-top: 10px; }
+        .doc-section ul, .doc-section ol { margin-top: 12px; padding-left: 22px; color: var(--text-secondary); }
+        .doc-section li { margin-top: 6px; }
+        .doc-section li strong, .doc-section p strong { color: var(--text-primary); }
+        .doc-section a.link { color: var(--accent); border-bottom: 1px dashed var(--accent-dim); }
+        .doc-section a.link:hover { border-bottom-color: var(--accent); }
+
+        /* 行内代码与代码块 */
+        code {
+            font-family: var(--mono); font-size: 0.88em;
+            background: var(--bg-tertiary); border: 1px solid var(--border-color);
+            border-radius: 4px; padding: 1px 5px; color: var(--text-primary);
+        }
+        pre {
+            margin-top: 14px; padding: 14px 16px;
+            background: var(--code-bg); border: 1px solid var(--border-color);
+            border-radius: 10px; overflow-x: auto;
+            font-family: var(--mono); font-size: 12.8px; line-height: 1.85;
+            color: var(--text-primary);
+        }
+        pre code { background: none; border: none; padding: 0; font-size: inherit; }
+        pre .cmt { color: var(--text-muted); }
+        pre .cmd { color: var(--accent); }
+
+        /* 表格 */
+        .table-wrap { margin-top: 14px; overflow-x: auto; border: 1px solid var(--border-color); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+        th, td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border-color); }
+        th { background: var(--bg-tertiary); font-weight: 700; color: var(--text-primary); white-space: nowrap; }
+        td { color: var(--text-secondary); }
+        tbody tr:last-child td { border-bottom: none; }
+        td code { white-space: nowrap; }
+
+        /* 提示框 */
+        .note {
+            margin-top: 16px; padding: 13px 16px 13px 14px;
+            border: 1px solid var(--border-color); border-left: 3px solid var(--accent);
+            border-radius: 8px; background: var(--bg-secondary);
+            font-size: 13.5px; color: var(--text-secondary);
+        }
+        .note .nt { display: flex; align-items: center; gap: 7px; font-weight: 700; color: var(--text-primary); margin-bottom: 5px; font-size: 13px; }
+        .note .nt .icon { width: 15px; height: 15px; color: var(--accent); }
+        .note.warn { border-left-color: var(--yellow); }
+        .note.warn .nt .icon { color: var(--yellow); }
+        .note.tip { border-left-color: var(--green); }
+        .note.tip .nt .icon { color: var(--green); }
+
+        /* 快速开始三步 */
+        .steps { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+        .step {
+            background: var(--bg-secondary); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 18px 18px 20px;
+        }
+        .step .sicon {
+            width: 34px; height: 34px; border-radius: 9px;
+            background: var(--accent-dim); color: var(--accent);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .step .sicon .icon { width: 17px; height: 17px; }
+        .step h4 { margin-top: 12px; font-size: 14.5px; font-weight: 700; color: var(--text-primary); }
+        .step p { margin-top: 6px; font-size: 13px; color: var(--text-secondary); }
+
+        /* 快捷键 */
+        .kbd {
+            display: inline-block; min-width: 22px; text-align: center;
+            padding: 1px 7px; margin: 0 2px;
+            font-family: var(--mono); font-size: 12px;
+            background: var(--bg-tertiary); color: var(--text-primary);
+            border: 1px solid var(--border-color); border-bottom-width: 2px; border-radius: 5px;
+        }
+
+        /* FAQ */
+        details.faq {
+            margin-top: 12px; border: 1px solid var(--border-color);
+            border-radius: 10px; background: var(--bg-secondary); overflow: hidden;
+        }
+        details.faq > summary {
+            cursor: pointer; padding: 12px 16px; font-size: 14px; font-weight: 600;
+            color: var(--text-primary); list-style: none; display: flex; align-items: center; gap: 9px;
+        }
+        details.faq > summary::-webkit-details-marker { display: none; }
+        details.faq > summary::before {
+            content: "＋"; color: var(--accent); font-weight: 700; font-size: 13px; flex-shrink: 0;
+        }
+        details.faq[open] > summary::before { content: "－"; }
+        details.faq > summary:hover { background: var(--bg-hover); }
+        details.faq .faq-body { padding: 0 16px 14px 42px; font-size: 13.5px; color: var(--text-secondary); }
+        details.faq .faq-body p + p { margin-top: 8px; }
+        details.faq .faq-body ul { margin-top: 8px; padding-left: 20px; }
+
+        /* 页脚 */
+        footer { border-top: 1px solid var(--border-color); padding: 40px 0 46px; }
+        .footer-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .footer-inner .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+        .footer-inner .brand .logo-mark { width: 24px; height: 24px; display: block; }
+        .footer-inner .fnote { font-size: 12.5px; color: var(--text-muted); }
+        .footer-inner .spacer { flex: 1; }
+        .footer-links { display: flex; gap: 18px; font-size: 13px; color: var(--text-secondary); }
+        .footer-links a:hover { color: var(--accent); }
+        .footer-bottom { margin-top: 18px; font-size: 12px; color: var(--text-muted); }
+        .footer-bottom + .footer-bottom { margin-top: 6px; }
+        .footer-bottom a:hover { color: var(--accent); }
+        .footer-bottom .beian { display: inline-flex; align-items: center; gap: 6px; }
+        .footer-bottom .beian .icon { width: 16px; height: 16px; color: var(--blue); }
+
+        /* 响应式 */
+        @media (max-width: 900px) {
+            .nav-links { display: none; }
+            .docs { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 6px; }
+            /* 窄屏下目录变成吸顶的横向胶囊列表 */
+            .toc {
+                position: sticky; top: 60px; z-index: 60;
+                max-height: none; overflow: visible;
+                display: flex; gap: 8px; overflow-x: auto;
+                padding: 12px 0; margin-bottom: 22px;
+                background: var(--bg-primary);
+                border-bottom: 1px solid var(--border-color);
+                -webkit-overflow-scrolling: touch;
+            }
+            .toc-title { display: none; }
+            .toc a {
+                flex-shrink: 0; padding: 5px 12px; border-radius: 999px;
+                border: 1px solid var(--border-color); white-space: nowrap;
+            }
+            .toc a.active { border-color: var(--accent); }
+            .doc-section > h2 { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== SVG 图标与 Logo 精灵（与首页同款） ===== -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+        <defs>
+            <linearGradient id="md-logo-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop class="md-logo-stop-top" offset="0%" stop-color="#d4902a" />
+                <stop class="md-logo-stop-bottom" offset="100%" stop-color="#f5b342" />
+            </linearGradient>
+        </defs>
+        <symbol id="md-logo" viewBox="0 0 100 100">
+            <ellipse cx="44" cy="26" rx="24" ry="9" fill="url(#md-logo-gradient)" />
+            <path d="M20 26 L20 70 Q20 78 44 78 Q68 78 68 70 L68 26" fill="url(#md-logo-gradient)" />
+            <path d="M20 42 Q44 50 68 42" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            <path d="M20 60 Q44 68 68 60" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            <circle cx="72" cy="72" r="18" fill="#ffffff" stroke="var(--accent)" stroke-width="3" />
+            <text x="72" y="77" text-anchor="middle" font-family="'Segoe UI', sans-serif" font-weight="700" font-size="13" fill="var(--accent)">MR</text>
+            <circle cx="86" cy="56" r="5" fill="var(--accent)" />
+            <circle cx="56" cy="86" r="5" fill="var(--accent)" />
+            <path d="M68 56 L78 60" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+            <path d="M64 78 L58 86" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" fill="none" />
+        </symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+        <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.55v-2.15c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.35.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.16 1.18a11 11 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.26 5.66.41.36.78 1.05.78 2.13v3.16c0 .3.2.67.8.55A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+        <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+        <symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+        <symbol id="i-key" viewBox="0 0 24 24"><path d="m21 2-2 2"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><path d="m19 4-3.5 3.5"/><path d="M13.39 9.61a5.5 5.5 0 1 1-7.78 7.78 5.5 5.5 0 0 1 7.78-7.78Z"/></symbol>
+        <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></symbol>
+        <symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+        <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+        <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+        <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+        <symbol id="i-police" viewBox="0 0 24 24"><path d="M12 2.4 20.4 5.2v6.5c0 5.1-3.6 8.9-8.4 10.2-4.8-1.3-8.4-5.1-8.4-10.2V5.2Z"/><path d="M12 6.6 13 9.22l2.8.14-2.18 1.77.73 2.71L12 12.3l-2.35 1.54.73-2.71L8.2 9.36l2.8-.14Z" fill="currentColor" stroke="none"/></symbol>
+    </svg>
+
+    <!-- ===== 顶部导航 ===== -->
+    <nav class="nav">
+        <div class="container nav-inner">
+            <a class="brand" href="../">
+                <svg class="logo-mark" aria-label="麦地缓存 Logo"><use href="#md-logo" /></svg>
+                麦地缓存
+            </a>
+            <div class="nav-links">
+                <a href="../">首页</a>
+                <a href="#quickstart">快速开始</a>
+                <a href="#connect">连接 Redis</a>
+                <a href="#keys">管理 Key</a>
+                <a href="#faq">常见问题</a>
+            </div>
+            <div class="spacer"></div>
+            <div class="nav-actions">
+                <a class="icon-btn current" href="./" title="使用文档" aria-label="使用文档" aria-current="page">
+                    <svg class="icon" aria-hidden="true"><use href="#i-doc" /></svg>
+                </a>
+                <div class="theme-dropdown">
+                    <button title="切换主题" id="btnTheme" class="icon-btn" aria-haspopup="menu" aria-expanded="false" aria-label="切换主题">
+                        <svg class="icon" aria-hidden="true"><use href="#i-sun" /></svg>
+                    </button>
+                    <div class="theme-menu" id="themeMenu" role="menu" aria-label="选择主题">
+                        <div class="theme-menu-title">选择主题</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="spring"><span class="theme-swatch" style="background:#4caf50"></span>春分</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="summer"><span class="theme-swatch" style="background:#22a6f2"></span>立夏</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="golden"><span class="theme-swatch" style="background:#d99a1b"></span>初秋</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="autumn"><span class="theme-swatch" style="background:#f5b342"></span>深秋</div>
+                        <div class="theme-option" role="menuitemradio" aria-checked="false" data-theme-value="winter"><span class="theme-swatch" style="background:#f5f6fa"></span>冬至</div>
+                    </div>
+                </div>
+                <a class="github-btn" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener" title="GitHub 仓库" aria-label="GitHub 仓库">
+                    <svg class="icon" aria-hidden="true"><use href="#i-github" /></svg>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ===== 正文 ===== -->
+    <div class="container docs">
+
+        <!-- 左侧目录 -->
+        <aside class="toc" id="toc" aria-label="文档目录">
+            <div class="toc-title">目录</div>
+            <a href="#quickstart">快速开始</a>
+            <a href="#install">安装</a>
+            <a href="#connect">连接 Redis</a>
+            <a href="#keys">浏览与查找 Key</a>
+            <a href="#edit">查看与编辑 Key</a>
+            <a href="#newkey">新增与删除 Key</a>
+            <a href="#terminal">内置终端</a>
+            <a href="#metrics">服务器状态</a>
+            <a href="#readonly">只读模式</a>
+            <a href="#cluster">集群模式</a>
+            <a href="#theme">主题与界面</a>
+            <a href="#shortcuts">快捷键</a>
+            <a href="#status">功能现状</a>
+            <a href="#faq">常见问题</a>
+            <a href="#feedback">反馈与链接</a>
+        </aside>
+
+        <!-- 文档正文 -->
+        <main class="doc-body">
+
+            <!-- 页面标题改为视觉隐藏：顶部大标题块已按需求去掉，但保留 h1，
+                 屏幕阅读器与搜索引擎仍能拿到页面主题，标题层级也不会从 h2 起步 -->
+            <h1 class="sr-only">麦地缓存使用文档</h1>
+
+            <!-- ============ 1. 快速开始 ============ -->
+            <section class="doc-section" id="quickstart">
+                <h2><span class="num">01</span>快速开始</h2>
+                <p>
+                    麦地缓存是一款开源的 Redis 图形化桌面客户端。整个流程只有三步：装好应用、新建连接、然后就能看到你的数据。
+                </p>
+                <div class="steps">
+                    <div class="step">
+                        <div class="sicon"><svg class="icon" aria-hidden="true"><use href="#i-download" /></svg></div>
+                        <h4>1. 下载并安装</h4>
+                        <p>在<a class="link" href="../#download">首页下载区</a>选择你的系统安装包，装好打开即可，无需额外配置。</p>
+                    </div>
+                    <div class="step">
+                        <div class="sicon"><svg class="icon" aria-hidden="true"><use href="#i-plug" /></svg></div>
+                        <h4>2. 新建连接</h4>
+                        <p>点右上角「新建连接」，填入主机与端口，点「测试连接」确认通了再保存。</p>
+                    </div>
+                    <div class="step">
+                        <div class="sicon"><svg class="icon" aria-hidden="true"><use href="#i-key" /></svg></div>
+                        <h4>3. 开始管理</h4>
+                        <p>左侧选连接，Key 列表自动加载；点任意 Key 查看内容、改值或调整 TTL。</p>
+                    </div>
+                </div>
+                <div class="note tip">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-shield" /></svg>连生产环境前先看这里</div>
+                    如果只是查看线上数据，创建连接时请勾选<strong>「只读连接」</strong>。这样所有写操作入口都会被禁用，后端也会拒绝写命令，避免手滑。
+                </div>
+            </section>
+
+            <!-- ============ 2. 安装 ============ -->
+            <section class="doc-section" id="install">
+                <h2><span class="num">02</span>安装</h2>
+                <p>
+                    安装包由 GitHub Actions 在打 tag 时自动构建，文件名形如 <code>myredis-&lt;版本&gt;-&lt;平台&gt;</code>。
+                    在<a class="link" href="../#download">首页</a>点对应平台按钮即可直接下载，也可以到
+                    <a class="link" href="https://github.com/myredisapp/myredis/releases" target="_blank" rel="noopener">GitHub Releases</a> 查看全部版本。
+                </p>
+
+                <h3>macOS</h3>
+                <ul>
+                    <li>下载 <code>.dmg</code>（Universal，Apple Silicon 与 Intel 通用）并打开。</li>
+                    <li>把「麦地缓存」拖进「应用程序」文件夹。</li>
+                    <li>首次打开若提示「无法验证开发者」，到<strong>系统设置 → 隐私与安全性</strong>里点击「仍要打开」即可。</li>
+                </ul>
+
+                <h3>Windows</h3>
+                <ul>
+                    <li><code>.exe</code>：NSIS 安装向导，双击后一路下一步，会自动创建开始菜单与桌面快捷方式。</li>
+                    <li><code>.msi</code>：适合需要批量分发或走组策略的场景。</li>
+                </ul>
+
+                <h3>Linux</h3>
+                <pre><code><span class="cmt"># Debian / Ubuntu：用 apt 安装可自动处理依赖</span>
+<span class="cmd">sudo apt install</span> ./myredis-*-linux-x64.deb
+
+<span class="cmt"># 或者免安装的 AppImage，赋予执行权限后直接运行</span>
+<span class="cmd">chmod +x</span> myredis-*-linux-x64.AppImage
+<span class="cmd">./</span>myredis-*-linux-x64.AppImage</code></pre>
+
+                <h3>从源码构建</h3>
+                <p>需要先安装 Rust 工具链与 Tauri CLI（<code>cargo install tauri-cli</code>）。</p>
+                <pre><code><span class="cmt"># 克隆仓库</span>
+<span class="cmd">git clone</span> https://github.com/myredisapp/myredis.git
+<span class="cmd">cd</span> myredis
+
+<span class="cmt"># 本地开发调试</span>
+<span class="cmd">cargo tauri</span> dev
+
+<span class="cmt"># 构建当前平台的安装包</span>
+<span class="cmd">cargo tauri</span> build</code></pre>
+            </section>
+
+            <!-- ============ 3. 连接 Redis ============ -->
+            <section class="doc-section" id="connect">
+                <h2><span class="num">03</span>连接 Redis</h2>
+                <p>
+                    点击左上角（窄窗口下在菜单里）的<strong>「新建连接」</strong>，填写下面几个字段。
+                    只有「主机」和「端口」是必填的，其余按你的服务器配置来。
+                </p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th>字段</th><th>说明</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr><td><strong>连接名称</strong></td><td>只用于显示，随便起个能认出来的名字，例如「本地开发」「生产环境」。</td></tr>
+                            <tr><td><strong>主机</strong></td><td>Redis 服务器地址，例如 <code>127.0.0.1</code> 或 <code>redis.example.com</code>。</td></tr>
+                            <tr><td><strong>端口</strong></td><td>默认 <code>6379</code>。</td></tr>
+                            <tr><td>用户名（可选）</td><td>Redis 6.0 及以上支持 ACL 用户名；留空则按传统单密码方式认证。</td></tr>
+                            <tr><td>密码（可选）</td><td>服务器设置了 <code>requirepass</code> 时填写；没有密码就留空。</td></tr>
+                            <tr><td>只读连接</td><td>勾选后禁止一切写操作，连接生产环境时建议打开。详见<a class="link" href="#readonly">只读模式</a>。</td></tr>
+                            <tr><td>集群模式</td><td>连接 Redis Cluster 时勾选，填任意一个节点地址即可。详见<a class="link" href="#cluster">集群模式</a>。</td></tr>
+                            <tr><td>Key 分隔符</td><td>默认 <code>:</code>，决定 Key 列表如何折叠成文件夹。详见<a class="link" href="#keys">浏览与查找 Key</a>。</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>先测试，再保存</h3>
+                <p>
+                    填完后点<strong>「测试连接」</strong>，按钮会短暂显示「测试中…」，随后给出结果：
+                </p>
+                <ul>
+                    <li><code>✓ 连接成功（PONG）</code>——凭据与网络都没问题，可以点「保存连接」了。</li>
+                    <li><code>✗ 连接失败：…</code>——按提示检查地址、端口、密码与防火墙。排查看<a class="link" href="#faq">常见问题</a>。</li>
+                </ul>
+                <p>
+                    保存后连接会出现在左侧列表里，点击即连接。连接成功的连接会显示绿点与「在线」标记，并且可以<strong>同时保持多条连接在线</strong>，随时点切换。
+                </p>
+
+                <h3>连接列表上的操作</h3>
+                <p>把鼠标移到连接条目上，右上角会出现刷新图标与 <code>…</code> 菜单：</p>
+                <ul>
+                    <li><strong>刷新</strong>：重新连接并从服务器重新拉取 Key 列表。</li>
+                    <li><code>…</code> <strong>编辑 / 复制 / 关闭连接 / 删除</strong>：「复制」会带着现有配置新建一条，名字自动加「副本」，很适合照着改一个测试环境连接。</li>
+                </ul>
+
+                <h3>连接配置存在哪</h3>
+                <p>所有连接配置保存在应用配置目录下的 <code>connections.json</code>：</p>
+                <ul>
+                    <li>macOS：<code>~/Library/Application Support/com.maidi.cache/connections.json</code></li>
+                    <li>Windows：<code>%APPDATA%\com.maidi.cache\connections.json</code></li>
+                    <li>Linux：<code>~/.config/com.maidi.cache/connections.json</code></li>
+                </ul>
+                <div class="note warn">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>请注意</div>
+                    密码与用户名以<strong>明文</strong>保存在这个文件里。不要把该文件提交到仓库或分享给别人；在共用电脑上使用时请留意。
+                </div>
+            </section>
+
+            <!-- ============ 4. 浏览与查找 Key ============ -->
+            <section class="doc-section" id="keys">
+                <h2><span class="num">04</span>浏览与查找 Key</h2>
+                <p>
+                    连接成功后，应用会自动加载当前数据库的 Key 列表，显示在中间一栏。每一行都带着类型徽标（<code>STR</code> / <code>HASH</code> / <code>LIST</code> / <code>SET</code>）和剩余 TTL。
+                </p>
+
+                <h3>切换数据库</h3>
+                <p>
+                    连接后在工具栏左侧的 <code>Db0</code> 下拉框里切换逻辑库（默认提供 <code>Db0</code>–<code>Db15</code>）。
+                    切换后 Key 列表与「Key 总数」会一起刷新。集群模式下没有这个概念，详见<a class="link" href="#cluster">集群模式</a>。
+                </p>
+
+                <h3>搜索</h3>
+                <p>
+                    工具栏搜索框按 Key 名过滤，<strong>不区分大小写、按包含匹配</strong>。比如输入 <code>user</code>，
+                    <code>user:1001</code>、<code>my_user</code> 都会被筛出来。
+                </p>
+                <div class="note">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>搜索框里的 * 不是通配符</div>
+                    搜索是纯文本包含匹配，<code>*</code> 会被当成普通字符。如果你想按模式找 Key，可以用内置终端的 <code>KEYS</code> 命令（见<a class="link" href="#terminal">内置终端</a>）。
+                </div>
+
+                <h3>文件夹折叠</h3>
+                <p>
+                    Key 列表会按连接配置里的<strong>「Key 分隔符」</strong>（默认 <code>:</code>）折叠成树。开启文件夹后，
+                    <code>user:1001:name</code> 会落到 <code>user:</code> 这一层里，层级多的时候会清爽很多。
+                </p>
+                <ul>
+                    <li>想按别的分隔符分组（例如 <code>/</code> 或 <code>.</code>），在连接配置里改「Key 分隔符」后重新连接。</li>
+                    <li>搜索时会临时展开成平铺列表，方便你直接看到命中的 Key。</li>
+                    <li>每个连接展开的文件夹状态会被记住，切来切去不会丢。</li>
+                </ul>
+            </section>
+
+            <!-- ============ 5. 查看与编辑 Key ============ -->
+            <section class="doc-section" id="edit">
+                <h2><span class="num">05</span>查看与编辑 Key</h2>
+                <p>在 Key 列表里点任意一行，右侧就是详情区：顶部是 Key 名、类型徽标与 TTL 输入框，下面是值，底部是操作按钮。</p>
+
+                <h3>String：查看与修改</h3>
+                <ol>
+                    <li>点击 Key，值会加载到编辑框里。</li>
+                    <li>直接改动内容；如果是 JSON，可以先点<strong>「格式化」</strong>再改，读起来清楚得多。</li>
+                    <li>点<strong>「保存」</strong>写回服务器。</li>
+                    <li>只想拿走内容？点<strong>「复制」</strong>即可复制到剪贴板。</li>
+                </ol>
+
+                <h3>修改 TTL（过期时间）</h3>
+                <p>详情区顶部的 TTL 输入框就是过期时间，单位是秒：</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>填写</th><th>含义</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>-1</code></td><td>永不过期（页面上显示为「永不过期」）</td></tr>
+                            <tr><td>正整数</td><td>从现在起多少秒后过期，例如 <code>3600</code> 表示一小时</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>
+                    改完 TTL 需要点「保存」才会生效；也就是说<strong>让一个 Key 永不过期的方法</strong>，是把 TTL 改成 <code>-1</code> 再保存。
+                    填了别的值会提示 <code>TTL 必须为 -1 或正整数</code>。
+                </p>
+                <div class="note tip">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-check" /></svg>保存前确认一下</div>
+                    保存会按当前编辑器里的内容整体写回这个 Key。改 TTL 时如果顺便改动了值，两者会一起生效。
+                </div>
+
+                <h3>其他类型</h3>
+                <p>
+                    详情区会按 Key 的实际类型选择展示方式：Hash、List、Set 会以字段/元素列表的形式呈现，ZSet、Stream 等类型目前提示「暂不支持此类型」。
+                    这些类型的字段内容还在开发中，字段级的新增、修改、删除请暂用别的工具（或内置终端做只读查询）。具体进度见<a class="link" href="#status">功能现状</a>。
+                </p>
+            </section>
+
+            <!-- ============ 6. 新增与删除 Key ============ -->
+            <section class="doc-section" id="newkey">
+                <h2><span class="num">06</span>新增与删除 Key</h2>
+
+                <h3>新增 Key</h3>
+                <p>点工具栏的<strong>「新增 Key」</strong>，填写三个字段：</p>
+                <ul>
+                    <li><strong>Key 名称</strong>：若已存在同名 Key，会提示 <code>Key 已存在</code> 并拒绝创建。</li>
+                    <li><strong>值</strong>：多行文本框，支持换行。</li>
+                    <li><strong>TTL（秒）</strong>：默认 <code>-1</code> 表示永不过期。</li>
+                </ul>
+                <p>点击「创建」后，新 Key 会立刻出现在列表里（当前仅支持创建 String 类型）。</p>
+
+                <h3>删除 Key</h3>
+                <p>
+                    选中 Key 后点详情区的<strong>「删除」</strong>，会弹出确认框。确认后立即从服务器删除，<strong>不可恢复</strong>，
+                    所以删之前建议先「复制」一份值留底。
+                </p>
+                <div class="note warn">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>只读连接下无法删除</div>
+                    只读连接下「新增 Key」与「保存」按钮会被禁用，后端也会直接拒绝写命令。
+                </div>
+            </section>
+
+            <!-- ============ 7. 内置终端 ============ -->
+            <section class="doc-section" id="terminal">
+                <h2><span class="num">07</span>内置终端</h2>
+                <p>
+                    窗口底部是内置终端面板，在这里输入命令按 <span class="kbd">Enter</span> 执行。点面板标题栏或右侧箭头可以折叠，
+                    拖动面板上沿还能调整高度。
+                </p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>命令</th><th>当前行为</th></tr></thead>
+                        <tbody>
+                            <tr><td><code>PING</code></td><td>返回 <code>PONG</code></td></tr>
+                            <tr><td><code>DBSIZE</code></td><td>返回当前已加载的 Key 数量</td></tr>
+                            <tr><td><code>GET key</code></td><td>从已加载的列表里读取该 Key 的 String 值</td></tr>
+                            <tr><td><code>KEYS pattern</code></td><td>在已加载的列表里按通配符匹配，例如 <code>KEYS user:*</code></td></tr>
+                            <tr><td><code>INFO</code></td><td>返回一段示例信息（非服务器真实 INFO）</td></tr>
+                            <tr><td><code>SET key value</code></td><td>打印 <code>OK</code>，但不会真正写入服务器</td></tr>
+                            <tr><td><code>FLUSHDB</code></td><td>打印 <code>OK (模拟清空)</code>，但不会真正清空</td></tr>
+                            <tr><td><code>HELP</code></td><td>列出终端支持的命令</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="note warn">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>写操作请走界面，不要用终端</div>
+                    终端目前是<strong>本地模拟执行</strong>：它不会把命令转发到服务器，<code>SET</code>、<code>FLUSHDB</code> 等写命令只会打印结果，
+                    服务器上的数据不会有任何变化。要写入数据请用详情区的「保存」或工具栏的「新增 Key」。
+                </div>
+            </section>
+
+            <!-- ============ 8. 服务器状态 ============ -->
+            <section class="doc-section" id="metrics">
+                <h2><span class="num">08</span>服务器状态</h2>
+                <p>连接列表下方的四个小格子是当前连接的实时指标，大约每 5 秒自动刷新一次：</p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>指标</th><th>含义</th></tr></thead>
+                        <tbody>
+                            <tr><td><strong>磁盘</strong></td><td>Redis 持久化目录所在磁盘的使用率。鼠标悬停可看到具体目录与百分比。</td></tr>
+                            <tr><td><strong>内存</strong></td><td>来自 <code>INFO used_memory</code>，已自动换算为 KB / MB / GB。</td></tr>
+                            <tr><td><strong>连接数</strong></td><td>来自 <code>INFO connected_clients</code>，当前客户端连接数。</td></tr>
+                            <tr><td><strong>Key 总数</strong></td><td>当前数据库的 <code>DBSIZE</code>，会跟着工具栏的 Db 选择器一起变化。</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>
+                    窗口顶部的状态栏则显示 <code>已连接 · 主机:端口</code>；如果是只读连接，后面会多一个「(只读)」标记。
+                </p>
+            </section>
+
+            <!-- ============ 9. 只读模式 ============ -->
+            <section class="doc-section" id="readonly">
+                <h2><span class="num">09</span>只读模式</h2>
+                <p>
+                    创建或编辑连接时勾选<strong>「只读连接」</strong>，这条连接就进入只读模式 —— 查看类操作一切照旧，
+                    所有会改动数据的入口则被关闭：
+                </p>
+                <ul>
+                    <li>「新增 Key」按钮：禁用</li>
+                    <li>「保存」按钮与 TTL 输入框：禁用</li>
+                    <li>窗口状态栏显示「(只读)」</li>
+                </ul>
+                <p>
+                    这层保护不只做在界面上：即使绕过按钮，后端也会在写入前拦截，返回
+                    <code>当前为只读连接，禁止写操作</code>。查线上数据时强烈建议打开。
+                </p>
+                <p>需要临时写入时，取消勾选并重新连接即可 —— 这样也有意让「改生产数据」变成需要刻意确认的动作。</p>
+            </section>
+
+            <!-- ============ 10. 集群模式 ============ -->
+            <section class="doc-section" id="cluster">
+                <h2><span class="num">10</span>集群模式</h2>
+                <p>
+                    连接 Redis Cluster 时，在连接配置里勾选<strong>「集群模式」</strong>，主机与端口填<strong>任意一个节点</strong>的地址即可，
+                    客户端会自己发现整个集群的拓扑。
+                </p>
+                <p>集群模式下有几处与单机不同，先了解一下能少踩坑：</p>
+                <ul>
+                    <li><strong>不能切换数据库</strong>：集群只有 db0，工具栏的 Db 选择器会被隐藏，切换会返回「集群模式不支持切换数据库」。</li>
+                    <li><strong>Key 列表由各主节点汇总</strong>：客户端会向所有主节点分别扫描，去重排序后展示，所以看到的是全集群的 Key。</li>
+                    <li><strong>内存与连接数为主节点汇总值</strong>，Key 总数同样是各主节点之和。</li>
+                    <li><strong>磁盘指标可能显示 <code>-</code></strong>：集群模式下 <code>CONFIG GET dir</code> 通常取不到，属正常现象。</li>
+                </ul>
+                <div class="note">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>遇到 MOVED 错误</div>
+                    如果用一个普通（非集群）连接去连集群节点，操作落到别的槽位上的 Key 时会报 <code>MOVED</code>。
+                    按提示改用「集群模式」重新连接即可。
+                </div>
+            </section>
+
+            <!-- ============ 11. 主题与界面 ============ -->
+            <section class="doc-section" id="theme">
+                <h2><span class="num">11</span>主题与界面</h2>
+                <p>
+                    应用内置五款「四季」主题，点窗口右上角的调色盘图标，在「选择主题」里挑一个：
+                </p>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>主题</th><th>风格</th></tr></thead>
+                        <tbody>
+                            <tr><td>春分</td><td>清新芽绿，明亮</td></tr>
+                            <tr><td>立夏</td><td>晴空湛蓝，明快清爽</td></tr>
+                            <tr><td>初秋</td><td>暖金麦色，沉稳温润</td></tr>
+                            <tr><td>深秋</td><td>暗金夜色，默认主题</td></tr>
+                            <tr><td>冬至</td><td>晴日雪白，简洁明亮</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>
+                    主题选择会保存在本地，下次打开还是这一款；本页与<a class="link" href="../">首页</a>也共用同一份记录，你在哪里换的装，切页面时都会跟着。
+                </p>
+
+                <h3>调整布局</h3>
+                <ul>
+                    <li><strong>折叠连接列表</strong>：点标题栏的菜单图标，窄屏或专心看数据时很实用。</li>
+                    <li><strong>拖动分隔条</strong>：连接列表宽度、Key 列表宽度、终端高度都可以拖。</li>
+                    <li>这些布局偏好会被记住，不用每次重新摆。</li>
+                </ul>
+            </section>
+
+            <!-- ============ 12. 快捷键 ============ -->
+            <section class="doc-section" id="shortcuts">
+                <h2><span class="num">12</span>快捷键</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>按键</th><th>作用</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="kbd">Enter</span></td><td>在终端输入框里执行命令</td></tr>
+                            <tr><td><span class="kbd">Enter</span></td><td>连接配置弹窗打开时，保存连接</td></tr>
+                            <tr><td><span class="kbd">Esc</span></td><td>关闭当前弹窗</td></tr>
+                            <tr><td><span class="kbd">Enter</span></td><td>「新增 Key」里在名称或 TTL 输入框中直接创建</td></tr>
+                            <tr><td><span class="kbd">Ctrl</span> / <span class="kbd">⌘</span> + <span class="kbd">Enter</span></td><td>「新增 Key」里在值文本框中提交（值可以带换行）</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p>点击弹窗外的灰色区域同样可以关闭弹窗。</p>
+            </section>
+
+            <!-- ============ 13. 功能现状 ============ -->
+            <section class="doc-section" id="status">
+                <h2><span class="num">13</span>功能现状</h2>
+                <p>为了避免你在界面上找不到某个按钮，这里如实列一下当前版本的能力边界。</p>
+                <h3>已经可用</h3>
+                <ul>
+                    <li>单机 / 集群连接，支持 ACL 用户名、密码、只读保护，连接配置本地持久化</li>
+                    <li>Key 列表浏览、关键字搜索、按自定义分隔符折叠文件夹</li>
+                    <li>String 类型值的查看、编辑、保存、复制、JSON 格式化</li>
+                    <li>TTL 查看与修改（<code>-1</code> 表示永不过期）</li>
+                    <li>新增 String Key、删除 Key（带确认）</li>
+                    <li>服务器指标：内存、连接数、Key 总数、磁盘占用</li>
+                    <li>五款四季主题、面板拖拽与布局记忆</li>
+                </ul>
+                <h3>仍在开发中</h3>
+                <ul>
+                    <li><strong>Hash / List / Set / ZSet 的字段级内容</strong>：目前这些类型的字段内容尚未从服务器加载，详情区会显示为「空 Hash / 空 List / 空 Set」，字段级的新增、修改、删除还不能在这里完成。</li>
+                    <li><strong>内置终端的真实命令转发</strong>：当前为本地模拟执行，只覆盖一小部分常用命令，写命令不会落到服务器。</li>
+                    <li><strong>导入 / 导出</strong>：工具栏上的两个按钮目前只会给出「功能（模拟）」提示，尚未实现，请不要依赖它备份数据。</li>
+                    <li><strong>连接配置的导入导出</strong>：暂未提供，跨机器迁移需要手动复制 <code>connections.json</code>。</li>
+                </ul>
+            </section>
+
+            <!-- ============ 14. 常见问题 ============ -->
+            <section class="doc-section" id="faq">
+                <h2><span class="num">14</span>常见问题</h2>
+
+                <details class="faq">
+                    <summary>提示连接失败 / 连接超时，怎么排查？</summary>
+                    <div class="faq-body">
+                        <p>按这个顺序检查，基本能定位到原因：</p>
+                        <ul>
+                            <li>主机和端口是否写对；本机测试用 <code>127.0.0.1:6379</code> 确认打通链路。</li>
+                            <li>服务器是否设置了密码（<code>requirepass</code>）；有密码时密码字段不能空。</li>
+                            <li>用了 ACL 的话，用户名也要填；只填密码会认证失败。</li>
+                            <li>Redis 的 <code>bind</code> 是否只监听了 <code>127.0.0.1</code>，以及 <code>protected-mode</code> 是否开启。</li>
+                            <li>服务器防火墙 / 安全组是否放行了该端口。</li>
+                        </ul>
+                        <p>先点「测试连接」拿到具体报错，通常比猜更快。</p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>操作时报 MOVED / 提示槽位相关错误？</summary>
+                    <div class="faq-body">
+                        <p>
+                            你连的是 Redis Cluster，但连接没有勾选「集群模式」。编辑该连接，勾上「集群模式」后重新连接即可。
+                            参考<a class="link" href="#cluster">集群模式</a>。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>点「保存」没反应，或者提示「只读连接，禁止写操作」？</summary>
+                    <div class="faq-body">
+                        <p>
+                            这条连接是只读连接。只读模式下「新增 Key」「保存」以及 TTL 输入框都会被禁用，后端也不会接受写命令。
+                            确实需要写入时，编辑连接取消勾选「只读连接」并重新连接。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>为什么 Hash / List / Set 的详情是空的？</summary>
+                    <div class="faq-body">
+                        <p>
+                            当前版本只加载了 String 类型的内容，其余类型暂时只显示类型与 TTL，字段内容会显示成空。
+                            这是已知的功能缺口，正在进行中，详见<a class="link" href="#status">功能现状</a>。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>点了「导入」「导出」只有一条提示？</summary>
+                    <div class="faq-body">
+                        <p>这两个功能还没实现，目前点击只会给出「功能（模拟）」的提示。请暂时不要用它做数据备份。</p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>搜索框里输入 <code>*</code> 为什么没有通配效果？</summary>
+                    <div class="faq-body">
+                        <p>
+                            列表搜索框是纯文本包含匹配，不解析通配符。需要按模式找 Key，可以在内置终端里用
+                            <code>KEYS user:*</code> 这样的命令匹配。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>Key 列表里的 TTL 显示「永不过期」，但服务器上有 TTL？</summary>
+                    <div class="faq-body">
+                        <p>
+                            Key 的 TTL 是在列表加载时读取的，服务器上的过期时间如果在之后被改动，列表不会自动同步。
+                            点该连接上的刷新图标重新连接，或重新选中这个 Key，即可看到最新的 TTL 与内容。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>连接配置和密码保存在哪里？安全吗？</summary>
+                    <div class="faq-body">
+                        <p>
+                            保存在应用配置目录的 <code>connections.json</code> 里（路径见<a class="link" href="#connect">连接 Redis</a>），
+                            用户名与密码是<strong>明文</strong>存储的。请不要把该文件提交到代码仓库或分享给他人；共用电脑上使用时要留意这一点。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>可以把连接配置迁移到另一台机器吗？</summary>
+                    <div class="faq-body">
+                        <p>目前没有导入导出功能，手动复制上面那个 <code>connections.json</code> 到新机器的同路径即可。</p>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ============ 15. 反馈与链接 ============ -->
+            <section class="doc-section" id="feedback">
+                <h2><span class="num">15</span>反馈与链接</h2>
+                <p>文档和功能都会随着版本继续补齐。用起来有问题、或者想要某个能力，欢迎直接提。</p>
+                <ul>
+                    <li><a class="link" href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">项目仓库</a>：源码、开发说明与贡献指南</li>
+                    <li><a class="link" href="https://github.com/myredisapp/myredis/releases" target="_blank" rel="noopener">Releases</a>：各平台安装包与版本说明</li>
+                    <li><a class="link" href="https://github.com/myredisapp/myredis/issues" target="_blank" rel="noopener">反馈问题</a>：Bug、需求都可以提在这里</li>
+                </ul>
+                <div class="note tip">
+                    <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-help" /></svg>提 issue 的小建议</div>
+                    带上系统版本、应用版本、Redis 版本（单机还是集群）以及完整报错信息，定位会快很多。
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ===== 页脚 ===== -->
+    <footer>
+        <div class="container">
+            <div class="footer-inner">
+                <span class="brand">
+                    <svg class="logo-mark" aria-hidden="true"><use href="#md-logo" /></svg>
+                    麦地缓存
+                </span>
+                <span class="fnote">Redis 图形化桌面管理客户端 · 基于 Tauri 2 与 Rust 构建</span>
+                <span class="spacer"></span>
+                <div class="footer-links">
+                    <a href="../">首页</a>
+                    <a href="https://github.com/myredisapp/myredis" target="_blank" rel="noopener">GitHub</a>
+                    <a href="https://github.com/myredisapp/myredis/releases" target="_blank" rel="noopener">Releases</a>
+                    <a href="https://github.com/myredisapp/myredis/issues" target="_blank" rel="noopener">反馈问题</a>
+                </div>
+            </div>
+            <div class="footer-bottom">© <span id="year">2026</span> myredisapp · 春分 / 立夏 / 初秋 / 深秋 / 冬至，愿有一款主题合你时节。</div>
+            <div class="footer-bottom"><span class="beian"><svg class="icon" aria-hidden="true"><use href="#i-police" /></svg><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">湘ICP备17012851号-8</a></span></div>
+        </div>
+    </footer>
+
+    <script>
+        (function () {
+            'use strict';
+
+            /* ==================== 主题切换（与首页共用 key，主题跨页同步） ==================== */
+            var THEME_KEY = 'myredis_home_theme';
+            var KNOWN = ['spring', 'summer', 'golden', 'autumn', 'winter'];
+            var root = document.documentElement;
+            var themeBtn = document.getElementById('btnTheme');
+            var themeMenu = document.getElementById('themeMenu');
+
+            function applyTheme(name) {
+                root.setAttribute('data-theme', name);
+                document.querySelectorAll('.theme-option').forEach(function (opt) {
+                    var on = opt.getAttribute('data-theme-value') === name;
+                    opt.classList.toggle('active', on);
+                    opt.setAttribute('aria-checked', on ? 'true' : 'false');
+                });
+            }
+
+            var initial = (location.hash || '').replace('#', '');
+            if (KNOWN.indexOf(initial) === -1) initial = null;
+            try {
+                if (!initial) initial = localStorage.getItem(THEME_KEY);
+            } catch (e) { /* 隐私模式下忽略 */ }
+            applyTheme(KNOWN.indexOf(initial) !== -1 ? initial : 'autumn');
+
+            themeBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = themeMenu.classList.toggle('open');
+                themeBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            document.addEventListener('click', function () {
+                themeMenu.classList.remove('open');
+                themeBtn.setAttribute('aria-expanded', 'false');
+            });
+            themeMenu.addEventListener('click', function (e) {
+                var opt = e.target.closest('.theme-option');
+                if (!opt) return;
+                var name = opt.getAttribute('data-theme-value') || 'autumn';
+                applyTheme(name);
+                try { localStorage.setItem(THEME_KEY, name); } catch (err) { /* 忽略 */ }
+                themeMenu.classList.remove('open');
+            });
+
+            /* ==================== 目录高亮当前章节 ==================== */
+            var tocEl = document.querySelector('.toc');
+            var tocLinks = Array.prototype.slice.call(tocEl ? tocEl.querySelectorAll('a') : []);
+            var sections = tocLinks
+                .map(function (a) { return document.getElementById(a.getAttribute('href').slice(1)); })
+                .filter(Boolean);
+
+            function highlight(id) {
+                tocLinks.forEach(function (a) {
+                    var on = a.getAttribute('href') === '#' + id;
+                    a.classList.toggle('active', on);
+                    if (!on) return;
+                    // 窄屏下目录是横向滚动的胶囊列表，把当前项带进可视区。
+                    // 这里直接改 scrollLeft，而不是 scrollIntoView —— 后者会把
+                    // 整个页面一起拖动，导致一边读一边被拽走。
+                    var t = tocEl.getBoundingClientRect();
+                    var r = a.getBoundingClientRect();
+                    if (r.left < t.left) tocEl.scrollLeft -= (t.left - r.left);
+                    else if (r.right > t.right) tocEl.scrollLeft += (r.right - t.right);
+                });
+            }
+
+            var lastActiveId = null;
+
+            function updateActive() {
+                if (!sections.length) return;
+                // 取「顶部已越过吸顶导航」的最后一节；页面滚到底时直接高亮最后一节
+                var line = 80;
+                var current = sections[0];
+                for (var i = 0; i < sections.length; i++) {
+                    if (sections[i].getBoundingClientRect().top <= line) current = sections[i];
+                    else break;
+                }
+                if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+                    current = sections[sections.length - 1];
+                }
+                // 只在章节真的变了才动 DOM，滚动过程不会反复重排
+                if (current.id === lastActiveId) return;
+                lastActiveId = current.id;
+                highlight(current.id);
+            }
+
+            // 同步计算，不经过 requestAnimationFrame / IntersectionObserver：
+            // 这两者在部分 WebView 与后台标签页里会被节流甚至完全不回调，
+            // 而滚动事件在所有环境下都可靠，章节数量小、开销可以忽略。
+            window.addEventListener('scroll', updateActive, { passive: true });
+            window.addEventListener('resize', updateActive);
+            window.addEventListener('hashchange', updateActive);
+            updateActive();
+
+            /* ==================== 杂项 ==================== */
+            document.getElementById('year').textContent = new Date().getFullYear();
+            requestAnimationFrame(function () { requestAnimationFrame(function () { root.classList.add('t-anim'); }); });
+        })();
+    </script>
+</body>
+</html>

@@ -193,8 +193,8 @@ jobs:
               $PRERELEASE
           fi
 
-  # Release 建好后把官网静态页推到服务器。web/index.html 是自包含单文件
-  # （图标等资源全部内联），上传这一个文件即可。
+  # Release 建好后把官网静态页推到服务器。web/ 下都是自包含单文件
+  # （图标等资源全部内联），首页与 docs/ 子目录一并上传即可。
   deploy-web:
     name: 发布网站静态页面
     needs: release
@@ -230,7 +230,7 @@ jobs:
           fi
           echo "已把版本号 ${TAG} 注入 web/index.html"
 
-      - name: 上传 web/index.html 到服务器
+      - name: 上传 web/ 静态页到服务器
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
@@ -256,15 +256,34 @@ jobs:
             printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
             chmod 600 "$KEY_FILE"
             SSH_OPTS+=(-i "$KEY_FILE" -o IdentitiesOnly=yes)
-            ssh "${SSH_OPTS[@]}" "$SSH_USERNAME@$SSH_HOST" "mkdir -p '$TARGET_DIR'"
-            scp "${SSH_OPTS[@]}" web/index.html "$SSH_USERNAME@$SSH_HOST:$TARGET_DIR/index.html"
           elif [ -n "${SSH_PASSWORD:-}" ]; then
             export SSHPASS="$SSH_PASSWORD"
-            sshpass -e ssh "${SSH_OPTS[@]}" "$SSH_USERNAME@$SSH_HOST" "mkdir -p '$TARGET_DIR'"
-            sshpass -e scp "${SSH_OPTS[@]}" web/index.html "$SSH_USERNAME@$SSH_HOST:$TARGET_DIR/index.html"
           else
             echo "::error::缺少认证凭据：请配置 SSH_PRIVATE_KEY 或 SSH_PASSWORD"
             exit 1
           fi
 
-          echo "已部署到 $SSH_USERNAME@$SSH_HOST:$TARGET_DIR/index.html"
+          # 私钥场景走 ssh/scp，密码场景前面挂 sshpass，其余参数完全一致
+          run_ssh() {
+            if [ -n "${SSH_PASSWORD:-}" ]; then
+              sshpass -e ssh "${SSH_OPTS[@]}" "$SSH_USERNAME@$SSH_HOST" "$@"
+            else
+              ssh "${SSH_OPTS[@]}" "$SSH_USERNAME@$SSH_HOST" "$@"
+            fi
+          }
+          run_scp() {
+            if [ -n "${SSH_PASSWORD:-}" ]; then
+              sshpass -e scp "${SSH_OPTS[@]}" "$1" "$SSH_USERNAME@$SSH_HOST:$2"
+            else
+              scp "${SSH_OPTS[@]}" "$1" "$SSH_USERNAME@$SSH_HOST:$2"
+            fi
+          }
+
+          # docs 子目录里必须有 index.html，否则访问 /docs/ 会被 nginx 以目录列表或 403 拦掉
+          run_ssh "mkdir -p '$TARGET_DIR' '$TARGET_DIR/docs'"
+
+          # 首页导航的「文档」指向 docs/，两个文件必须同批部署，避免入口指向不存在的页面
+          run_scp web/index.html      "$TARGET_DIR/index.html"
+          run_scp web/docs/index.html "$TARGET_DIR/docs/index.html"
+
+          echo "已部署到 $SSH_USERNAME@$SSH_HOST:$TARGET_DIR/{index.html,docs/index.html}"
