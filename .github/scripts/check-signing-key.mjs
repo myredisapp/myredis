@@ -121,7 +121,12 @@ const resolveSigner = () => {
   // npm 装的 tauri（CI），或 cargo 装的 cargo-tauri（cargo 会把 `cargo tauri` 派发给它）
   for (const candidate of [['tauri'], ['cargo', 'tauri']]) {
     const [bin, ...args] = candidate;
-    const probe = spawnSync(bin, [...args, '--version'], { encoding: 'utf8' });
+    // Windows 上 npm 只装出 tauri.cmd / tauri.ps1 两个 shim，Node 不带 shell 直接
+    // spawn 找不到可执行体（ENOENT）；走 cmd.exe 才能解析 .cmd
+    const probe = spawnSync(bin, [...args, '--version'], {
+      encoding: 'utf8',
+      shell: process.platform === 'win32',
+    });
     if (!probe.error && probe.status === 0) return candidate;
   }
   return null;
@@ -150,6 +155,7 @@ try {
   const sign = spawnSync(signer[0], [...signer.slice(1), 'signer', 'sign', probeFile], {
     encoding: 'utf8',
     env: childEnv,
+    shell: process.platform === 'win32',
   });
 
   // CLI 会把同一条错误同时打到 stdout 与 stderr，去重后再转成日志，免得刷两遍
