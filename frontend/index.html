@@ -1799,10 +1799,15 @@
             background: var(--accent-hover);
         }
 
-        /* 标题栏更新按钮上的红点：有可用新版本时点亮 */
+        /* 标题栏更新入口：默认不占位，只有查到新版本才显示（见 checkUpdate） */
         #btnCheckUpdate {
             position: relative;
+            display: none;
         }
+        #btnCheckUpdate.show {
+            display: flex;
+        }
+        /* 有可用新版本时点亮红点 */
         .update-dot {
             display: none;
             position: absolute;
@@ -4125,6 +4130,9 @@
             const UPDATE_NOTICE_MS = 8000;
             // 同一个版本只提示一次「发现新版本」，避免每次启动都打扰
             const UPDATE_NOTICE_KEY = 'mc_cache_update_notified';
+            // 标题栏的更新按钮默认不显示，只有查到新版本才出现；
+            // 所以启动后要隔一阵再静默查一次，否则挂机久了发新版也看不到入口
+            const UPDATE_RECHECK_MS = 30 * 60 * 1000;
 
             const updateBar = document.getElementById('updateBar');
             const updateBarFill = document.getElementById('updateBarFill');
@@ -4319,9 +4327,11 @@
                 showUpdateModal('更新已就绪', html, '立即重启', installAndRestart);
             }
 
-            // silent=true 时只在标题栏点亮红点并轻提示一次（启动时的静默检查）
+            // silent=true 时只在标题栏显示更新入口并轻提示一次（启动时的静默检查）
             function checkUpdate(silent) {
                 return invoke('check_update').then(info => {
+                    // 没有新版本就不显示更新按钮，标题栏只留刷新 / 清库 / 新建连接
+                    btnCheckUpdate.classList.toggle('show', !!info.available);
                     updateDot.classList.toggle('show', !!info.available);
                     btnCheckUpdate.title = info.available
                         ? '发现新版本 v' + info.version + '，点击更新'
@@ -4381,8 +4391,15 @@
 
             btnCheckUpdate.addEventListener('click', () => {
                 btnCheckUpdate.disabled = true;
-                checkUpdate(false).then(info => {
-                    if (info && info.available) openUpdateAvailableModal(info);
+                // 安装包已经下好时直接给重启入口，不必再走一遍「发现新版本 → 立即更新」
+                invoke('get_update_progress').catch(() => null).then(p => {
+                    if (p && p.stage === 'ready') {
+                        openUpdateReadyModal(p.version);
+                        return;
+                    }
+                    return checkUpdate(false).then(info => {
+                        if (info && info.available) openUpdateAvailableModal(info);
+                    });
                 }).finally(() => { btnCheckUpdate.disabled = false; });
             });
             updateBarRestart.addEventListener('click', installAndRestart);
@@ -4414,8 +4431,12 @@
                     }
                 }).catch(() => {});
 
-                // 启动后静默查一次：有新版只点亮红点并轻提示，不弹窗挡操作
+                // 启动后静默查一次：有新版只显示更新入口并轻提示，不弹窗挡操作
                 setTimeout(() => checkUpdate(true), 1500);
+
+                // 之后定时静默复查：入口平时是藏起来的，只有复查到新版本才会出现。
+                // 下载中 / 已就绪时后端直接返回缓存结果，不会重复打网络请求。
+                setInterval(() => checkUpdate(true), UPDATE_RECHECK_MS);
             }
 
             // ---------- 初始化 ----------
