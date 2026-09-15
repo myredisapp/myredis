@@ -16,9 +16,11 @@ const BUNDLE_EXT = {
   appimage: '.AppImage',
   msi: '.msi',
   nsis: '.exe',
+  // 开了 bundle.createUpdaterArtifacts 后，macOS 的自动更新包是与 .app 同级的
+  // .app.tar.gz（.dmg 只用于首次安装，不参与更新），它同样要改名进 Release ——
+  // latest.json 里的下载地址就是按改名后的这个名字拼的
+  app: '.app.tar.gz',
 };
-// app 产出的是 .app 目录、不是安装包，没有对应的文件需要收
-const BUNDLE_DIR_ONLY = new Set(['app']);
 
 const [bundleDir, tag, platform, bundles] = process.argv.slice(2);
 
@@ -42,7 +44,7 @@ if (!existsSync(bundleDir)) {
 // （比如上次构建的残留），宁可不认，也不能给它贴上本平台的名字
 const wanted = new Set();
 for (const kind of bundles.split(',').map((k) => k.trim().toLowerCase())) {
-  if (!kind || BUNDLE_DIR_ONLY.has(kind)) continue;
+  if (!kind) continue;
   const ext = BUNDLE_EXT[kind];
   if (!ext) {
     console.error(`不认识的 bundle 类型 "${kind}"，请在 rename-artifacts.mjs 的 BUNDLE_EXT 里补上`);
@@ -84,4 +86,14 @@ for (const [ext, src] of found) {
   const dest = join(dirname(src), `myredis-${tag}-${platform}${ext}`);
   renameSync(src, dest);
   console.log(`${src} -> ${dest}`);
+
+  // 签名文件跟着安装包一起改名。latest.json 里每个平台都要带上自己的 .sig 内容，
+  // 生成清单的脚本按 <安装包名>.sig 找它，所以这里必须同步改，不能漏。
+  // 缺失不算错误：真正缺签名时由 gen-latest-json.mjs 报错，那里能给出更准确的原因。
+  const srcSig = `${src}.sig`;
+  if (existsSync(srcSig)) {
+    const destSig = `${dest}.sig`;
+    renameSync(srcSig, destSig);
+    console.log(`${srcSig} -> ${destSig}`);
+  }
 }

@@ -61,15 +61,28 @@ struct ExportEntry {
     value: serde_json::Value,
 }
 
-/// 导出指定 keys 的完整内容，返回 JSON 文本。
+/// 导出结果。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportResult {
+    /// 导出的 JSON 文档文本
+    pub content: String,
+    /// 实际导出的 key 数（读取期间消失或被跳过的类型不计入）
+    pub count: usize,
+}
+
+/// 导出指定 keys 的完整内容，返回 JSON 文档文本与实际导出条数。
+///
+/// `keys` 省略或为空时，导出当前 keyspace 的**全部** key：前端分页浏览时只持有已加载
+/// 的那部分 key，导出不能只看那一部分，所以全量枚举放在后端做。
 ///
 /// 读取期间被删除或类型变为 `none` 的 key 会被静默跳过。
 #[tauri::command]
 pub async fn export_keys(
     pool: tauri::State<'_, Pool>,
     conn_id: String,
-    keys: Vec<String>,
-) -> Result<String, String> {
+    keys: Option<Vec<String>>,
+) -> Result<ExportResult, String> {
     export_keys_inner(&pool, &conn_id, keys).await
 }
 
@@ -77,10 +90,15 @@ pub async fn export_keys(
 pub async fn export_keys_inner(
     pool: &Pool,
     conn_id: &str,
-    keys: Vec<String>,
-) -> Result<String, String> {
+    keys: Option<Vec<String>>,
+) -> Result<ExportResult, String> {
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
+
+    let keys = match keys {
+        Some(list) if !list.is_empty() => list,
+        _ => crate::commands::key::collect_all_key_names(&conn_cfg, &mut con).await?,
+    };
 
     let mut entries = Vec::with_capacity(keys.len());
     for key in &keys {
@@ -176,11 +194,15 @@ pub async fn export_keys_inner(
         "exportedAt": chrono_like_now(),
         "keys": entries,
     });
-    serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())
+    let content = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
+    Ok(ExportResult {
+        content,
+        count: entries.len(),
+    })
 }
 
 /// 生成 ISO-8601 风格的 UTC 时间戳（不引入 chrono 依赖，手写最小实现）。
-fn chrono_like_now() -> String {
+pub(crate) fn chrono_like_now() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -500,7 +522,8 @@ mod tests {
             "maidi:ie:t".to_string(),
             "maidi:ie:z".to_string(),
         ];
-        let doc = export_keys_inner(&pool, &conn_id, keys.clone()).await?;
+        let doc = export_keys_inner(&pool, &conn_id, Some(keys.clone())).await?;
+        assert_eq!(doc.count, 5, "5 个 key 应全部导出: {doc:?}");
 
         // 删掉后重新导入（覆盖模式）
         redis::cmd("DEL")
@@ -508,12 +531,12 @@ mod tests {
             .query_async::<_, ()>(&mut con)
             .await
             .unwrap();
-        let result = import_keys_inner(&pool, &conn_id, &doc, true).await?;
+        let result = import_keys_inner(&pool, &conn_id, &doc.content, true).await?;
         assert_eq!(result.imported, 5, "5 个 key 应全部导入: {result:?}");
         assert!(result.failed.is_empty(), "不应有失败: {result:?}");
 
         // 再导一次（不覆盖）应全部跳过
-        let result = import_keys_inner(&pool, &conn_id, &doc, false).await?;
+        let result = import_keys_inner(&pool, &conn_id, &doc.content, false).await?;
         assert_eq!(result.skipped, 5);
         assert_eq!(result.imported, 0);
 
@@ -554,6 +577,39 @@ mod tests {
         let result = import_keys_inner(&pool, &conn_id, "not json", true).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("JSON"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn export_without_keys_scans_whole_keyspace() -> Result<(), String> {
+        let conn_id = format!("impexp_all:{}", unique_id());
+        let pool = test_pool(&conn_id).await?;
+        let key = format!("maidi:ie:all:{}", unique_id());
+        {
+            let mut con = pool.conn(&conn_id).unwrap();
+            redis::cmd("SET")
+                .arg(&key)
+                .arg("v")
+                .query_async::<_, ()>(&mut con)
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        // 不传 keys：后端自行全量枚举，不受前端「只加载了一页」的限制
+        let exported = export_keys_inner(&pool, &conn_id, None).await?;
+        assert!(exported.count >= 1, "全量导出至少应包含刚写入的 key");
+        assert!(
+            exported.content.contains(&key),
+            "全量导出应包含刚写入的 key: {key}"
+        );
+
+        let mut con = pool.conn(&conn_id).unwrap();
+        redis::cmd("DEL")
+            .arg(&key)
+            .query_async::<_, ()>(&mut con)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok(())
     }
 }

@@ -8,8 +8,26 @@
 //! cargo test --test cluster_integration -- --ignored --nocapture
 //! ```
 
+use maidi_cache_lib::commands::key::{list_keys_inner, KeyEntry};
 use maidi_cache_lib::connection_pool::Pool;
 use maidi_cache_lib::models::{ConnType, Connection};
+
+/// 按游标翻完所有页，返回全部 key（等价于分页之前「一次列出全部」的结果）。
+async fn list_all_keys(pool: &Pool, conn_id: &str) -> Vec<KeyEntry> {
+    let mut cursor = "0".to_string();
+    let mut keys = Vec::new();
+    loop {
+        let page = list_keys_inner(pool, conn_id, &cursor, 100, None)
+            .await
+            .expect("list_keys 失败");
+        keys.extend(page.keys);
+        if page.next_cursor == "0" {
+            break;
+        }
+        cursor = page.next_cursor;
+    }
+    keys
+}
 
 fn cluster_conn(id: &str) -> Connection {
     let port = std::env::var("MYREDIS_CLUSTER_PORT")
@@ -131,9 +149,7 @@ async fn cluster_get_server_info_and_scan() {
         .await
         .expect("集群 SET 失败");
 
-    let listed = maidi_cache_lib::commands::key::list_keys_inner(&pool, "cluster_info")
-        .await
-        .expect("list_keys 失败");
+    let listed = list_all_keys(&pool, "cluster_info").await;
     assert!(
         listed.iter().any(|k| k.key == "myredis:cluster:scan:probe"),
         "list_keys 应包含刚写入的探针 key"
@@ -173,9 +189,7 @@ async fn cluster_list_keys_stable_and_complete() {
     // 反复列出多次：每次都必须包含所有探针 key，且结果完全一致
     let mut snapshots = Vec::new();
     for _ in 0..5 {
-        let entries = maidi_cache_lib::commands::key::list_keys_inner(&pool, "cluster_list_keys")
-            .await
-            .expect("list_keys 失败");
+        let entries = list_all_keys(&pool, "cluster_list_keys").await;
         snapshots.push(entries.iter().map(|e| e.key.clone()).collect::<Vec<_>>());
     }
     for (i, snap) in snapshots.iter().enumerate().skip(1) {
@@ -201,4 +215,75 @@ async fn cluster_list_keys_stable_and_complete() {
     }
 
     pool.disconnect("cluster_list_keys");
+}
+
+/// 集群分页：小页大小强制游标在多个主节点之间接力，结果必须完整且不重复。
+#[tokio::test]
+#[ignore]
+async fn cluster_list_keys_pages_span_nodes_without_loss() {
+    let pool = Pool::new();
+    let conn = cluster_conn("cluster_paging");
+    pool.connect(&conn).await.expect("连接失败");
+    let mut con = pool.conn("cluster_paging").unwrap();
+
+    // 300 个 key，用 3 个不同的 hash tag 把它们打散到 3 个主节点
+    let prefix = "myredis:cluster:page";
+    let total = 300usize;
+    let mut written = Vec::new();
+    for i in 0..total {
+        let key = format!("{prefix}:{{t{}}}:{i:04}", i % 3);
+        let _: String = redis::cmd("SET")
+            .arg(&key)
+            .arg("1")
+            .query_async(&mut con)
+            .await
+            .expect("集群 SET 失败");
+        written.push(key);
+    }
+
+    // 每页 25 个：必然翻多页，且游标必须跨节点接力
+    let mut cursor = "0".to_string();
+    let mut names = Vec::new();
+    let mut visited_nodes = std::collections::HashSet::new();
+    let mut pages = 0usize;
+    loop {
+        let page = list_keys_inner(&pool, "cluster_paging", &cursor, 25, Some(prefix))
+            .await
+            .expect("集群分页失败");
+        names.extend(page.keys.into_iter().map(|k| k.key));
+        pages += 1;
+        assert!(pages < 100, "分页未收敛，游标处理可能有误");
+        if page.next_cursor == "0" {
+            break;
+        }
+        // 集群游标形如 `地址:游标`，地址部分应始终是主节点
+        let (addr, _) = page
+            .next_cursor
+            .rsplit_once(':')
+            .expect("集群游标应带节点地址");
+        visited_nodes.insert(addr.to_string());
+        cursor = page.next_cursor;
+    }
+
+    assert!(pages > 1, "25 个/页、{total} 个 key，至少应分 2 页");
+    assert!(
+        visited_nodes.len() > 1,
+        "游标应在多个主节点之间接力，实际只经过 {visited_nodes:?}"
+    );
+
+    let mut expected = written.clone();
+    let mut actual = names;
+    expected.sort();
+    actual.sort();
+    assert_eq!(actual, expected, "集群分页必须覆盖全部 key 且不重复");
+
+    for key in &written {
+        let _: i64 = redis::cmd("DEL")
+            .arg(key)
+            .query_async(&mut con)
+            .await
+            .expect("清理失败");
+    }
+
+    pool.disconnect("cluster_paging");
 }

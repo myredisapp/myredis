@@ -38,6 +38,7 @@ impl AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let config_dir = app
                 .path()
@@ -46,6 +47,8 @@ pub fn run() {
             app.manage(AppState::new(config_dir));
             // 连接池作为独立的状态，便于命令按需借用
             app.manage(Pool::new());
+            // 更新状态：后台下载的进度与已下好的安装包都放这里，供三个更新命令共享
+            app.manage(commands::update::UpdateState::default());
             // 初始化配置（目前仅保底引入，避免 dead_code 告警，后续用于默认值/迁移）
             let _ = AppConfig::default();
             Ok(())
@@ -57,6 +60,8 @@ pub fn run() {
             commands::connection::save_connection,
             commands::connection::delete_connection,
             commands::connection::test_connection,
+            commands::connection::export_connections,
+            commands::connection::import_connections,
             commands::server::ping,
             commands::server::get_server_info,
             commands::server::select_db,
@@ -81,6 +86,10 @@ pub fn run() {
             commands::terminal::execute_command,
             commands::import_export::export_keys,
             commands::import_export::import_keys,
+            commands::update::check_update,
+            commands::update::start_update_download,
+            commands::update::get_update_progress,
+            commands::update::install_update_and_restart,
         ])
         .run(tauri::generate_context!())
         .expect("启动麦地缓存失败");

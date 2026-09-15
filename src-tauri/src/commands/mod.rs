@@ -8,3 +8,4 @@ pub mod key;
 pub mod key_content;
 pub mod server;
 pub mod terminal;
+pub mod update;

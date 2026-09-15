@@ -613,6 +613,46 @@
             background: var(--accent-dim);
         }
 
+        /* 连接配置的导入 / 导出：与「添加连接」同宽的两个小按钮 */
+        .conn-io-actions {
+            display: flex;
+            gap: 8px;
+            margin: 0 12px 12px;
+        }
+        .conn-io-actions button {
+            flex: 1;
+            padding: 6px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+        .conn-io-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: var(--accent-dim);
+        }
+        /* 折叠态：只留图标 */
+        .sidebar.collapsed .conn-io-actions {
+            margin: 0 8px 12px;
+            gap: 4px;
+        }
+        .sidebar.collapsed .conn-io-actions button {
+            font-size: 0;
+            gap: 0;
+            padding: 6px 4px;
+        }
+        .sidebar.collapsed .conn-io-actions button i {
+            font-size: 13px;
+        }
+
         .sidebar-footer {
             border-top: 1px solid var(--border-color);
             padding: 12px 16px;
@@ -817,6 +857,7 @@
             overflow-y: auto;
             padding: 6px 0;
             flex-shrink: 0;
+            position: relative;
         }
 
         /* ---- 模块边界拖拽手柄 ---- */
@@ -884,6 +925,49 @@
         .key-tree::-webkit-scrollbar-thumb {
             background: var(--border-color);
             border-radius: 4px;
+        }
+
+        /* ---- Key 列表虚拟滚动 ----
+           占位层撑出总高度，实际只渲染视口内的行；
+           行高与 JS 的 KEY_ROW_HEIGHT 保持一致。 */
+        .vt-spacer {
+            position: relative;
+            width: 100%;
+        }
+        .vt-row {
+            position: absolute;
+            left: 0;
+            right: 0;
+            height: 28px;
+        }
+        .vt-row > .tree-node {
+            height: 100%;
+        }
+        .vt-row .node-label {
+            height: 100%;
+            box-sizing: border-box;
+            margin: 0 6px;
+        }
+        /* 底部状态条：常驻显示已加载数量与「滚动加载更多」提示 */
+        .vt-status {
+            position: sticky;
+            bottom: 0;
+            padding: 5px 10px;
+            font-size: 11px;
+            text-align: center;
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+        }
+        .vt-status .vt-more {
+            border: none;
+            background: none;
+            padding: 0 2px;
+            color: var(--accent);
+            font-size: 11px;
+            font-family: inherit;
+            cursor: pointer;
+            text-decoration: underline;
         }
 
         .tree-node {
@@ -1630,6 +1714,123 @@
         .toast-notification {
             border-left-color: var(--accent) !important;
         }
+
+        /* ========== 静默更新 ========== */
+        /* 进度条是 app-window 的最后一个 flex 子项（排在终端面板之下），
+           展开时把上方主体略微顶起，而不是浮在上面遮住终端输入框 */
+        .update-bar {
+            flex-shrink: 0;
+            height: 0;
+            overflow: hidden;
+            position: relative;
+            background: var(--bg-tertiary);
+            transition: height 0.2s ease;
+        }
+        .update-bar.open {
+            height: 34px;
+            border-top: 1px solid var(--border-color);
+        }
+        /* 填充条铺在最底层，右缘露出的底色就是「还没下完」的部分 */
+        .update-bar-fill {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            background: var(--accent-dim);
+            border-right: 1px solid var(--accent);
+            transition: width 0.2s linear;
+        }
+        .update-bar.done .update-bar-fill {
+            background: rgba(124, 184, 75, 0.18);
+            border-right-color: var(--green);
+        }
+        .update-bar.failed .update-bar-fill {
+            background: rgba(229, 72, 77, 0.16);
+            border-right-color: var(--danger, #e5484d);
+        }
+        /* 服务端没给总量时算不出百分比，改成来回扫的动画表示「还在下」 */
+        .update-bar.indeterminate .update-bar-fill {
+            width: 40%;
+            animation: updateSweep 1.4s ease-in-out infinite;
+        }
+        @keyframes updateSweep {
+            0% { transform: translateX(-105%); }
+            100% { transform: translateX(255%); }
+        }
+        .update-bar-inner {
+            position: relative;
+            height: 34px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0 14px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        .update-bar-inner .update-bar-spacer {
+            flex: 1;
+        }
+        .update-bar-pct {
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .update-bar-inner button {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 6px;
+            padding: 2px 10px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .update-bar-inner button:hover {
+            background: var(--bg-hover);
+        }
+        .update-bar-inner button.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #1a150e;
+            font-weight: 600;
+        }
+        .update-bar-inner button.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        /* 标题栏更新按钮上的红点：有可用新版本时点亮 */
+        #btnCheckUpdate {
+            position: relative;
+        }
+        .update-dot {
+            display: none;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--danger, #e5484d);
+        }
+        .update-dot.show {
+            display: block;
+        }
+
+        /* 更新弹窗里的更新说明：保留换行、限量滚动 */
+        .update-notes {
+            margin: 10px 0 0;
+            padding: 10px 12px;
+            max-height: 190px;
+            overflow-y: auto;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            font-size: 12px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
     </style>
 </head>
 <body>
@@ -1665,7 +1866,7 @@
             <div class="logo">
                 <svg class="logo-mark" aria-label="麦地缓存 Logo"><use href="#md-logo-mark" /></svg>
                 麦地缓存
-                <span>v2.0</span>
+                <span id="appVersion">v-</span>
             </div>
             <div class="connection-status">
                 <span class="dot" id="statusDot"></span>
@@ -1684,6 +1885,7 @@
                 </div>
             </div>
             <div class="actions">
+                <button title="检查更新" id="btnCheckUpdate"><i class="fas fa-cloud-arrow-down"></i><span class="update-dot" id="updateDot"></span></button>
                 <button title="刷新所有Key" id="btnRefresh"><i class="fas fa-sync-alt"></i></button>
                 <button title="清空当前数据库" id="btnFlush"><i class="fas fa-trash-alt"></i></button>
                 <button class="primary" id="btnNewConnection"><i class="fas fa-plus"></i> 新建连接</button>
@@ -1702,6 +1904,10 @@
                 <button class="add-connection" id="addConnectionBtn">
                     <i class="fas fa-plus-circle"></i> 添加连接
                 </button>
+                <div class="conn-io-actions">
+                    <button id="btnImportConnections" title="从 JSON 文件导入连接配置（同 id 会被覆盖）"><i class="fas fa-file-import"></i> 导入</button>
+                    <button id="btnExportConnections" title="把连接配置导出为 JSON 文件，可在另一台机器导入"><i class="fas fa-file-export"></i> 导出</button>
+                </div>
 
                 <div class="sidebar-footer">
                     <div class="server-stats">
@@ -1774,6 +1980,19 @@
                 <span class="prompt-label">redis&gt;</span>
                 <input type="text" id="terminalInput" placeholder="输入 Redis 命令 ..." autofocus />
                 <button id="terminalSend">执行</button>
+            </div>
+        </div>
+
+        <!-- ===== 更新进度条（后台下载时出现，常驻窗口底部，不挡终端输入） ===== -->
+        <div class="update-bar" id="updateBar">
+            <div class="update-bar-fill" id="updateBarFill"></div>
+            <div class="update-bar-inner">
+                <i class="fas fa-circle-notch" id="updateBarIcon"></i>
+                <span id="updateBarText">正在后台下载更新…</span>
+                <span class="update-bar-pct" id="updateBarPct"></span>
+                <div class="update-bar-spacer"></div>
+                <button class="primary" id="updateBarRestart" style="display:none;">立即重启</button>
+                <button id="updateBarDismiss" title="收起进度条（更新已下载，重启后生效）" style="display:none;"><i class="fas fa-times"></i></button>
             </div>
         </div>
 
@@ -1858,9 +2077,25 @@
         <div class="modal" style="width: 400px;">
             <div class="modal-title"><i class="fas fa-exclamation-triangle" style="color: var(--accent);"></i> <span id="confirmTitle">提示</span></div>
             <div id="confirmMessage" style="margin-bottom: 24px; line-height: 1.6; color: var(--text-secondary); word-break: break-all;"></div>
+            <label id="confirmOption" style="display:none; align-items:center; gap:8px; margin-bottom: 20px; font-size: 13px; color: var(--text-secondary); cursor: pointer;">
+                <input type="checkbox" id="confirmOptionBox" />
+                <span id="confirmOptionLabel"></span>
+            </label>
             <div class="modal-actions" style="justify-content: flex-end; gap: 10px;">
                 <button class="secondary" id="confirmCancel">取消</button>
                 <button class="primary" id="confirmOk" style="background: var(--danger, #e5484d); border-color: var(--danger, #e5484d);">删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 更新对话框（「发现新版本」与「更新已就绪」共用一套结构） ===== -->
+    <div class="modal-overlay" id="updateModal">
+        <div class="modal" style="width: 460px;">
+            <div class="modal-title"><i class="fas fa-cloud-arrow-down" style="color: var(--accent);"></i> <span id="updateModalTitle">发现新版本</span></div>
+            <div id="updateModalBody" style="line-height: 1.7; color: var(--text-secondary); font-size: 13px;"></div>
+            <div class="modal-actions" style="margin-top: 22px;">
+                <button class="secondary" id="updateModalCancel">稍后</button>
+                <button class="primary" id="updateModalOk">立即更新</button>
             </div>
         </div>
     </div>
@@ -2267,6 +2502,8 @@
                                 onlineConns.delete(id);
                                 if (currentConn && currentConn.id === id) {
                                     currentConn.online = false;
+                                    resetKeyList();
+                                    selectedKey = null;
                                     renderKeyTree();
                                     renderDetail();
                                 }
@@ -2305,6 +2542,99 @@
                 }
             }
 
+            // ---------- 连接配置的导入 / 导出 ----------
+            // 触发一次「另存为」下载
+            function downloadJson(filename, text) {
+                const blob = new Blob([text], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            // 导出文件名用的日期戳
+            function todayStamp() {
+                return new Date().toISOString().slice(0, 10);
+            }
+
+            // 导出全部连接配置为 JSON 文件（可选是否带密码）
+            function exportConnections() {
+                if (!CONNECTIONS.length) {
+                    showToast('暂无连接配置可导出', 'info');
+                    return;
+                }
+                showConfirm(`将把 ${CONNECTIONS.length} 个连接配置导出为 JSON 文件，可在另一台机器导入。`, {
+                    title: '导出连接配置',
+                    okText: '导出',
+                    danger: false,
+                    checkbox: { label: '包含密码（明文保存，请妥善保管）', checked: true },
+                }).then((ok) => {
+                    if (!ok) return;
+                    const includePasswords = getConfirmOption();
+                    invoke('export_connections', { includePasswords })
+                        .then((res) => {
+                            if (!res || !res.count) {
+                                showToast('没有可导出的连接配置', 'info');
+                                return;
+                            }
+                            downloadJson(`maidi-connections-${todayStamp()}.json`, res.content);
+                            showToast(`已导出 ${res.count} 个连接配置`, 'success');
+                            appendTerminal(`EXPORT ${res.count} connections → OK${includePasswords ? '（含密码）' : ''}`, 'ok');
+                        })
+                        .catch(err => {
+                            showToast('导出连接配置失败: ' + err, 'error');
+                            appendTerminal(`导出连接配置失败: ${err}`, 'error');
+                        });
+                });
+            }
+
+            // 从 JSON 文件导入连接配置（按 id 匹配，同 id 覆盖）
+            let connImportFileInput = null;
+            function importConnections() {
+                if (!connImportFileInput) {
+                    connImportFileInput = document.createElement('input');
+                    connImportFileInput.type = 'file';
+                    connImportFileInput.accept = '.json,application/json';
+                    connImportFileInput.style.display = 'none';
+                    document.body.appendChild(connImportFileInput);
+                    connImportFileInput.addEventListener('change', () => {
+                        const file = connImportFileInput.files && connImportFileInput.files[0];
+                        connImportFileInput.value = '';
+                        if (!file) return;
+                        showConfirm(`将从「${file.name}」导入连接配置。已存在同 id 的连接会被覆盖。继续吗？`, {
+                            title: '导入连接配置',
+                            okText: '导入',
+                        }).then((ok) => {
+                            if (!ok) return;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                invoke('import_connections', { content: String(reader.result), overwrite: true })
+                                    .then((res) => {
+                                        const failed = res.failed ? res.failed.length : 0;
+                                        const msg = `导入完成：新增/覆盖 ${res.imported}，跳过 ${res.skipped}，失败 ${failed}`;
+                                        showToast(msg, failed > 0 ? 'error' : 'success');
+                                        appendTerminal(`IMPORT → ${msg}`, failed > 0 ? 'error' : 'ok');
+                                        if (failed > 0) {
+                                            res.failed.slice(0, 5).forEach(f => appendTerminal(`  失败 ${f.name}: ${f.error}`, 'error'));
+                                        }
+                                        return loadConnections();
+                                    })
+                                    .catch(err => {
+                                        showToast('导入连接配置失败: ' + err, 'error');
+                                        appendTerminal(`导入连接配置失败: ${err}`, 'error');
+                                    });
+                            };
+                            reader.readAsText(file);
+                        });
+                    });
+                }
+                connImportFileInput.click();
+            }
+
             function connectTo(conn) {
                 if (!conn) return Promise.reject(new Error('无连接信息'));
                 appendTerminal(`正在连接 ${conn.name} (${conn.host}:${conn.port}) …`, '');
@@ -2339,6 +2669,11 @@
                 currentConn = conn;
                 renderConnections();
                 updateStatus();
+                // 切换连接时先清掉上一个连接的列表与分页游标，避免串数据
+                resetKeyList();
+                // 选中的 Key 属于上一个连接，必须一起清掉：否则详情区会拿空列表
+                // 去查它，误报「Key 不存在」
+                selectedKey = null;
                 renderKeyTree();
                 renderDetail();
                 refreshDbSelector();
@@ -2447,34 +2782,27 @@
                 });
             }
 
-// 从后端加载 key 列表并刷新树
-            function loadKeys() {
-                if (!currentConn || !currentConn.id) return Promise.resolve();
-                return invoke('list_keys', { connId: currentConn.id })
-                    .then((list) => {
-                        const items = list || [];
-                        const flat = {};
-                        const flatList = [];
-                        for (const it of items) {
-                            const ttl = it.ttl !== undefined ? it.ttl : -1;
-                            flat[it.key] = { type: it.type || 'string', ttl, value: '' };
-                            flatList.push({ key: it.key, type: it.type || 'string', ttl, value: '' });
-                        }
-                        KEY_DATA = flat;
-                        allKeys = flatList;
-                        renderKeyTree(keySearch ? keySearch.value : '');
-                        // 注意：不要用 allKeys.length 覆盖 statKeys。
-                        // statKeys 表示「当前数据库的 key 总数（DBSIZE）」，由 renderServerInfo 维护，
-                        // 与顶部 DB 选择器联动，是当前的实时数据。
-                        return allKeys;
-                    })
-                    .catch(err => {
-                        console.error('加载 Key 列表失败', err);
-                        return [];
-                    });
-            }
+            // ---------- 渲染：Key 列表（后端分页 + 虚拟滚动 + 文件夹折叠） ----------
+            // 每页向后端请求的 key 数（后端把它当作 SCAN 的 COUNT 提示，实际每页可能略多）
+            const KEY_PAGE_SIZE = 100;
+            // 虚拟滚动的行高，需与 CSS 里 .vt-row 的 height 一致
+            let KEY_ROW_HEIGHT = 28;
+            // 视口上下各多渲染几行，减少快速滚动时出现白屏
+            const KEY_OVERSCAN = 8;
+            // 距底部还有这么多行时就预取下一页
+            const KEY_PREFETCH_ROWS = 10;
 
-            // ---------- 渲染：Key 列表（支持按分隔符折叠为文件夹） ----------
+            // 分页状态：cursor 是后端返回的不透明游标，done 表示已扫描完当前 keyspace
+            const keyPaging = {
+                cursor: '0',
+                done: false,
+                loading: false,
+                searchTerm: '',
+                error: '',
+                token: 0,
+            };
+            // 扁平化后的可见行（文件夹 + key），虚拟滚动的数据源
+            let keyRows = [];
             // 每个连接已展开的文件夹路径集合，Map<connId, Set<folderPath>>
             let expandedCache = {};
 
@@ -2496,7 +2824,6 @@
             // 渲染叶子 key 行
             function renderKeyRowHtml(key, depth) {
                 const item = KEY_DATA[key] || {};
-                const t = item.type || 'string';
                 return '<div class="tree-node">' +
                     '<div class="node-label node-key-select' + (selectedKey === key ? ' active' : '') + '" data-key="' + escapeHtml(key) + '" title="' + escapeHtml(key) + '" style="padding-left:' + (8 + depth * 16) + 'px">' +
                         '<span class="toggle" style="visibility:hidden;"><i class="fas fa-chevron-right"></i></span>' +
@@ -2515,8 +2842,8 @@
                 '</div></div>';
             }
 
-            // 文件夹模式：keys 已过滤排序。按 sep 组织成目录树并递归渲染。
-            function renderFolders(keys, sep, expanded, depth, dirPath) {
+            // 文件夹模式：keys 已排序。按 sep 组织成目录树，展开的目录输出后续行。
+            function buildFolderRows(keys, sep, expanded, depth, dirPath, out) {
                 const prefix = dirPath ? dirPath + sep : '';
                 const childDirs = new Set();
                 const leafKeys = [];
@@ -2531,80 +2858,231 @@
                         childDirs.add(prefix + rest.slice(0, idx)); // 直接子目录
                     }
                 });
-                let html = '';
-                // 先文件件（按路径），再 key
+                // 先文件件（按路径），再 key —— 与折叠前的展示顺序一致
                 const dirList = Array.from(childDirs).sort();
                 for (let i = 0; i < dirList.length; i++) {
                     const d = dirList[i];
-                    const label = d.split(sep).pop();
                     const isOpen = expanded.has(d);
-                    html += renderFolderRowHtml(label, d, isOpen, depth);
-                    if (isOpen) {
-                        html += renderFolders(keys, sep, expanded, depth + 1, d);
-                    }
+                    out.push({ kind: 'folder', path: d, label: d.split(sep).pop(), isOpen: isOpen, depth: depth });
+                    if (isOpen) buildFolderRows(keys, sep, expanded, depth + 1, d, out);
                 }
                 const leafList = leafKeys.sort();
                 for (let j = 0; j < leafList.length; j++) {
-                    html += renderKeyRowHtml(leafList[j], depth);
+                    out.push({ kind: 'key', key: leafList[j], depth: depth });
                 }
-                return html;
             }
 
-            // 渲染 Key 列表（文件夹折叠模式）
-            function renderKeyTree(filter = '') {
-                const searchTerm = (filter || '').trim().toLowerCase();
-                const isConnected = currentConn && currentConn.online;
-
-                if (!isConnected) {
-                    keyTreeEl.innerHTML = '' +
-                        '<div style="padding:24px 16px;color:var(--text-muted);text-align:center;font-size:13px;">' +
-                            '<i class="fas fa-plug" style="font-size:22px;display:block;margin-bottom:8px;opacity:.4;"></i>' +
-                            '请先连接 Redis 服务器' +
-                        '</div>';
-                    return;
-                }
-
-                let list = Object.keys(KEY_DATA);
-                if (searchTerm) list = list.filter(k => k.toLowerCase().includes(searchTerm));
-                list = list.sort((a, b) => a.localeCompare(b));
-
-                if (list.length === 0) {
-                    keyTreeEl.innerHTML = '' +
-                        '<div style="padding:24px 16px;color:var(--text-muted);text-align:center;font-size:13px;">' +
-                            '<i class="fas fa-inbox" style="font-size:22px;display:block;margin-bottom:8px;opacity:.4;"></i>' +
-                            (searchTerm ? '没有匹配的 Key' : '暂无 Key\n点击「新增 Key」创建') +
-                        '</div>';
-                    return;
-                }
-
+            // 由已加载的 key 重建扁平行列表（文件夹展开状态变化、数据变化后调用）
+            function rebuildKeyRows() {
+                const list = Object.keys(KEY_DATA).sort((a, b) => a.localeCompare(b));
                 const sep = getSeparator();
-                const folderMode = !searchTerm && !!sep; // 搜索时不折叠文件夹
-                const expanded = getExpandedSet();
-
-                let html;
-                if (folderMode) {
-                    html = renderFolders(list, sep, expanded, 0, '');
+                const rows = [];
+                if (keyPaging.searchTerm || !sep) {
+                    // 搜索时不折叠文件夹：命中的是 key 本身，折叠起来反而看不到结果
+                    for (let i = 0; i < list.length; i++) {
+                        rows.push({ kind: 'key', key: list[i], depth: 0 });
+                    }
                 } else {
-                    html = list.map(k => renderKeyRowHtml(k, 0)).join('');
+                    buildFolderRows(list, sep, getExpandedSet(), 0, '', rows);
                 }
-                keyTreeEl.innerHTML = html;
+                keyRows = rows;
+            }
 
-                keyTreeEl.querySelectorAll('.node-key-select').forEach(el => {
-                    el.addEventListener('click', () => {
-                        selectedKey = el.dataset.key;
-                        renderKeyTree(keySearch.value);
-                        renderDetail();
-                    });
+            // Key 树的空态 / 占位提示
+            function keyTreeHintHtml(icon, text, loading) {
+                return '<div style="padding:24px 16px;color:var(--text-muted);text-align:center;font-size:13px;">' +
+                    '<i class="fas ' + (loading ? 'fa-spinner fa-spin' : icon) + '" style="font-size:22px;display:block;margin-bottom:8px;opacity:.4;"></i>' +
+                    escapeHtml(text) + '</div>';
+            }
+
+            // 虚拟滚动需要的骨架：占位层 + 底部状态条
+            function ensureKeyTreeSkeleton() {
+                if (document.getElementById('keyTreeSpacer')) return;
+                keyTreeEl.innerHTML = '<div class="vt-spacer" id="keyTreeSpacer"></div>' +
+                    '<div class="vt-status" id="keyTreeStatus"></div>';
+            }
+
+            function updateKeyTreeStatus() {
+                const el = document.getElementById('keyTreeStatus');
+                if (!el) return;
+                if (keyPaging.loading) {
+                    el.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 加载中…';
+                    return;
+                }
+                const scope = keyPaging.searchTerm ? '匹配 ' : '已加载 ';
+                const n = allKeys.length;
+                if (keyPaging.done) {
+                    el.textContent = scope + n + ' 个 Key（已全部加载）';
+                    return;
+                }
+                // 文件夹折叠起来时列表可能撑不满视口，滚不动就永远触发不了加载；
+                // 所以除了滚动预取，这里再给一个显式入口
+                el.innerHTML = scope + n + ' 个 Key · <button type="button" class="vt-more">加载更多</button>';
+            }
+
+            // 只渲染视口内的行（虚拟滚动）
+            function renderKeyWindow() {
+                const spacer = document.getElementById('keyTreeSpacer');
+                if (!spacer) return;
+                const total = keyRows.length;
+                spacer.style.height = (total * KEY_ROW_HEIGHT) + 'px';
+                if (total === 0) {
+                    spacer.innerHTML = '';
+                    updateKeyTreeStatus();
+                    return;
+                }
+                const viewHeight = keyTreeEl.clientHeight || 400;
+                const first = Math.max(0, Math.floor(keyTreeEl.scrollTop / KEY_ROW_HEIGHT) - KEY_OVERSCAN);
+                const last = Math.min(total, Math.ceil((keyTreeEl.scrollTop + viewHeight) / KEY_ROW_HEIGHT) + KEY_OVERSCAN);
+                let html = '';
+                for (let i = first; i < last; i++) {
+                    const row = keyRows[i];
+                    const inner = row.kind === 'folder'
+                        ? renderFolderRowHtml(row.label, row.path, row.isOpen, row.depth)
+                        : renderKeyRowHtml(row.key, row.depth);
+                    html += '<div class="vt-row" style="top:' + (i * KEY_ROW_HEIGHT) + 'px">' + inner + '</div>';
+                }
+                spacer.innerHTML = html;
+                // 行高自愈：CSS 与 JS 常量不一致时按真实高度重算一次
+                const probe = spacer.firstElementChild;
+                if (probe && probe.offsetHeight > 0 && probe.offsetHeight !== KEY_ROW_HEIGHT) {
+                    KEY_ROW_HEIGHT = probe.offsetHeight;
+                    renderKeyWindow();
+                    return;
+                }
+                updateKeyTreeStatus();
+            }
+
+            // 滚动接近底部时预取下一页
+            function maybeLoadNextPage() {
+                if (keyPaging.done || keyPaging.loading) return;
+                const remain = keyTreeEl.scrollHeight - keyTreeEl.scrollTop - keyTreeEl.clientHeight;
+                if (remain <= KEY_ROW_HEIGHT * KEY_PREFETCH_ROWS) loadKeyPage();
+            }
+
+            // 清空本地列表与分页状态（断开连接、切换连接、重新加载前调用）
+            function resetKeyList() {
+                keyPaging.token += 1;
+                keyPaging.cursor = '0';
+                keyPaging.done = false;
+                keyPaging.loading = false;
+                keyPaging.searchTerm = keySearch ? keySearch.value.trim() : '';
+                keyPaging.error = '';
+                KEY_DATA = {};
+                allKeys = [];
+                keyRows = [];
+                keyTreeEl.scrollTop = 0;
+            }
+
+            // 本地插入或更新一个 key（新增成功、分页结果合并时调用）
+            function upsertKeyEntry(key, type, ttl) {
+                const existing = KEY_DATA[key];
+                if (existing) {
+                    // SCAN 在键空间变动时可能重复返回同一个 key：更新而不重复入列
+                    existing.type = type;
+                    existing.ttl = ttl;
+                    return existing;
+                }
+                // KEY_DATA 与 allKeys 共用同一个对象，两处状态不会再走偏
+                const entry = { key: key, type: type, ttl: ttl, value: '' };
+                KEY_DATA[key] = entry;
+                allKeys.push(entry);
+                return entry;
+            }
+
+            // 本地移除一个 key（删除成功后调用，避免整表重扫）
+            function removeKeyEntry(key) {
+                delete KEY_DATA[key];
+                const idx = allKeys.findIndex(k => k.key === key);
+                if (idx >= 0) allKeys.splice(idx, 1);
+            }
+
+            // 从第一页重新加载（连接切换、搜索、刷新、导入后调用）
+            function loadKeys() {
+                if (!currentConn || !currentConn.id) {
+                    resetKeyList();
+                    renderKeyTree();
+                    return Promise.resolve(allKeys);
+                }
+                resetKeyList();
+                return loadKeyPage(true);
+            }
+
+            /**
+             * 拉取一页 key 并追加到列表。
+             *
+             * `reset` 为 true 表示这一页是重置后的首页（此时列表刚被清空）。
+             */
+            function loadKeyPage(reset) {
+                if (!currentConn || !currentConn.id) return Promise.resolve(allKeys);
+                if (keyPaging.loading && !reset) return Promise.resolve(allKeys);
+                if (keyPaging.done) return Promise.resolve(allKeys);
+
+                const token = keyPaging.token;
+                keyPaging.loading = true;
+                keyPaging.error = '';
+                renderKeyTree();
+
+                return invoke('list_keys', {
+                    connId: currentConn.id,
+                    cursor: keyPaging.cursor,
+                    count: KEY_PAGE_SIZE,
+                    pattern: keyPaging.searchTerm || null,
+                }).then((page) => {
+                    // 请求期间连接/搜索词变过：这批结果已经过期，直接丢弃
+                    if (token !== keyPaging.token) return allKeys;
+                    const items = (page && page.keys) || [];
+                    for (const it of items) {
+                        const type = it.type || 'string';
+                        const ttl = it.ttl !== undefined ? it.ttl : -1;
+                        upsertKeyEntry(it.key, type, ttl);
+                    }
+                    keyPaging.cursor = (page && page.nextCursor) ? page.nextCursor : '0';
+                    keyPaging.done = keyPaging.cursor === '0';
+                    renderKeyTree();
+                    return allKeys;
+                }).catch((err) => {
+                    if (token === keyPaging.token) {
+                        // 保留已加载的部分，只把失败原因记下来（空列表时提示里会显示）
+                        keyPaging.error = String(err);
+                        console.error('加载 Key 列表失败', err);
+                        showToast('加载 Key 列表失败: ' + err, 'error');
+                    }
+                    return allKeys;
+                }).finally(() => {
+                    if (token === keyPaging.token) {
+                        keyPaging.loading = false;
+                        renderKeyTree();
+                    }
                 });
-                keyTreeEl.querySelectorAll('.node-folder-select').forEach(el => {
-                    el.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const p = el.dataset.folder;
-                        const es = getExpandedSet();
-                        if (es.has(p)) es.delete(p); else es.add(p);
-                        renderKeyTree(keySearch.value);
-                    });
-                });
+            }
+
+            /**
+             * 渲染 Key 列表：先处理未连接 / 无数据的空态，否则重建行并渲染可视窗口。
+             */
+            function renderKeyTree() {
+                const isConnected = currentConn && currentConn.online;
+                if (!isConnected) {
+                    keyRows = [];
+                    keyTreeEl.innerHTML = keyTreeHintHtml('fa-plug', '请先连接 Redis 服务器', false);
+                    return;
+                }
+                rebuildKeyRows();
+                if (keyRows.length === 0) {
+                    const searching = !!keyPaging.searchTerm;
+                    if (keyPaging.error) {
+                        keyTreeEl.innerHTML = keyTreeHintHtml('fa-exclamation-triangle', '加载失败：' + keyPaging.error, false);
+                    } else {
+                        keyTreeEl.innerHTML = keyTreeHintHtml(
+                            'fa-inbox',
+                            searching ? '没有匹配的 Key' : '暂无 Key\n点击「新增 Key」创建',
+                            keyPaging.loading
+                        );
+                    }
+                    return;
+                }
+                ensureKeyTreeSkeleton();
+                renderKeyWindow();
             }
 
             // ---------- 渲染：Key 详情 ----------
@@ -2734,7 +3212,7 @@
                                     showToast('TTL 已更新', 'success');
                                     appendTerminal(ttlResult.ttl > 0 ? `EXPIRE ${selectedKey} ${ttlResult.ttl} → OK` : `PERSIST ${selectedKey} → OK`, 'ok');
                                     if (KEY_DATA[selectedKey]) KEY_DATA[selectedKey].ttl = ttlResult.ttl;
-                                    loadKeys();
+                                    renderKeyTree();
                                 })
                                 .catch(err => {
                                     showToast('TTL 更新失败: ' + err, 'error');
@@ -2761,7 +3239,8 @@
                                     KEY_DATA[selectedKey].value = value;
                                     KEY_DATA[selectedKey].ttl = ttlResult.ttl;
                                 }
-                                loadKeys().then(() => renderDetail());
+                                renderKeyTree();
+                                renderDetail();
                             })
                             .catch(err => {
                                 showToast('保存失败: ' + err, 'error');
@@ -2795,8 +3274,11 @@
                                     appendTerminal(`删除 Key "${keyToDelete}"${n > 0 ? '' : '（不存在）'}`, n > 0 ? 'ok' : '');
                                     showToast(n > 0 ? 'Key 已删除' : 'Key 不存在', n > 0 ? 'success' : 'error');
                                     if (selectedKey === keyToDelete) selectedKey = null;
-                                    // 刷新 key 列表
-                                    return loadKeys();
+                                    // 本地摘掉这一条：分页模式下重扫列表会把已加载的页
+                                    // 和滚动位置一起丢掉
+                                    removeKeyEntry(keyToDelete);
+                                    renderKeyTree();
+                                    renderDetail();
                                 })
                                 .catch(err => {
                                     console.error('删除 Key 失败', err);
@@ -3172,6 +3654,8 @@
 
             // ---------- 通用确认对话框（替代原生 confirm） ----------
             let _confirmResolve = null;
+            // 确认框里可选复选框的当前状态（showConfirm 传入 checkbox 时才有意义）
+            let _confirmOptionChecked = false;
             function showConfirm(message, options = {}) {
                 const cModal = document.getElementById('confirmModal');
                 document.getElementById('confirmTitle').textContent = options.title || '提示';
@@ -3185,14 +3669,31 @@
                     okBtn.style.background = '';
                     okBtn.style.borderColor = '';
                 }
+                // 可选复选框：调用方用 getConfirmOption() 读取结果
+                const optionRow = document.getElementById('confirmOption');
+                const optionBox = document.getElementById('confirmOptionBox');
+                if (options.checkbox && options.checkbox.label) {
+                    _confirmOptionChecked = !!options.checkbox.checked;
+                    optionBox.checked = _confirmOptionChecked;
+                    document.getElementById('confirmOptionLabel').textContent = options.checkbox.label;
+                    optionRow.style.display = 'flex';
+                } else {
+                    _confirmOptionChecked = false;
+                    optionRow.style.display = 'none';
+                }
                 cModal.classList.add('open');
                 return new Promise((resolve) => {
                     _confirmResolve = resolve;
                 });
             }
+            // 读取最近一次确认框里复选框的状态
+            function getConfirmOption() {
+                return _confirmOptionChecked;
+            }
             function closeConfirm(result) {
                 const cModal = document.getElementById('confirmModal');
                 cModal.classList.remove('open');
+                if (result) _confirmOptionChecked = document.getElementById('confirmOptionBox').checked;
                 if (_confirmResolve) {
                     _confirmResolve(result);
                     _confirmResolve = null;
@@ -3347,8 +3848,39 @@
                 `;
             });
 
-            keySearch.addEventListener('input', (e) => {
-                renderKeyTree(e.target.value);
+            // 搜索下推到后端 SCAN：输入停顿后再重扫，避免每敲一个字符就扫一遍 keyspace
+            let keySearchTimer = null;
+            keySearch.addEventListener('input', () => {
+                clearTimeout(keySearchTimer);
+                keySearchTimer = setTimeout(() => { loadKeys(); }, 300);
+            });
+
+            // Key 树的滚动与点击都用事件委托：虚拟滚动会不断替换行元素，
+            // 逐元素绑定既浪费又容易漏绑
+            keyTreeEl.addEventListener('scroll', () => {
+                renderKeyWindow();
+                maybeLoadNextPage();
+            });
+            keyTreeEl.addEventListener('click', (e) => {
+                // 状态条上的「加载更多」
+                if (e.target.closest('.vt-more')) {
+                    loadKeyPage();
+                    return;
+                }
+                const keyEl = e.target.closest('.node-key-select');
+                if (keyEl) {
+                    selectedKey = keyEl.dataset.key;
+                    renderKeyWindow();
+                    renderDetail();
+                    return;
+                }
+                const folderEl = e.target.closest('.node-folder-select');
+                if (!folderEl) return;
+                const path = folderEl.dataset.folder;
+                const expanded = getExpandedSet();
+                if (expanded.has(path)) expanded.delete(path); else expanded.add(path);
+                rebuildKeyRows();
+                renderKeyWindow();
             });
 
             // 数据库切换
@@ -3356,6 +3888,8 @@
 
             document.getElementById('addConnectionBtn').addEventListener('click', () => openModal(null));
             document.getElementById('btnNewConnection').addEventListener('click', () => openModal(null));
+            document.getElementById('btnImportConnections').addEventListener('click', importConnections);
+            document.getElementById('btnExportConnections').addEventListener('click', exportConnections);
 
             document.getElementById('modalTest').addEventListener('click', testConnection);
             document.getElementById('modalCancel').addEventListener('click', closeModal);
@@ -3376,7 +3910,7 @@
             });
 
             document.getElementById('btnRefresh').addEventListener('click', () => {
-                renderKeyTree(keySearch.value);
+                loadKeys();
                 showToast('已刷新', 'info');
                 appendTerminal('刷新 Key 列表', '');
             });
@@ -3431,7 +3965,9 @@
                     addKeyNameInput.focus();
                     return;
                 }
-                if (allKeys.some(k => k.key === trimmed)) {
+                // 查重只看已加载的部分：分页模式下未加载的 key 查不到，
+                // 真冲突时 SET 会直接覆盖（与旧行为一致）
+                if (KEY_DATA[trimmed]) {
                     showToast('Key 已存在', 'error');
                     return;
                 }
@@ -3449,12 +3985,13 @@
                         showToast(`Key "${trimmed}" 已创建`, 'success');
                         const ttlArg = ttlResult.ttl > 0 ? ` EX ${ttlResult.ttl}` : '';
                         appendTerminal(`SET ${trimmed} "${value}"${ttlArg} → OK`, 'ok');
-                        // 刷新 key 列表
-                        loadKeys().then(() => {
-                            selectedKey = trimmed;
-                            renderKeyTree(keySearch.value);
-                            renderDetail();
-                        });
+                        // 本地插入这条新 key：重扫列表会丢掉已加载的分页与滚动位置，
+                        // 而且新 key 未必落在第一页里
+                        upsertKeyEntry(trimmed, 'string', ttlResult.ttl);
+                        KEY_DATA[trimmed].value = value;
+                        selectedKey = trimmed;
+                        renderKeyTree();
+                        renderDetail();
                     })
                     .catch(err => {
                         showToast('创建失败: ' + err, 'error');
@@ -3524,25 +4061,20 @@
                     showToast('请先连接 Redis 服务器', 'error');
                     return;
                 }
-                if (!allKeys.length) {
-                    showToast('当前数据库没有 Key 可导出', 'info');
-                    return;
-                }
                 const btn = document.getElementById('btnExport');
                 btn.disabled = true;
-                invoke('export_keys', { connId: currentConn.id, keys: allKeys.map(k => k.key) })
-                    .then((text) => {
-                        const blob = new Blob([text], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `maidi-export-${new Date().toISOString().slice(0, 10)}.json`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                        showToast(`已导出 ${allKeys.length} 个 Key`, 'success');
-                        appendTerminal(`EXPORT ${allKeys.length} keys → OK`, 'ok');
+                // 不传 keys：由后端全量枚举当前 keyspace。分页浏览时前端只持有已加载的
+                // 那部分 key，拿它当导出范围会漏数据。
+                invoke('export_keys', { connId: currentConn.id, keys: null })
+                    .then((res) => {
+                        const count = (res && res.count) || 0;
+                        if (!count) {
+                            showToast('当前数据库没有可导出的 Key', 'info');
+                            return;
+                        }
+                        downloadJson(`maidi-export-${todayStamp()}.json`, res.content);
+                        showToast(`已导出 ${count} 个 Key`, 'success');
+                        appendTerminal(`EXPORT ${count} keys → OK`, 'ok');
                     })
                     .catch((err) => {
                         showToast('导出失败: ' + err, 'error');
@@ -3581,6 +4113,293 @@
                 });
             }
 
+            // ==================== 静默更新 ====================
+            // 配合后端四个命令：check_update / start_update_download /
+            // get_update_progress / install_update_and_restart。
+            // 下载跑在 Rust 侧的后台任务里（Update::download 自带签名校验），
+            // 这里只轮询进度画底部进度条，所以下载期间应用照常可用，
+            // 甚至刷新页面也不会中断 —— 进度和已下好的安装包都存在后端状态里。
+            const UPDATE_POLL_MS = 500;
+            // 同一个版本只提示一次「发现新版本」，避免每次启动都打扰
+            const UPDATE_NOTICE_KEY = 'mc_cache_update_notified';
+
+            const updateBar = document.getElementById('updateBar');
+            const updateBarFill = document.getElementById('updateBarFill');
+            const updateBarIcon = document.getElementById('updateBarIcon');
+            const updateBarText = document.getElementById('updateBarText');
+            const updateBarPct = document.getElementById('updateBarPct');
+            const updateBarRestart = document.getElementById('updateBarRestart');
+            const updateBarDismiss = document.getElementById('updateBarDismiss');
+            const updateModal = document.getElementById('updateModal');
+            const updateModalTitle = document.getElementById('updateModalTitle');
+            const updateModalBody = document.getElementById('updateModalBody');
+            const updateModalOk = document.getElementById('updateModalOk');
+            const updateModalCancel = document.getElementById('updateModalCancel');
+            const updateDot = document.getElementById('updateDot');
+            const btnCheckUpdate = document.getElementById('btnCheckUpdate');
+
+            let updatePollTimer = null;
+            // 弹窗确认按钮该做什么：发现新版本时是「立即更新」，已就绪时是「立即重启」
+            let updateModalAction = null;
+            // 用户手动收起了进度条（新版本开始下载时重置）
+            let updateBarHidden = false;
+            // 本轮下载是否已弹过「更新已就绪」，防止重复弹窗
+            let updateReadyNotified = false;
+
+            function fmtSize(bytes) {
+                if (!bytes || bytes < 1024) return (bytes || 0) + ' B';
+                const units = ['KB', 'MB', 'GB'];
+                let value = bytes / 1024;
+                let i = 0;
+                while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
+                return value.toFixed(1) + ' ' + units[i];
+            }
+
+            function showUpdateBar() {
+                if (!updateBarHidden) updateBar.classList.add('open');
+            }
+
+            function hideUpdateBar() {
+                updateBar.classList.remove('open', 'indeterminate', 'done', 'failed');
+            }
+
+            // 把后端返回的进度快照画到进度条上
+            function renderUpdateProgress(p) {
+                const known = p.total && p.total > 0;
+                const pct = known ? Math.min(100, Math.round((p.downloaded / p.total) * 100)) : 0;
+
+                updateBar.classList.toggle('indeterminate', p.stage === 'downloading' && !known);
+                updateBar.classList.toggle('done', p.stage === 'ready');
+                updateBar.classList.toggle('failed', p.stage === 'failed');
+
+                if (p.stage === 'downloading') {
+                    showUpdateBar();
+                    updateBarIcon.className = 'fas fa-circle-notch fa-spin';
+                    updateBarIcon.style.color = '';
+                    updateBarText.textContent = '正在后台下载更新 v' + (p.version || '') + '…';
+                    updateBarPct.textContent = known
+                        ? pct + '%（' + fmtSize(p.downloaded) + ' / ' + fmtSize(p.total) + '）'
+                        : fmtSize(p.downloaded);
+                    updateBarFill.style.width = known ? pct + '%' : '';
+                    updateBarRestart.style.display = 'none';
+                    updateBarDismiss.style.display = 'none';
+                    return;
+                }
+
+                if (p.stage === 'ready') {
+                    showUpdateBar();
+                    updateBarIcon.className = 'fas fa-check-circle';
+                    updateBarIcon.style.color = 'var(--green)';
+                    updateBarText.textContent = '更新 v' + (p.version || '') + ' 已下载完成，重启后生效';
+                    updateBarPct.textContent = '';
+                    updateBarFill.style.width = '100%';
+                    updateBarRestart.style.display = '';
+                    updateBarDismiss.style.display = '';
+                    return;
+                }
+
+                if (p.stage === 'failed') {
+                    showUpdateBar();
+                    updateBarIcon.className = 'fas fa-exclamation-circle';
+                    updateBarIcon.style.color = 'var(--danger, #e5484d)';
+                    updateBarText.textContent = p.error || '更新失败';
+                    updateBarPct.textContent = '';
+                    updateBarFill.style.width = '100%';
+                    updateBarRestart.style.display = 'none';
+                    updateBarDismiss.style.display = '';
+                    return;
+                }
+
+                if (p.stage === 'installing') {
+                    // 正常路径下重启很快，这里主要覆盖「安装途中刷新了页面」的情况，
+                    // 让进度条继续说明现在在做什么，而不是突然消失
+                    showUpdateBar();
+                    updateBarIcon.className = 'fas fa-circle-notch fa-spin';
+                    updateBarIcon.style.color = '';
+                    updateBarText.textContent = '正在安装更新并重启…';
+                    updateBarPct.textContent = '';
+                    updateBarFill.style.width = '100%';
+                    updateBarRestart.style.display = 'none';
+                    updateBarDismiss.style.display = 'none';
+                    return;
+                }
+
+                hideUpdateBar();
+            }
+
+            function stopUpdatePolling() {
+                if (updatePollTimer) {
+                    clearInterval(updatePollTimer);
+                    updatePollTimer = null;
+                }
+            }
+
+            function pollUpdateProgress() {
+                return invoke('get_update_progress').then(p => {
+                    renderUpdateProgress(p);
+                    if (p.stage === 'ready') {
+                        stopUpdatePolling();
+                        if (!updateReadyNotified) {
+                            updateReadyNotified = true;
+                            openUpdateReadyModal(p.version);
+                        }
+                    } else if (p.stage === 'failed') {
+                        stopUpdatePolling();
+                    }
+                    return p;
+                }).catch(err => {
+                    // 单次轮询失败不打断下载，下一轮继续
+                    console.warn('读取更新进度失败', err);
+                });
+            }
+
+            function startUpdatePolling() {
+                stopUpdatePolling();
+                pollUpdateProgress();
+                updatePollTimer = setInterval(pollUpdateProgress, UPDATE_POLL_MS);
+            }
+
+            function closeUpdateModal() {
+                updateModal.classList.remove('open');
+                updateModalAction = null;
+            }
+
+            function showUpdateModal(title, bodyHtml, okText, action) {
+                updateModalTitle.textContent = title;
+                updateModalBody.innerHTML = bodyHtml;
+                updateModalOk.textContent = okText;
+                updateModalAction = action;
+                updateModal.classList.add('open');
+            }
+
+            // 「发现新版本」弹窗：版本号 + 更新说明
+            function openUpdateAvailableModal(info) {
+                let html = '<div>新版本 <b style="color: var(--accent);">v' + escapeHtml(info.version) + '</b>'
+                    + ' 已发布，当前版本 v' + escapeHtml(info.currentVersion) + '。</div>';
+                if (info.date) {
+                    const when = new Date(info.date);
+                    // 日期解析失败就不显示，不影响更新本身
+                    if (!isNaN(when.getTime())) {
+                        html += '<div style="margin-top: 6px; color: var(--text-muted); font-size: 12px;">'
+                            + '发布于 ' + escapeHtml(when.toLocaleString('zh-CN')) + '</div>';
+                    }
+                }
+                if (info.notes) {
+                    html += '<div class="update-notes">' + escapeHtml(info.notes) + '</div>';
+                }
+                html += '<div style="margin-top: 12px; color: var(--text-muted);">'
+                    + '更新包会在后台下载，期间可以继续使用；下载完成后重启即可生效。</div>';
+                showUpdateModal('发现新版本', html, '立即更新', startUpdateDownload);
+            }
+
+            // 「更新已就绪」弹窗：下载完成后的提示，重启即生效
+            function openUpdateReadyModal(version) {
+                const html = '<div>新版本 <b style="color: var(--green);">v' + escapeHtml(version || '') + '</b>'
+                    + ' 已下载完成，重启应用即可完成更新。</div>'
+                    + '<div style="margin-top: 10px; color: var(--text-muted);">'
+                    + '重启不影响已保存的连接配置，正在编辑的内容请先保存。</div>';
+                showUpdateModal('更新已就绪', html, '立即重启', installAndRestart);
+            }
+
+            // silent=true 时只在标题栏点亮红点并轻提示一次（启动时的静默检查）
+            function checkUpdate(silent) {
+                return invoke('check_update').then(info => {
+                    updateDot.classList.toggle('show', !!info.available);
+                    btnCheckUpdate.title = info.available
+                        ? '发现新版本 v' + info.version + '，点击更新'
+                        : '检查更新';
+                    if (info.available) {
+                        notifyUpdateOnce(info);
+                    } else if (!silent) {
+                        showToast('已是最新版本 v' + info.currentVersion, 'success');
+                    }
+                    return info;
+                }).catch(err => {
+                    if (!silent) showToast('检查更新失败: ' + err, 'error');
+                    else console.warn('静默检查更新失败', err);
+                    return null;
+                });
+            }
+
+            function notifyUpdateOnce(info) {
+                try {
+                    if (localStorage.getItem(UPDATE_NOTICE_KEY) === info.version) return;
+                    localStorage.setItem(UPDATE_NOTICE_KEY, info.version);
+                } catch (e) { /* localStorage 不可用时每次都提示，可以接受 */ }
+                showToast('发现新版本 v' + info.version + '，点击右上角下载', 'info');
+            }
+
+            function startUpdateDownload() {
+                closeUpdateModal();
+                updateBarHidden = false;
+                updateReadyNotified = false;
+                showUpdateBar();
+                updateBarIcon.className = 'fas fa-circle-notch fa-spin';
+                updateBarIcon.style.color = '';
+                updateBarText.textContent = '正在准备下载…';
+                invoke('start_update_download')
+                    .then(() => startUpdatePolling())
+                    .catch(err => {
+                        hideUpdateBar();
+                        showToast('开始下载失败: ' + err, 'error');
+                    });
+            }
+
+            function installAndRestart() {
+                closeUpdateModal();
+                updateBarRestart.disabled = true;
+                updateBarRestart.textContent = '正在重启…';
+                updateBarText.textContent = '正在安装更新并重启…';
+                invoke('install_update_and_restart').catch(err => {
+                    // 成功时进程会被新版本接管、不会有回调；能走到这说明安装失败
+                    updateBarRestart.disabled = false;
+                    updateBarRestart.textContent = '立即重启';
+                    // 后端已把阶段置为 failed，拉一次进度让进度条常驻失败原因，
+                    // 而不是只弹一个两秒就消失的 toast
+                    pollUpdateProgress();
+                    showToast('更新安装失败: ' + err, 'error');
+                });
+            }
+
+            btnCheckUpdate.addEventListener('click', () => {
+                btnCheckUpdate.disabled = true;
+                checkUpdate(false).then(info => {
+                    if (info && info.available) openUpdateAvailableModal(info);
+                }).finally(() => { btnCheckUpdate.disabled = false; });
+            });
+            updateBarRestart.addEventListener('click', installAndRestart);
+            updateBarDismiss.addEventListener('click', () => {
+                updateBarHidden = true;
+                hideUpdateBar();
+            });
+            updateModalOk.addEventListener('click', () => {
+                const action = updateModalAction;
+                closeUpdateModal();
+                if (action) action();
+            });
+            updateModalCancel.addEventListener('click', closeUpdateModal);
+
+            function initUpdate() {
+                // 标题栏版本号取自安装包（不依赖网络），拿不到就保留占位符
+                invoke('plugin:app|version')
+                    .then(v => { document.getElementById('appVersion').textContent = 'v' + v; })
+                    .catch(() => {});
+
+                // 恢复进度条：下载可能在上一次页面加载时就开始了，进度存在后端
+                invoke('get_update_progress').then(p => {
+                    renderUpdateProgress(p);
+                    if (p.stage === 'downloading') {
+                        startUpdatePolling();
+                    } else if (p.stage === 'ready') {
+                        // 本次启动前就下好了，保留进度条上的重启入口，不再弹窗打扰
+                        updateReadyNotified = true;
+                    }
+                }).catch(() => {});
+
+                // 启动后静默查一次：有新版只点亮红点并轻提示，不弹窗挡操作
+                setTimeout(() => checkUpdate(true), 1500);
+            }
+
             // ---------- 初始化 ----------
             applyLayout();
             refreshDbSelector();
@@ -3589,6 +4408,7 @@
             renderDetail();
             loadConnections();
             updateStatus();
+            initUpdate();
 
             setTimeout(() => {
                 appendTerminal('欢迎使用 麦地缓存', 'ok');
@@ -3604,7 +4424,14 @@
                 }
             }, 5000);
 
-            window.__app = { allKeys, KEY_DATA, expandedFolders, renderKeyTree, renderDetail };
+            // 调试/自动化钩子：allKeys 与 KEY_DATA 会被分页重置重新赋值，这里用取值器
+            window.__app = {
+                get allKeys() { return allKeys; },
+                get KEY_DATA() { return KEY_DATA; },
+                expandedFolders,
+                renderKeyTree,
+                renderDetail,
+            };
 
             // ==================== 主题切换 ====================
             const THEME_KEY = 'mc_cache_theme';

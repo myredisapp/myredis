@@ -1,8 +1,10 @@
 # 开发进度与问题记录
 
 > 本文档用于跟踪「麦地缓存」开发进度、已决策事项、已知缺口与待办事项。随开发持续更新。
-> 最近更新：2026-09-14，状态：**v0.0.12 已发布；Hash/List/Set/ZSet 编辑、终端真实转发、Key 导入导出已落地，
-> 用户可见缺口仅剩「连接配置导入导出」1 项**。
+> 最近更新：2026-09-15，状态：**v0.0.12 已发布；Hash/List/Set/ZSet 编辑、终端真实转发、Key 导入导出、
+> 连接配置导入导出、Key 列表分页与虚拟滚动均已落地（后三项尚未进入任何发布 tag）；
+> 新增自动更新（后台下载 + 重启生效，见 §1.7 / §8.9）。
+> §2.1 的功能缺口已清空，剩余为代码质量与工程流程债务**。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -19,7 +21,7 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-| 当前 HEAD | 开发中 | 核心链路完整，待补 Hash/List/Set/ZSet、终端真实转发、导入导出 |
+| 当前 HEAD | 开发中 | 核心链路完整；§2 剩余为代码质量与工程流程债务 |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
@@ -27,7 +29,7 @@
 > 最新 tag 为 `v0.0.12`。
 
 技术栈：Tauri 2 + Rust 2021 + `redis` 0.25（`tokio-comp` / `connection-manager` / `cluster` / `cluster-async`）
-+ tokio + sysinfo 0.39 + 单文件原生 JS 前端（`frontend/index.html`，无构建步骤，约 3300 行）。
++ tokio + sysinfo 0.39 + 单文件原生 JS 前端（`frontend/index.html`，无构建步骤，约 4000 行）。
 
 ---
 
@@ -59,11 +61,22 @@
 
 ### 1.3 Key 操作（✅ 完成）
 
-- [x] `list_keys`：`SCAN` 游标遍历（**不用 `KEYS *`**，避免阻塞生产实例），返回 `key / type / ttl`
+- [x] `list_keys`：**分页 + `SCAN` 游标遍历**（**不用 `KEYS *`**，避免阻塞生产实例），
+      签名 `list_keys(conn_id, cursor, count, pattern) -> { keys, next_cursor }`，返回 `key / type / ttl`
+      - 单页大小由调用方给定（默认 100，上限 1000），页内累积到 `count` 或游标归零为止；
+        单页最多 32 轮 `SCAN`，命中不足时先返回已扫到的部分与继续用的游标，保证单次请求工作量有界
+      - 集群下游标是 `节点地址:节点内游标` 的复合值，一页可跨多个主节点；用节点**地址**而非序号，
+        避免 `CLUSTER NODES` 输出顺序变化导致翻页漏读或重复（节点已不在集群时报错提示刷新）
+      - `pattern` 收的是用户原始搜索文本，后端按「不区分大小写的包含匹配」语义转成 `MATCH` 模式：
+        glob 元字符（`* ? [ ] \`）转义后按字面量处理，ASCII 字母展开成字符类 `[aA]` 还原大小写不敏感
+        （见 `to_match_pattern`，有单测）。搜索因此能命中尚未加载的 key，而不只是在已加载的那一页里找
 - [x] `set_key`：`SET key value [EX ttl]`，TTL 仅接受 `-1`（永不过期）或正整数，其余报参数错误
 - [x] `del_key`：支持批量 `DEL`，返回实际删除数量
 - [x] `get_string`：读取 String 值
 - [x] 前端 Key 树、关键字搜索、文件夹折叠、TTL 输入与保存、新增 String Key、删除 Key（带确认）
+      - 列表按页加载：滚到底部自动预取下一页，状态条另有「加载更多」入口
+        （文件夹折叠起来时列表撑不满视口、滚不动，需要有显式入口）
+      - 渲染走虚拟滚动：只渲染视口内的行（上下各多渲染 8 行），几十万 key 不再一次性铺满 DOM
 - [x] **Hash / List / Set / ZSet 的内容加载与字段级编辑**（`commands/key_content.rs`）
       - 读取：`get_hash`（HGETALL）/ `get_list`（LRANGE 0 -1，带下标）/ `get_set`（SMEMBERS）
         / `get_zset`（ZRANGE 0 -1 WITHSCORES）
@@ -77,9 +90,15 @@
       （OK / (nil) / (integer) N / (empty array)，多行数组逐行输出）；
       只读连接按 `WRITE_COMMANDS` 名单拦截写命令，命令执行包 10s `tokio::time::timeout`
 - [x] **Key 导入 / 导出**（`commands/import_export.rs`）：导出为 JSON 文档
-      （string/hash/list/set/zset 五种类型 + TTL，逐 key 独立命令读取，集群模式不触发跨 slot 错误）；
+      （string/hash/list/set/zset 五种类型 + TTL，逐 key 独立命令读取，集群模式不触发跨 slot 错误；
+      `keys` 传 `null` 时由后端全量枚举当前 keyspace —— 前端分页浏览时只持有已加载的那部分 key，
+      拿它当导出范围会漏数据，所以全量枚举放在后端做）；
       导入支持覆盖 / 跳过两种冲突策略，逐 key 写入（SET / HSET / RPUSH / SADD / ZADD + EXPIRE），
       单条失败不影响其它 key，失败原因汇总返回；Stream 等类型跳过
+- [x] **连接配置导入 / 导出**（`commands/connection.rs`）：导出全部连接配置为 JSON 文档
+      （可选是否包含密码，含明文密码时前端弹确认框提示；格式带 `app` / `version` / `exportedAt` 元信息）；
+      导入兼容 `{ connections: [...] }` 与裸数组两种形态，按 `id` 匹配已有连接（覆盖或跳过），
+      单条字段缺失 / 类型错误只记入失败列表并带名称返回，不影响其它条目
 
 ### 1.4 服务器信息（✅ 完成）
 
@@ -89,7 +108,7 @@
       （按「挂载点是路径最长前缀」匹配磁盘；`CONFIG` 无权限时静默降级）
 - [x] 前端每约 5 秒自动刷新指标
 
-### 1.5 前端（部分完成）
+### 1.5 前端（✅ 完成）
 
 - [x] 五款主题（春分 / 立夏 / 初秋 / 深秋 / 冬至），选择结果存 `localStorage`（key `mc_cache_theme`）
 - [x] 面板拖拽与布局记忆，存 `localStorage`（key `myredis.layout`）
@@ -97,6 +116,11 @@
 - [x] 快捷键：`Enter` 执行终端命令 / 保存连接弹窗 / 新增 Key 名称与 TTL；`Ctrl`(`⌘`)+`Enter` 提交新增 Key 的值；`Esc` 关闭弹窗
 - [x] 终端为**真实命令转发**（见 §1.3），结果按 redis-cli 风格渲染，写命令在只读连接下被拦截
 - [x] 导入（JSON 文件，覆盖前确认，报告成功/跳过/失败数量）/ 导出（当前库全部 Key 下载为 JSON）
+- [x] **Key 列表分页 + 虚拟滚动**（见 §1.3）：滚到底部预取下一页，状态条常驻「已加载 N 个 Key / 加载更多」，
+      只渲染视口内的行；搜索下推后端 `SCAN MATCH`（输入停顿 300 ms 后重扫），
+      增 / 删 Key 只改本地列表，不再整表重扫
+- [x] **连接配置导入 / 导出**：侧栏连接区两个入口，导出弹确认框（可选是否包含明文密码），
+      导入前确认覆盖策略，报告新增/覆盖、跳过、失败数量
 
 ### 1.6 工程与发布（✅ 完成）
 
@@ -108,6 +132,17 @@
       三平台矩阵出包（macOS universal / Linux x64 / Windows x64），规范化产物名，发 Release，推送 `web/` 静态页
 - [x] 三平台打包踩坑记录见 §8（**这一节是实测经验，勿删**）
 
+### 1.7 自动更新（✅ 完成）
+
+- [x] 标题栏「检查更新」入口：启动后静默查一次（有新版只点亮红点并轻提示一次，不弹窗挡操作），也可手动点开
+- [x] **后台下载**：点「立即更新」后在 Rust 侧的独立任务里下载，前端每 500 ms 轮询 `get_update_progress`
+      画窗口底部进度条；下载期间应用照常可用，甚至刷新页面也不中断（进度与安装包都存在后端状态里）
+- [x] 下载完成弹「更新已就绪」提示，点「立即重启」才真正落盘安装并重启；底部进度条上常驻重启入口，
+      关掉弹窗也不会找不到入口
+- [x] 安装包验签：`Update::download` 内部先验签再返回字节，所以「下到一半的坏包」不会被装上；
+      公钥在 `tauri.conf.json`，私钥只在 CI（见 §8.9）
+- [x] 失败兜底：下载失败在进度条上说明原因；安装失败（如应用目录不可写）会把安装包留在内存里，可再点一次重启
+
 ---
 
 ## 2. 待办事项
@@ -116,8 +151,8 @@
 
 ### 2.1 功能缺口（P1，用户可见）
 
-> 以下 1 项与 `web/docs/index.html` 的「功能现状 → 仍在开发中」一一对应，改动该项请同步更新那份文档。
-> 原列在此的 Hash/List/Set/ZSet 编辑、终端真实转发、Key 导入导出三项已于 2026-09-14 完成（见 §1.3）。
+> **当前无遗留项** —— 本节 4 项已全部完成，`web/docs/index.html` 的「功能现状 → 仍在开发中」也已清空，
+> 两处请保持同步（改动用户可见能力时按 §6 第 7 条一起更新）。
 
 - [x] ✅ **Hash / List / Set / ZSet 的内容加载与字段级编辑**（2026-09-14 完成）
   - 实现：`commands/key_content.rs` + 前端详情区可编辑表格（行内保存/删除 + 底部新增行），详见 §1.3。
@@ -128,8 +163,9 @@
 - [x] ✅ **Key 导入 / 导出**（2026-09-14 完成）
   - 实现：`commands/import_export.rs`（JSON 格式，覆盖/跳过两种冲突策略），详见 §1.3。
 
-- [ ] ⬜ **连接配置的导入 / 导出**
-  - 现状：跨机器迁移要手动拷贝 `connections.json`。
+- [x] ✅ **连接配置的导入 / 导出**（2026-09-14 完成）
+  - 实现：`commands/connection.rs` 的 `export_connections` / `import_connections`
+    （侧栏两个入口，导出可选是否带明文密码，导入按 `id` 覆盖/跳过），详见 §1.3 与 §1.5。
 
 ### 2.2 代码质量与健壮性（P1–P2）
 
@@ -145,13 +181,14 @@
     用户在主机名里填 `rediss://x` 只会得到一条通用 URL 解析错误。
   - `PROJECT_PLAN.md` §9.4.1 / §4.2.3 要求拦截并返回「暂不支持 TLS 加密连接 (rediss)」，需补上入口校验。
 
-- [ ] ⬜ **P2｜Key 列表全量加载，分页与虚拟滚动未落地**
-  - 现状：`list_keys` 一次性把 SCAN 游标跑到 0 并返回全部 key，前端既无 cursor 也无虚拟化，
-    与 `PROJECT_PLAN.md` §4.3「后端 SCAN 分页 + 前端虚拟滚动」的设计不符。几十万 key 时会明显卡。
+- [x] ✅ **P2｜Key 列表全量加载，分页与虚拟滚动未落地**（2026-09-14 完成）
+  - 实现：`list_keys` 改为游标分页（见 §1.3），前端改成虚拟滚动 + 滚动预取 + 状态条「加载更多」，
+    搜索下推后端 `SCAN MATCH`。与 `PROJECT_PLAN.md` §4.3 的设计对齐。
 
-- [ ] ⬜ **P2｜集群 `list_keys` 的 N+1 命令**
-  - 现状：拿到全部 key 名后，对**每个 key** 各发一次 `TYPE` 和一次 `TTL`（`commands/key.rs`）。
-    一万个 key 就是两万次往返，可用 pipeline 批量收拢。
+- [ ] ⬜ **P2｜`list_keys` 的 N+1 命令**
+  - 现状：对拿到的**每个 key** 各发一次 `TYPE` 和一次 `TTL`（`commands/key.rs`）。
+    分页后单次请求的往返数已被页大小封顶（默认 100 个 key → 200 次往返），
+    但仍是 O(页大小) 次往返，可用 pipeline 收拢成 1 次。
 
 - [ ] ⬜ **P2｜同步阻塞 IO 跑在 async 上下文**
   - 现状：`storage.rs` 的模块注释写明「调用方应放在 `spawn_blocking` 中执行」，
@@ -202,7 +239,9 @@
 | 1 | 密码明文存 `connections.json` | 已知风险 | 任何有本机读权限的进程都能取到；后续可改系统密钥链（macOS Keychain / Windows Credential Manager / Secret Service） |
 | 2 | 超时值是否暴露给用户配置 | 待定 | 现为硬编码默认值（5s 连接 / 10s 命令），且尚未接线，见 §2.2 |
 | 3 | 兼容 Redis 6.0 以下 | 需持续注意 | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级 |
-| 4 | 前端 `frontend/index.html` 单文件已约 3300 行 | 观察中 | 复杂度继续上升时再评估拆分为多文件 + esbuild，与桌面客户端解耦，不影响后端 |
+| 4 | 前端 `frontend/index.html` 单文件已约 4000 行 | 观察中 | 复杂度继续上升时再评估拆分为多文件 + esbuild，与桌面客户端解耦，不影响后端 |
+| 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件 |
+| 6 | macOS 构建未做代码签名 / 公证 | 已知风险 | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。后续要公证需另配 `APPLE_*` 凭据 |
 
 ---
 
@@ -210,6 +249,8 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-15 | — | 新增**自动更新**（§1.7）：`tauri-plugin-updater` + 后台下载 + 前端轮询进度条 + 重启生效，四个命令见 `src-tauri/src/commands/update.rs`；发布流程加 `createUpdaterArtifacts` 签名与 `latest.json` 清单生成（§8.9），签名私钥存 CI secret；标题栏版本号改为读真实版本（原先硬编码 `v2.0`） |
+| 2026-09-14 | — | §1.5 两项收尾：**连接配置导入/导出**（`export_connections` / `import_connections` + 侧栏入口 + 带复选框的确认框）与 **Key 列表分页 + 虚拟滚动**（`list_keys` 改游标分页、集群复合游标、前端虚拟渲染与滚动预取、搜索下推 `SCAN MATCH`）；`export_keys` 改为后端全量枚举（`keys` 可传 `null`）；§2.1 功能缺口清空 |
 | 2026-09-14 | — | §1.3 三项缺口落地：Hash/List/Set/ZSet 内容加载与字段级编辑（`key_content.rs`）、终端真实命令转发（`terminal.rs`）、Key 导入导出（`import_export.rs`）；任意类型 TTL 修改（`set_key_ttl`，PERSIST/EXPIRE） |
 | 2026-09-14 | — | 全面重写：按实际代码回填进度；新增「待办事项」章节（4 项功能缺口 + 8 项代码/工程债务）；明确非待办清单 |
 | 2026-09（历史） | v0.2.x | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与模块拖拽调宽 |
@@ -374,3 +415,35 @@ Linux 仍刻意留在 `ubuntu-22.04`：产物会继承构建机的 glibc 版本�
 构建矩阵前先跑 `check-deploy-env`，快速校验部署凭据 / SSH 连通 / `scp` 试传 ——
 让缺失或配错的凭据在几秒内失败，而不是等几十分钟构建跑完才暴露。
 同一 tag 重复触发会取消上一次未跑完的运行（`concurrency.cancel-in-progress`）。
+
+### 8.9 自动更新的签名与清单（`latest.json`）
+
+发布流程为自动更新多做了两件事：构建阶段给更新包签名，发布阶段生成更新清单。
+
+**公钥 / 私钥**：`tauri.conf.json` 的 `plugins.updater.pubkey` 是公钥（明文，可进仓库）；
+私钥在 GitHub secret `TAURI_SIGNING_PRIVATE_KEY`，本地副本 `~/.tauri/myredis-updater.key`
+（`tauri signer generate -w ~/.tauri/myredis-updater.key`，生成时未设密码，CI 里把密码传空字符串即可 ——
+tauri 把「已设置但为空」当作无密码，与「变量缺失」不同，后者会尝试交互式索要密码）。
+
+`check-deploy-env` 会前置检查这个私钥（见该脚本第 2 步）：缺了照样能打包成功，只是产不出 `.sig`，
+症状是「已安装的应用永远收不到更新」这种静默失败，所以必须在构建前拦下来。
+
+**更新源**：`plugins.updater.endpoints` 指向
+`https://github.com/myredisapp/myredis/releases/latest/download/latest.json`，
+也就是「最新一个正式 Release 的附件」。预发布（tag 带 `-`，如 `v0.2.0-beta.1`）不会顶掉 `latest`，
+所以预发布用户收不到自动更新、也不会拿到半成品，这符合预期。
+
+**产物与清单**：
+
+- `bundle.createUpdaterArtifacts: true` 后，tauri 在安装包旁边额外产出 `.sig`，
+  以及 macOS 的 `.app.tar.gz`（更新用 tar.gz；`.dmg` 只用于首次安装，没有 `.sig`）；
+- `rename-artifacts.mjs` 现在也认 `app` 类型（`.app.tar.gz`），并把 `.sig` 跟着安装包一起改名成
+  `myredis-<tag>-<platform>.<ext>.sig`；
+- `gen-latest-json.mjs` 在 Release 建好后执行，读各平台的 `.sig` 内容生成 `latest.json` 并上传为附件
+  （`notes` 取自 Release 正文，即 `--generate-notes` 的结果）。
+
+平台键是 tauri 的 `OS-ARCH` 形式，必须与运行端算出来的 target 一致：macOS 出的是 universal 单包，
+所以 `darwin-aarch64` 与 `darwin-x86_64` 两个键指向同一个 `.app.tar.gz`；Windows **只挂 NSIS**（`.exe`），
+因为 msi 与 nsis 各有一套独立的卸载信息，用 msi 去更新 nsis 装的机器会留下两份安装。
+
+命令链路（检查 / 后台下载 / 轮询进度 / 安装重启）见 §1.7 与 `src-tauri/src/commands/update.rs`。

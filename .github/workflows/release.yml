@@ -46,6 +46,8 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
           WEB_DEPLOY_PATH: ${{ vars.WEB_DEPLOY_PATH }}
+          # 构建 job 用它给更新包签名，缺了会打出一堆装不上的更新包，所以也在这里先卡一道
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: bash .github/scripts/check-deploy-env.sh
 
   build:
@@ -128,7 +130,15 @@ jobs:
 
       # bundles 的值必须加引号：Windows runner 的默认 shell 是 PowerShell，
       # 未加引号的 nsis,msi 会被它当成数组、展开成一个参数 "nsis msi" 传给 tauri，报 invalid value。
-      - name: 构建并打包
+      #
+      # 签名私钥只在 CI 里（仓库 secret），客户端用 tauri.conf.json 里的公钥校验，
+      # 所以这一步产出的 .sig 必须跟着安装包一起发布，否则更新会被客户端拒掉。
+      # 密钥生成时没设密码，PASSWORD 传空字符串即可：tauri 把「已设置但为空」当作无密码，
+      # 与「变量缺失」不同（后者会尝试交互式索要密码）。
+      - name: 构建并打包（含更新包签名）
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: tauri build --target ${{ matrix.target }} --bundles "${{ matrix.bundles }}"
 
       # tauri 按 productName 命名安装包（macOS / Windows 是中文「麦地缓存」，Linux 是 maidi-cache），
@@ -192,6 +202,25 @@ jobs:
               --verify-tag \
               $PRERELEASE
           fi
+
+      # 更新清单最后生成：它要引用刚上传的安装包名，notes 又取自刚生成的 Release 正文。
+      # 地址固定为 releases/latest/download/latest.json（见 tauri.conf.json 的 endpoints），
+      # 所以它必须挂在「最新一个正式 Release」上 —— 预发布不会顶掉 latest，符合预期。
+      - name: 生成并上传更新清单 latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          # Release 正文就是 --generate-notes 的结果，直接拿来当更新说明
+          gh release view "$TAG" --json body -q .body > release-notes.md
+          node .github/scripts/gen-latest-json.mjs "$TAG" dist release-notes.md latest.json
+          gh release upload "$TAG" latest.json --clobber
+
+      # latest.json 里的下载地址指向 GitHub Release 资产，不需要额外部署，
+      # 但内容依赖上一步上传成功，这里打印一次做留痕，便于发布后核对
+      - name: 回显更新清单
+        run: cat latest.json
 
   # Release 建好后把官网静态页推到服务器。web/ 下都是自包含单文件
   # （图标等资源全部内联），首页与 docs/ 子目录一并上传即可。
