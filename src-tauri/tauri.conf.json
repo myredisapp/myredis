@@ -44,7 +44,7 @@
       "endpoints": [
         "https://github.com/myredisapp/myredis/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhDQTFGMzJEMEE5QzBENzAKUldSd0Rad0tMZk9oakNmK281NXpnb3lEbjNRbjFIbElsSFhuYjRiS2Jrb1ZPOHBCam9NMDRjMFQK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEY0MjAyNkY1MDk0MzM0QwpSV1JNTTVSUWJ3SkNEM0pYMVdrVEJ0UkkwSEF2VWJqQ05VVlhtVy80Y2RZWHN6eEdWQXNOaS9BUgo="
     }
   }
 }

@@ -109,6 +109,13 @@ pub fn command_error_message(err: &redis::RedisError, direct: Option<&Connection
     }
 }
 
+// 让 Tauri 命令能返回 AppError（Tauri 2 要求错误实现 Serialize）
+impl Serialize for AppError {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::command_error_message;
@@ -191,12 +198,5 @@ mod tests {
     fn other_errors_pass_through() {
         let err = redis::RedisError::from((redis::ErrorKind::TypeError, "WRONGTYPE message"));
         assert_eq!(command_error_message(&err, None), err.to_string());
-    }
-}
-
-// 让 Tauri 命令能返回 AppError（Tauri 2 要求错误实现 Serialize）
-impl Serialize for AppError {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
     }
 }

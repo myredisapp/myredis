@@ -13,6 +13,10 @@
 //!
 //! 更新源是 `tauri.conf.json` 里 `plugins.updater.endpoints` 指向的 `latest.json`，
 //! 校验用的公钥同在该文件；私钥只存在于 CI（`.github/workflows/release.yml`）。
+//!
+//! 报错文案的分工（改动时别破坏）：**返回给前端的 `Err` 不带「检查更新失败」这类
+//! 前缀**，前缀由前端调用处加 —— 否则界面上会出现「检查更新失败: 检查更新失败: …」。
+//! 进度条上的 `UpdateProgress::error` 是唯一展示处，所以自带前缀。
 
 use std::sync::{Mutex, MutexGuard};
 
@@ -117,6 +121,28 @@ fn info_of(update: &Update) -> UpdateInfo {
     }
 }
 
+/// 把 `Updater::check` 的错误翻成能对症的说法。
+///
+/// 这里不加「检查更新失败」这类前缀 —— 前端调用处已经加过一次，两边都加会看到重复的
+/// 「检查更新失败: 检查更新失败: …」。插件原文大多是英文，也只有 `ReleaseNotFound`
+/// 这一种需要解释：
+///
+/// - `ReleaseNotFound`：所有 endpoint 都没返回 2xx。最常见的是**最新发布还没有附带
+///   `latest.json`**（例如 tag 打在启用自动更新之前），此时 GitHub 对
+///   `releases/latest/download/latest.json` 返回 404；
+/// - `Reqwest`：真的没连上（断网、代理、仓库私有等），带上网关原文；
+/// - 其余（清单 JSON 不合规、缺平台条目、签名/配置问题等）：保留插件原文，便于排查。
+fn check_error(err: tauri_plugin_updater::Error) -> AppError {
+    use tauri_plugin_updater::Error as UpdaterError;
+    match err {
+        UpdaterError::ReleaseNotFound => {
+            AppError::msg("更新服务没有返回版本清单（当前最新发布可能还没附带 latest.json）")
+        }
+        UpdaterError::Reqwest(err) => AppError::msg(format!("连接更新服务失败: {err}")),
+        other => AppError::msg(other.to_string()),
+    }
+}
+
 /// 检查是否有新版本。
 ///
 /// 已有下载成果（下载中 / 已就绪）时直接复用缓存结果，不再打一次网络请求 ——
@@ -143,7 +169,7 @@ pub async fn check_update(app: AppHandle) -> AppResult<UpdateInfo> {
         .map_err(|err| AppError::msg(format!("更新组件初始化失败: {err}")))?
         .check()
         .await
-        .map_err(|err| AppError::msg(format!("检查更新失败: {err}")))?;
+        .map_err(check_error)?;
 
     let Some(update) = update else {
         return Ok(UpdateInfo {
@@ -261,9 +287,51 @@ pub fn install_update_and_restart(app: AppHandle) -> AppResult<()> {
         let mut inner = state.guard();
         inner.bytes = Some(bytes);
         inner.stage = UpdateStage::Failed;
+        // 进度条上只显示这一行、没有别的上下文，所以自己带前缀；
+        // 返回给前端的错误不带前缀，由调用处统一加（见模块注释里的分工）
         inner.error = Some(format!("更新安装失败: {err}"));
-        return Err(AppError::msg(format!("更新安装失败: {err}")));
+        return Err(AppError::msg(err.to_string()));
     }
 
     app.restart();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tauri_plugin_updater::Error as UpdaterError;
+
+    /// 最新发布还没附带 latest.json 时插件报的就是这个错，提示里必须点出「清单」，
+    /// 否则用户只会看到一句英文，无从判断是网络问题还是还没发版。
+    #[test]
+    fn release_not_found_explains_missing_manifest() {
+        let text = check_error(UpdaterError::ReleaseNotFound).to_string();
+        assert!(
+            text.contains("latest.json"),
+            "提示应指明可能缺少清单: {text}"
+        );
+    }
+
+    /// 返回给前端的错误不带前缀，前缀由前端统一加，避免出现两个「检查更新失败:」。
+    #[test]
+    fn errors_do_not_repeat_the_frontend_prefix() {
+        for err in [
+            UpdaterError::ReleaseNotFound,
+            UpdaterError::EmptyEndpoints,
+            UpdaterError::UnsupportedArch,
+        ] {
+            let text = check_error(err).to_string();
+            assert!(
+                !text.starts_with("检查更新失败"),
+                "后端不该再加前缀: {text}"
+            );
+        }
+    }
+
+    /// 配置/清单格式这类问题保留插件原文，便于排查，不要吞掉。
+    #[test]
+    fn unknown_errors_keep_the_plugin_message() {
+        let text = check_error(UpdaterError::EmptyEndpoints).to_string();
+        assert!(text.contains("endpoints"), "应保留插件原文: {text}");
+    }
 }

@@ -141,7 +141,9 @@
       关掉弹窗也不会找不到入口
 - [x] 安装包验签：`Update::download` 内部先验签再返回字节，所以「下到一半的坏包」不会被装上；
       公钥在 `tauri.conf.json`，私钥只在 CI（见 §8.9）
-- [x] 失败兜底：下载失败在进度条上说明原因；安装失败（如应用目录不可写）会把安装包留在内存里，可再点一次重启
+- [x] 失败兜底：下载失败在进度条上说明原因；安装失败（如应用目录不可写）会把安装包留在内存里，可再点一次重启。
+      失败提示不长期占位：进度条上的失败原因与失败 toast 都是 **8 秒后自动消失**（也可以点 × 立刻收起），
+      重试再点标题栏的「检查更新」即可
 
 ---
 
@@ -249,6 +251,9 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-15 | — | 新增 `scripts/rotate-signing-key.sh`：交互式输入密码 → 重新生成更新签名密钥对 → 旧密钥自动备份 → 新公钥写回 `tauri.conf.json` → 覆盖两个 CI secret → 真签自检；`update-dryrun.sh` 支持带密码的私钥（终端里问一次）；修掉几处「`$var` 紧邻中文」的写法（macOS bash 3.2 会把中文并进变量名，CI 的 bash 5 不会，本地跑 `check-deploy-env.sh` 会静默吞标点或直接报错） |
+| 2026-09-15 | — | 发布流水线加**签名私钥闸门** `check-signing-key.mjs`（流水线第一步 + 构建 job 签名前各跑一次）：真签一次判定私钥能否解开、与公钥是否配对（比对 key id），并检查 `endpoints`/`createUpdaterArtifacts`；发布 job 加**清单回读校验**（按客户端用的两个地址匿名取回逐字节比对，`latest` 别名带重试）；`check-deploy-env.sh` 的私钥检查降为「存在性」，深度校验归新脚本 |
+| 2026-09-15 | — | 自动更新收尾：失败提示（进度条上的原因 + 失败 toast）改为 **8 秒后自动消失**；「检查更新」的错误文案不再重复前缀，并把插件那句英文 `Could not fetch a valid release JSON` 翻成「更新服务没有返回版本清单」（`ReleaseNotFound` 分支，附单测）；新增 `scripts/update-dryrun.sh` 本地演练更新源（§8.9），搞清「发版前检查更新必然失败」的原因 |
 | 2026-09-15 | — | 新增**自动更新**（§1.7）：`tauri-plugin-updater` + 后台下载 + 前端轮询进度条 + 重启生效，四个命令见 `src-tauri/src/commands/update.rs`；发布流程加 `createUpdaterArtifacts` 签名与 `latest.json` 清单生成（§8.9），签名私钥存 CI secret；标题栏版本号改为读真实版本（原先硬编码 `v2.0`） |
 | 2026-09-14 | — | §1.5 两项收尾：**连接配置导入/导出**（`export_connections` / `import_connections` + 侧栏入口 + 带复选框的确认框）与 **Key 列表分页 + 虚拟滚动**（`list_keys` 改游标分页、集群复合游标、前端虚拟渲染与滚动预取、搜索下推 `SCAN MATCH`）；`export_keys` 改为后端全量枚举（`keys` 可传 `null`）；§2.1 功能缺口清空 |
 | 2026-09-14 | — | §1.3 三项缺口落地：Hash/List/Set/ZSet 内容加载与字段级编辑（`key_content.rs`）、终端真实命令转发（`terminal.rs`）、Key 导入导出（`import_export.rs`）；任意类型 TTL 修改（`set_key_ttl`，PERSIST/EXPIRE） |
@@ -412,8 +417,17 @@ Linux 仍刻意留在 `ubuntu-22.04`：产物会继承构建机的 glibc 版本�
 ### 8.8 触发方式与前置闸门
 
 打 tag 即触发（`git tag v0.2.0 && git push origin v0.2.0`），只匹配 `v*`。
-构建矩阵前先跑 `check-deploy-env`，快速校验部署凭据 / SSH 连通 / `scp` 试传 ——
-让缺失或配错的凭据在几秒内失败，而不是等几十分钟构建跑完才暴露。
+构建矩阵前先跑 `check-deploy-env` job，它按顺序做三件事，任何一步失败就整体停下：
+
+1. **校验更新签名私钥**（`check-signing-key.mjs`，本 job 的第一个检查步骤）：真签一次来判定
+   私钥能不能用给的密码解开、是不是与 `tauri.conf.json` 里的公钥配对，并顺带检查
+   `plugins.updater.endpoints` 与 `bundle.createUpdaterArtifacts` 是否就位。详见 §8.9
+   （它需要 `tauri signer sign`，所以之前先装 Node 与 CLI，见 job 内的步骤注释）；
+2. 校验必需环境变量齐全且非空、SSH 认证方式有且只有一种；
+3. 校验 SSH 可登录（试连）并能 `scp` 试传。
+
+这样缺失/配错的凭据在几秒内失败，而不是等几十分钟的构建跑完才暴露。
+构建 job 在签名前会再跑一次同一个私钥校验（单独重跑构建 job 时前置闸门不会跑）。
 同一 tag 重复触发会取消上一次未跑完的运行（`concurrency.cancel-in-progress`）。
 
 ### 8.9 自动更新的签名与清单（`latest.json`）
@@ -421,12 +435,42 @@ Linux 仍刻意留在 `ubuntu-22.04`：产物会继承构建机的 glibc 版本�
 发布流程为自动更新多做了两件事：构建阶段给更新包签名，发布阶段生成更新清单。
 
 **公钥 / 私钥**：`tauri.conf.json` 的 `plugins.updater.pubkey` 是公钥（明文，可进仓库）；
-私钥在 GitHub secret `TAURI_SIGNING_PRIVATE_KEY`，本地副本 `~/.tauri/myredis-updater.key`
-（`tauri signer generate -w ~/.tauri/myredis-updater.key`，生成时未设密码，CI 里把密码传空字符串即可 ——
-tauri 把「已设置但为空」当作无密码，与「变量缺失」不同，后者会尝试交互式索要密码）。
+私钥在 GitHub secret `TAURI_SIGNING_PRIVATE_KEY`，其密码在 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，
+本地副本 `~/.tauri/myredis-updater.key`（`.pub` 在同目录）。
 
-`check-deploy-env` 会前置检查这个私钥（见该脚本第 2 步）：缺了照样能打包成功，只是产不出 `.sig`，
-症状是「已安装的应用永远收不到更新」这种静默失败，所以必须在构建前拦下来。
+**轮换密钥**用 `bash scripts/rotate-signing-key.sh`：交互式输入密码（不进命令历史）→ 重新生成密钥对
+→ 把新公钥写回 `tauri.conf.json`（打印新旧 key id）→ 用 stdin 覆盖两个 CI secret → 跑一次签名自检。
+它同时支持 `KEY_PATH` / `CONFIG_PATH` / `SKIP_GH=1` / `SKIP_GENERATE=1`（自己 `tauri signer generate`
+之后接着换公钥与 secret）。
+
+> ⚠️ 轮换的前提是**还没有任何客户端带着旧公钥发出去**。公钥是编译进安装包的，旧公钥一旦随包发布，
+> 换私钥就等于那些用户再也收不到自动更新（只能手动重装）。v0.0.13 发布之后不要再换密钥 ——
+> 除非接受「老用户手动重装一次」。
+
+另一个必须记住的细节：tauri 要求 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 这个变量**存在**。
+空值 = 无密码；完全缺失则会去交互式索要密码（CI 里会卡住）。所以工作流里显式传了这个 secret，
+`check-signing-key.mjs` 也会兜底给子进程补一个值。
+私钥**内容**与**密码**都要备份：密码忘了 = 私钥作废 = 之后再也发不出自动更新。
+
+`check-deploy-env` 会检查这个私钥「是否存在」（见该脚本第 2 步）。但「存在」不等于「可用」：
+私钥/密码配错时 `tauri build` 依然成功，只是产出的 `.sig` 客户端验不过（或干脆没有 `.sig`），
+症状是「已安装的应用永远收不到更新」这种静默失败 —— 等几十分钟构建跑完、Release 也发出去才发现，
+而发出去的版本收不回。所以第一道检查是 `check-signing-key.mjs`：它不停留在「变量存在」，
+而是真跑一次 `tauri signer sign` 并比对 key id，判定私钥能不能用给的密码解开、是否与配置里的
+公钥配对，顺带检查 `endpoints` 非空、`createUpdaterArtifacts: true`。判定依据与失败样例：
+
+| 情况 | 表现 |
+|------|------|
+| 私钥缺失 | `缺少 TAURI_SIGNING_PRIVATE_KEY…` |
+| 密码不对 / 私钥损坏 | 打印签名命令原文（如 `Wrong password for that key`）并给出两条常见原因 |
+| 私钥与公钥不是一对 | 同时打印两边的 key id，指出「客户端一律验签失败」 |
+| 私钥是别项目的、或公钥被换过 | 同上（key id 不同即可判定，不需要引入验签依赖） |
+| `endpoints` 为空 / `createUpdaterArtifacts` 不为 true | 直接失败，指出客户端会取不到清单 / 不会产出 `.sig` |
+
+key id 的取法：minisign 的公钥与签名载荷都是 `算法[2] | key id[8] | …`，key id 是明文，
+正好是注释行里那串十六进制的倒序写法。注意 tauri 的 `.sig` 文件与配置里的 `pubkey` 存的都是
+minisign 原文的 base64（`check-signing-key.mjs` 里 `minisignText()` 负责两种形式都认）。
+npm 版 `@tauri-apps/cli`（CI 装的就是它）自带 `signer` 子命令，所以这一步不需要额外装 cargo 版 CLI。
 
 **更新源**：`plugins.updater.endpoints` 指向
 `https://github.com/myredisapp/myredis/releases/latest/download/latest.json`，
@@ -440,10 +484,42 @@ tauri 把「已设置但为空」当作无密码，与「变量缺失」不同�
 - `rename-artifacts.mjs` 现在也认 `app` 类型（`.app.tar.gz`），并把 `.sig` 跟着安装包一起改名成
   `myredis-<tag>-<platform>.<ext>.sig`；
 - `gen-latest-json.mjs` 在 Release 建好后执行，读各平台的 `.sig` 内容生成 `latest.json` 并上传为附件
-  （`notes` 取自 Release 正文，即 `--generate-notes` 的结果）。
+  （`notes` 取自 Release 正文，即 `--generate-notes` 的结果）。**上传不等于客户端取得到**，
+  所以紧接着还有一个「回读校验」步骤：按客户端真正使用的两个地址（`releases/download/<tag>/latest.json`
+  与 `releases/latest/download/latest.json`）匿名 `curl` 回来与本地逐字节 `diff`。
+  `latest` 别名在 Release 刚建好时可能延迟几秒，脚本重试 10 次 × 3 秒；预发布 tag 不占用 `latest`，
+  只校验 tag 地址。缺附件/挂错名字/内容不一致都会在这里失败，而不是等用户点「检查更新」才发现。
+
+**v0.0.13 的清单已按上述流程演练过**（用真实私钥对占位产物签名，跑 `rename-artifacts.mjs` 三个平台 +
+`gen-latest-json.mjs`）：产出 `version 0.0.13`、4 个平台键（`darwin-aarch64` / `darwin-x86_64` /
+`linux-x86_64` / `windows-x86_64`），下载地址指向
+`releases/download/v0.0.13/myredis-v0.0.13-<platform>.<ext>`，且三份签名都能被 `tauri.conf.json`
+里的公钥验过（`minisign -V`，等价于客户端下载后 `Update::download` 的校验）。
+注意发布时清单里的 `version` 必须等于安装包版本，而安装包版本由构建 job 的
+`set-version.mjs "<tag>"` 从 tag 写入；两边都来自同一个 tag，所以是自洽的。
 
 平台键是 tauri 的 `OS-ARCH` 形式，必须与运行端算出来的 target 一致：macOS 出的是 universal 单包，
 所以 `darwin-aarch64` 与 `darwin-x86_64` 两个键指向同一个 `.app.tar.gz`；Windows **只挂 NSIS**（`.exe`），
 因为 msi 与 nsis 各有一套独立的卸载信息，用 msi 去更新 nsis 装的机器会留下两份安装。
 
 命令链路（检查 / 后台下载 / 轮询进度 / 安装重启）见 §1.7 与 `src-tauri/src/commands/update.rs`。
+
+**发版之前「检查更新」一定是失败的**：清单是发布阶段的产物，而 `releases/latest/download/latest.json`
+读的是**最新那个 Release 的附件**。所以只要最新 Release 还是在启用自动更新（v0.0.12 及更早）之前打的，
+这个地址就返回 404，界面上会提示「更新服务没有返回版本清单（当前最新发布可能还没附带 latest.json）」——
+这不是客户端 bug，打一个带清单的新 tag 即可（见 §8.8）。同理，装了 v0.0.12 及更早版本的用户没有更新模块，
+无法自动升上来，得手动装一次带自动更新的版本。
+
+**本地演练（不发版也能看完整流程）**：`bash scripts/update-dryrun.sh` 会本地造一份已签名的占位安装包
+与同构的 `latest.json`（版本号默认取当前版本 +1），起一个本地 HTTP 服务当更新源，并打印让开发版指向它的命令：
+
+```bash
+cargo tauri dev --config '{"plugins":{"updater":{"endpoints":["http://127.0.0.1:<port>/latest.json"]}}}'
+```
+
+`--config` 是**深合并**：只覆盖 `endpoints`，`pubkey` 等其余配置照旧（可用
+`TAURI_CONFIG='<同上 JSON>' cargo build` 加 `grep` 二进制里的端点和公钥字符串复现这个结论）。
+脚本里的 `minisign -V` 自检与客户端下载后的校验等价，用的是 `tauri.conf.json` 里那把公钥，
+所以它同时验证了「私钥可用 + 公私钥配对 + 清单格式」。
+注意演练包是占位文件（内容随意、只用来验签），**不要点「立即重启」**：开发版不是 `.app` 包，
+插件会把 `current_exe` 的父目录（`target/debug`）当成安装目标。

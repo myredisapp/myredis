@@ -46,11 +46,14 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 第 2 步 — 更新包签名私钥。
+# 第 2 步 — 更新包签名私钥「存在」。
 # 构建矩阵用它给更新包签名（bundle.createUpdaterArtifacts），客户端拿
 # tauri.conf.json 里的公钥验签。私钥缺了照样能打包成功，只是产不出 .sig，
 # 于是「能装新版本的应用」永远收不到更新 —— 这种静默失败放到这一步拦下来。
 # 允许用 PATH 形式，方便本地拿一个私钥文件直接跑这个脚本。
+#
+# 这里只看「有没有」；「能不能解开、与公钥是否配对」由
+# .github/scripts/check-signing-key.mjs 真签一次来判定（流水线第一步就跑它）。
 # ---------------------------------------------------------------------------
 if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" && -z "${TAURI_SIGNING_PRIVATE_KEY_PATH:-}" ]]; then
   echo "::error::缺少 TAURI_SIGNING_PRIVATE_KEY（或 TAURI_SIGNING_PRIVATE_KEY_PATH）。" >&2
@@ -172,7 +175,7 @@ run_remote "$DEST" "rm -f '$WEB_DEPLOY_PATH/$PROBE_REMOTE'" >/dev/null 2>&1 || t
 rm -f "$PROBE_LOCAL"
 
 if [[ "$SCP_OK" -ne 1 ]]; then
-  echo "::error::scp 传到 $DEST 的 '$WEB_DEPLOY_PATH' 失败（退出码 $SCP_RC）。" >&2
+  echo "::error::scp 传到 $DEST 的 '$WEB_DEPLOY_PATH' 失败（退出码 ${SCP_RC}）。" >&2
   echo "::error::部署步骤用完全相同的选项执行 scp；请确认这些选项对 scp（而不只是 ssh）合法。" >&2
   if [[ -n "$SCP_OUT" ]]; then
     echo "::error::scp 输出: $SCP_OUT" >&2
@@ -180,4 +183,4 @@ if [[ "$SCP_OK" -ne 1 ]]; then
   exit 1
 fi
 
-echo "==> OK: 部署环境就绪（$DEST，端口 $PORT）。" >&2
+echo "==> OK: 部署环境就绪（${DEST}，端口 ${PORT}）。" >&2

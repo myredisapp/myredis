@@ -3787,7 +3787,8 @@
             }
 
             // ---------- Toast 提示 ----------
-            function showToast(msg, type = 'info') {
+            // duration 默认 2.2 秒；更新失败的提示要留足阅读时间，调用方传 UPDATE_NOTICE_MS
+            function showToast(msg, type = 'info', duration = 2200) {
                 const existing = document.querySelector('.toast-notification');
                 if (existing) existing.remove();
                 const toast = document.createElement('div');
@@ -3813,7 +3814,7 @@
                     toast.style.opacity = '0';
                     toast.style.transition = 'opacity 0.3s';
                     setTimeout(() => toast.remove(), 300);
-                }, 2200);
+                }, duration);
             }
 
             // ---------- 事件绑定 ----------
@@ -4120,6 +4121,8 @@
             // 这里只轮询进度画底部进度条，所以下载期间应用照常可用，
             // 甚至刷新页面也不会中断 —— 进度和已下好的安装包都存在后端状态里。
             const UPDATE_POLL_MS = 500;
+            // 更新失败提示的停留时长：8 秒后自动收起，不一直杵在页面底部
+            const UPDATE_NOTICE_MS = 8000;
             // 同一个版本只提示一次「发现新版本」，避免每次启动都打扰
             const UPDATE_NOTICE_KEY = 'mc_cache_update_notified';
 
@@ -4145,6 +4148,8 @@
             let updateBarHidden = false;
             // 本轮下载是否已弹过「更新已就绪」，防止重复弹窗
             let updateReadyNotified = false;
+            // 失败提示的自动收起定时器
+            let updateFailTimer = null;
 
             function fmtSize(bytes) {
                 if (!bytes || bytes < 1024) return (bytes || 0) + ' B';
@@ -4159,12 +4164,22 @@
                 if (!updateBarHidden) updateBar.classList.add('open');
             }
 
+            function clearUpdateFailTimer() {
+                if (updateFailTimer) {
+                    clearTimeout(updateFailTimer);
+                    updateFailTimer = null;
+                }
+            }
+
             function hideUpdateBar() {
+                clearUpdateFailTimer();
                 updateBar.classList.remove('open', 'indeterminate', 'done', 'failed');
             }
 
             // 把后端返回的进度快照画到进度条上
             function renderUpdateProgress(p) {
+                // 任何一次新渲染都作废上一次失败提示的自动收起
+                clearUpdateFailTimer();
                 const known = p.total && p.total > 0;
                 const pct = known ? Math.min(100, Math.round((p.downloaded / p.total) * 100)) : 0;
 
@@ -4207,6 +4222,9 @@
                     updateBarFill.style.width = '100%';
                     updateBarRestart.style.display = 'none';
                     updateBarDismiss.style.display = '';
+                    // 失败原因不用一直留在页面上：8 秒后自动收起，也可以点 × 立刻收起。
+                    // 想重试就再点标题栏的检查更新按钮，会重新走一遍检查流程。
+                    updateFailTimer = setTimeout(hideUpdateBar, UPDATE_NOTICE_MS);
                     return;
                 }
 
@@ -4315,7 +4333,7 @@
                     }
                     return info;
                 }).catch(err => {
-                    if (!silent) showToast('检查更新失败: ' + err, 'error');
+                    if (!silent) showToast('检查更新失败: ' + err, 'error', UPDATE_NOTICE_MS);
                     else console.warn('静默检查更新失败', err);
                     return null;
                 });
@@ -4341,7 +4359,7 @@
                     .then(() => startUpdatePolling())
                     .catch(err => {
                         hideUpdateBar();
-                        showToast('开始下载失败: ' + err, 'error');
+                        showToast('开始下载失败: ' + err, 'error', UPDATE_NOTICE_MS);
                     });
             }
 
@@ -4354,10 +4372,10 @@
                     // 成功时进程会被新版本接管、不会有回调；能走到这说明安装失败
                     updateBarRestart.disabled = false;
                     updateBarRestart.textContent = '立即重启';
-                    // 后端已把阶段置为 failed，拉一次进度让进度条常驻失败原因，
-                    // 而不是只弹一个两秒就消失的 toast
+                    // 后端已把阶段置为 failed，拉一次进度让进度条自己把失败原因显示出来
+                    // （失败提示 8 秒后自动收起，见 renderUpdateProgress）
                     pollUpdateProgress();
-                    showToast('更新安装失败: ' + err, 'error');
+                    showToast('更新安装失败: ' + err, 'error', UPDATE_NOTICE_MS);
                 });
             }
 

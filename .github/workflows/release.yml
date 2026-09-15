@@ -23,14 +23,35 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # fail-fast 前置闸门：在多平台构建矩阵之前校验部署环境，让缺失/配错的
+  # fail-fast 前置闸门：在多平台构建矩阵之前校验签名私钥与部署环境，让缺失/配错的
   # 凭据在几秒内失败，而不是等几十分钟构建跑完才暴露。
-  # 见 .github/scripts/check-deploy-env.sh
+  # 见 .github/scripts/check-signing-key.mjs 与 .github/scripts/check-deploy-env.sh
   check-deploy-env:
     name: 检查部署环境
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # 校验私钥要真跑一次 `tauri signer sign`：私钥是加密存放的，密码对不对、
+      # 与公钥是否配对，只有实际签一次才能确定
+      - name: 安装 Tauri CLI
+        shell: bash
+        run: |
+          sudo env "PATH=$PATH" npm install -g @tauri-apps/cli@2.11.3
+          tauri --version
+
+      # 第一步：私钥能用 + 与 tauri.conf.json 里的公钥配对 + 清单相关配置齐全。
+      # 配错的后果是「安装包照样出，只是客户端永远收不到更新」，属于必须前置拦下的静默失败
+      - name: 校验更新签名私钥
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node .github/scripts/check-signing-key.mjs
 
       - name: 安装 SSH 工具
         run: |
@@ -46,7 +67,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
           WEB_DEPLOY_PATH: ${{ vars.WEB_DEPLOY_PATH }}
-          # 构建 job 用它给更新包签名，缺了会打出一堆装不上的更新包，所以也在这里先卡一道
+          # 构建 job 用它给更新包签名；深度校验（密码 + 与公钥配对）在上一道步骤里
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: bash .github/scripts/check-deploy-env.sh
 
@@ -128,13 +149,23 @@ jobs:
       - name: 同步版本号（取自 tag）
         run: node .github/scripts/set-version.mjs "${{ github.ref_name }}"
 
+      # 签名前再校验一次私钥（与 check-deploy-env 里同一脚本）：单独重跑构建 job 时
+      # 前置闸门不会跑，而这一步产出的 .sig 出问题只会在用户侧表现为「收不到更新」
+      - name: 校验更新签名私钥
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node .github/scripts/check-signing-key.mjs
+
       # bundles 的值必须加引号：Windows runner 的默认 shell 是 PowerShell，
       # 未加引号的 nsis,msi 会被它当成数组、展开成一个参数 "nsis msi" 传给 tauri，报 invalid value。
       #
       # 签名私钥只在 CI 里（仓库 secret），客户端用 tauri.conf.json 里的公钥校验，
       # 所以这一步产出的 .sig 必须跟着安装包一起发布，否则更新会被客户端拒掉。
-      # 密钥生成时没设密码，PASSWORD 传空字符串即可：tauri 把「已设置但为空」当作无密码，
-      # 与「变量缺失」不同（后者会尝试交互式索要密码）。
+      # 密码来自 secret TAURI_SIGNING_PRIVATE_KEY_PASSWORD（换密钥/换密码见
+      # scripts/rotate-signing-key.sh）。tauri 要求这个变量**存在**：空值按无密码处理，
+      # 变量缺失则会去交互式索要密码，在 CI 里卡住。
       - name: 构建并打包（含更新包签名）
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -217,10 +248,42 @@ jobs:
           node .github/scripts/gen-latest-json.mjs "$TAG" dist release-notes.md latest.json
           gh release upload "$TAG" latest.json --clobber
 
-      # latest.json 里的下载地址指向 GitHub Release 资产，不需要额外部署，
-      # 但内容依赖上一步上传成功，这里打印一次做留痕，便于发布后核对
-      - name: 回显更新清单
-        run: cat latest.json
+      # 上传成功不等于客户端取得到：按客户端真正使用的两个地址匿名回读一次并逐字节比对，
+      # 免得「清单没挂上 / 挂错名字 / 内容与本地不一致」这类问题等到用户点「检查更新」才发现。
+      - name: 回读校验更新清单
+        run: |
+          set -euo pipefail
+          TAG="$GITHUB_REF_NAME"
+          cat latest.json
+
+          TAG_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/latest.json"
+          if ! curl -fsSL "$TAG_URL" -o fetched-by-tag.json; then
+            echo "::error::$TAG_URL 取不到：本次 Release 里没有 latest.json 附件（生成/上传步骤没生效）" >&2
+            exit 1
+          fi
+          diff -u latest.json fetched-by-tag.json
+          echo "✓ $TAG_URL 可匿名取到，内容与本地一致"
+
+          case "$TAG" in
+            *-*)
+              echo "预发布不占用 latest 别名（不会顶掉正式版），跳过 latest 地址校验"
+              exit 0
+              ;;
+          esac
+
+          LATEST_URL="https://github.com/$GITHUB_REPOSITORY/releases/latest/download/latest.json"
+          # Release 刚建好时 latest 指向可能有几秒延迟，重试若干次
+          for attempt in $(seq 1 10); do
+            if curl -fsSL "$LATEST_URL" -o fetched-by-latest.json \
+              && diff -q latest.json fetched-by-latest.json >/dev/null; then
+              echo "✓ $LATEST_URL 已指向本次发布（tauri.conf.json 里的 endpoints 就是这个地址）"
+              exit 0
+            fi
+            echo "第 ${attempt} 次校验 $LATEST_URL 未就绪，3 秒后重试"
+            sleep 3
+          done
+          echo "::error::$LATEST_URL 未指向本次发布，客户端点「检查更新」会拿不到清单" >&2
+          exit 1
 
   # Release 建好后把官网静态页推到服务器。web/ 下都是自包含单文件
   # （图标等资源全部内联），首页与 docs/ 子目录一并上传即可。
