@@ -6,7 +6,7 @@
 //
 // 用法：node gen-latest-json.mjs <tag> <distDir> [notesFile] [outFile]
 //   例：node gen-latest-json.mjs v0.2.0 dist /tmp/notes.md latest.json
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // 平台键是 tauri 的 `OS-ARCH` 形式，必须与运行端算出来的 target 完全一致。
@@ -47,17 +47,33 @@ const version = tag.replace(/^[vV]/, '');
 const repo = process.env.GITHUB_REPOSITORY || 'myredisapp/myredis';
 const urlBase = `https://github.com/${repo}/releases/download/${tag}`;
 
+// 按文件名在 distDir 下递归找安装包。download-artifact 会保留每个 artifact 内部的
+// 目录结构（macos/、dmg/、nsis/ 等子目录），文件不在 dist 根上，所以不能直接 join
+const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+  const full = join(dir, entry.name);
+  return entry.isDirectory() ? walk(full) : [full];
+});
+const distFiles = existsSync(distDir) ? walk(distDir) : [];
+const findOne = (name) => {
+  const matches = distFiles.filter((f) => f === join(distDir, name) || f.endsWith(`/${name}`));
+  if (matches.length > 1) {
+    console.error(`${name} 出现多个，无法确定该用哪个：\n  ${matches.join('\n  ')}`);
+    process.exit(1);
+  }
+  return matches[0];
+};
+
 const platforms = {};
 for (const target of TARGETS) {
   const name = target.file(tag);
-  const artifact = join(distDir, name);
-  const sigPath = `${artifact}.sig`;
+  const artifact = findOne(name);
+  const sigPath = findOne(`${name}.sig`);
 
-  if (!existsSync(artifact)) {
+  if (!artifact) {
     console.error(`找不到更新包 ${name}（在 ${distDir} 下）。改名步骤没生效，还是构建没出这个包？`);
     process.exit(1);
   }
-  if (!existsSync(sigPath)) {
+  if (!sigPath) {
     console.error(`找不到签名文件 ${name}.sig。构建时没配 TAURI_SIGNING_PRIVATE_KEY，更新会被客户端拒掉。`);
     process.exit(1);
   }
