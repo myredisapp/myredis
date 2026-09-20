@@ -252,9 +252,11 @@
             position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
             overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
         }
+        /* .docs 与 .container 是同一个元素，这里只写纵向内边距：
+           用简写会把 .container 的左右 24px 留白覆盖成 0，窄屏下正文就贴边了 */
         .docs {
             display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 46px;
-            padding: 38px 0 72px; align-items: start;
+            padding-top: 38px; padding-bottom: 72px; align-items: start;
         }
         .toc { position: sticky; top: 80px; font-size: 13.5px; max-height: calc(100vh - 108px); overflow-y: auto; }
         .toc-title {
@@ -310,6 +312,8 @@
             color: var(--text-primary);
         }
         pre code { background: none; border: none; padding: 0; font-size: inherit; }
+        /* 路径这类没有空格的行内代码在窄屏要能断行，否则会顶穿左右留白、把整页撑宽 */
+        .doc-section code { overflow-wrap: anywhere; }
         pre .cmt { color: var(--text-muted); }
         pre .cmd { color: var(--accent); }
 
@@ -403,7 +407,8 @@
                 position: sticky; top: 60px; z-index: 60;
                 max-height: none; overflow: visible;
                 display: flex; gap: 8px; overflow-x: auto;
-                padding: 12px 0; margin-bottom: 22px;
+                /* 负外边距让吸顶条通栏贴住屏幕两侧，内边距让胶囊与正文对齐同一 24px 栏位 */
+                padding: 12px 24px; margin: 0 -24px 22px;
                 background: var(--bg-primary);
                 border-bottom: 1px solid var(--border-color);
                 -webkit-overflow-scrolling: touch;
