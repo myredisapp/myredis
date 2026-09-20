@@ -303,12 +303,12 @@
         .titlebar .window-controls .min { background: #ffbd2e; }
         .titlebar .window-controls .max { background: #28c840; }
 
-        /* ========== 设置下拉（工作区 + 主题） ========== */
-        .settings-dropdown {
+        /* ========== 主题切换下拉 ========== */
+        .theme-dropdown {
             position: relative;
             margin-right: 8px;
         }
-        .settings-dropdown .ghost-btn {
+        .theme-dropdown .ghost-btn {
             background: transparent;
             border: 1px solid var(--border-color);
             color: var(--text-secondary);
@@ -322,17 +322,16 @@
             justify-content: center;
             transition: all 0.2s;
         }
-        .settings-dropdown .ghost-btn:hover {
+        .theme-dropdown .ghost-btn:hover {
             background: var(--bg-hover);
             color: var(--text-primary);
             border-color: var(--accent);
         }
-        .settings-dropdown .settings-menu {
+        .theme-dropdown .theme-menu {
             position: absolute;
             top: calc(var(--header-height) - 12px);
             right: 0;
-            min-width: 268px;
-            max-width: 340px;
+            min-width: 150px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
             border-radius: var(--radius);
@@ -343,109 +342,15 @@
             flex-direction: column;
             gap: 2px;
         }
-        .settings-dropdown .settings-menu.open { display: flex; }
-        .settings-dropdown .settings-menu-title {
+        .theme-dropdown .theme-menu.open { display: flex; }
+        .theme-dropdown .theme-menu-title {
             font-size: 11px;
             color: var(--text-muted);
             padding: 4px 8px 6px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        /* ---------- 工作区 ---------- */
-        .settings-dropdown .ws-current {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px 4px;
-            font-size: 12.5px;
-            color: var(--text-primary);
-        }
-        .settings-dropdown .ws-current i { color: var(--accent); flex-shrink: 0; }
-        /* 路径靠 JS 缩略（主目录缩成 ~、过长时保留头尾），这里只兜住溢出 */
-        .settings-dropdown .ws-path {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .settings-dropdown .ws-path.is-default { color: var(--text-secondary); }
-        .settings-dropdown .ws-hint {
-            font-size: 11.5px;
-            color: var(--text-muted);
-            padding: 0 10px 6px;
-            line-height: 1.5;
-        }
-        .settings-dropdown .ws-actions { display: flex; gap: 6px; padding: 0 4px; }
-        .settings-dropdown .ws-actions button {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            padding: 6px 8px;
-            font-size: 12.5px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            background: transparent;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.15s;
-            white-space: nowrap;
-        }
-        .settings-dropdown .ws-actions button:hover:not(:disabled) {
-            background: var(--bg-hover);
-            border-color: var(--accent);
-            color: var(--text-primary);
-        }
-        .settings-dropdown .ws-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
-        .settings-dropdown .ws-actions button.ws-icon { flex: 0 0 auto; padding: 6px 10px; }
-        .settings-dropdown .ws-recent {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            max-height: 176px;
-            overflow-y: auto;
-            padding-top: 2px;
-        }
-        .settings-dropdown .ws-recent:empty { display: none; }
-        .settings-dropdown .ws-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 8px;
-            border-radius: 6px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 12.5px;
-            transition: background 0.15s, color 0.15s;
-        }
-        .settings-dropdown .ws-item:hover { background: var(--bg-hover); color: var(--text-primary); }
-        .settings-dropdown .ws-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
-        .settings-dropdown .ws-item .ws-name {
-            flex: 1;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .settings-dropdown .ws-item .ws-forget {
-            opacity: 0;
-            border: none;
-            background: transparent;
-            color: inherit;
-            cursor: pointer;
-            font-size: 12px;
-            padding: 2px 4px;
-            border-radius: 4px;
-            transition: opacity 0.15s;
-        }
-        .settings-dropdown .ws-item:hover .ws-forget { opacity: 0.75; }
-        .settings-dropdown .ws-item .ws-forget:hover { opacity: 1; background: var(--bg-active); }
-        .settings-dropdown .menu-sep {
-            height: 1px;
-            background: var(--border-color);
-            margin: 6px 4px;
-        }
-        /* ---------- 主题 ---------- */
-        .settings-dropdown .theme-option {
+        .theme-dropdown .theme-option {
             display: flex;
             align-items: center;
             gap: 10px;
@@ -457,16 +362,16 @@
             white-space: nowrap;
             transition: background 0.15s, color 0.15s;
         }
-        .settings-dropdown .theme-option:hover {
+        .theme-dropdown .theme-option:hover {
             background: var(--bg-hover);
             color: var(--text-primary);
         }
-        .settings-dropdown .theme-option.active {
+        .theme-dropdown .theme-option.active {
             background: var(--accent-dim);
             color: var(--accent);
             font-weight: 600;
         }
-        .settings-dropdown .theme-swatch {
+        .theme-dropdown .theme-swatch {
             width: 16px;
             height: 16px;
             border-radius: 50%;
@@ -1973,23 +1878,10 @@
                 <span id="statusLabel">已连接 · localhost:6379</span>
             </div>
             <div class="spacer"></div>
-            <div class="settings-dropdown">
-                <button title="设置（工作区 / 主题）" id="btnSettings" class="ghost-btn"><i class="fas fa-gear"></i></button>
-                <div class="settings-menu" id="settingsMenu">
-                    <div class="settings-menu-title">工作区</div>
-                    <div class="ws-current">
-                        <i class="fas fa-folder-tree"></i>
-                        <span class="ws-path" id="wsPath">-</span>
-                    </div>
-                    <div class="ws-hint" id="wsHint">导出文件保存到这个目录</div>
-                    <div class="ws-actions">
-                        <button id="wsChoose" title="选择一个文件夹作为工作区"><i class="fas fa-folder-open"></i> 选择文件夹…</button>
-                        <button class="ws-icon" id="wsOpen" title="在文件管理器中打开工作区"><i class="fas fa-arrow-up-right-from-square"></i></button>
-                        <button class="ws-icon" id="wsReset" title="恢复默认工作区（用户主目录）"><i class="fas fa-rotate-left"></i></button>
-                    </div>
-                    <div class="ws-recent" id="wsRecent"></div>
-                    <div class="menu-sep"></div>
-                    <div class="settings-menu-title">选择主题</div>
+            <div class="theme-dropdown">
+                <button title="切换主题" id="btnTheme" class="ghost-btn"><i class="fas fa-palette"></i></button>
+                <div class="theme-menu" id="themeMenu">
+                    <div class="theme-menu-title">选择主题</div>
                     <div class="theme-option active" data-theme-value="spring"><span class="theme-swatch" style="background:#4caf50"></span>春分</div>
                     <div class="theme-option" data-theme-value="summer"><span class="theme-swatch" style="background:#22a6f2"></span>立夏</div>
                     <div class="theme-option" data-theme-value="golden"><span class="theme-swatch" style="background:#d99a1b"></span>初秋</div>
@@ -2656,7 +2548,7 @@
             }
 
             // ---------- 连接配置的导入 / 导出 ----------
-            // 触发一次「另存为」下载：工作区写不进去时（目录被删、无写入权限）才走这条路
+            // 触发一次「另存为」下载
             function downloadJson(filename, text) {
                 const blob = new Blob([text], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -2667,18 +2559,6 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-            }
-
-            // 把导出内容写进「工作区」（设置下拉框里可切换，默认用户主目录），
-            // 返回落盘后的绝对路径供提示；写失败时退回下载，避免导出彻底没法用。
-            function saveJsonFile(filename, text) {
-                return invoke('save_workspace_file', { fileName: filename, content: text })
-                    .catch(err => {
-                        console.warn('写入工作区失败，改为下载:', err);
-                        downloadJson(filename, text);
-                        showToast('写入工作区失败，已改为下载: ' + err, 'error', 4000);
-                        return null;
-                    });
             }
 
             // 导出文件名用的日期戳
@@ -2706,11 +2586,9 @@
                                 showToast('没有可导出的连接配置', 'info');
                                 return;
                             }
-                            saveJsonFile(`maidi-connections-${todayStamp()}.json`, res.content).then(saved => {
-                                if (!saved) return; // 兜底下载已经提示过失败原因
-                                showToast(`已导出 ${res.count} 个连接配置 → ${shortenPath(saved.path)}`, 'success', 4000);
-                                appendTerminal(`EXPORT ${res.count} connections → ${saved.path}${includePasswords ? '（含密码）' : ''}`, 'ok');
-                            });
+                            downloadJson(`maidi-connections-${todayStamp()}.json`, res.content);
+                            showToast(`已导出 ${res.count} 个连接配置`, 'success');
+                            appendTerminal(`EXPORT ${res.count} connections → OK${includePasswords ? '（含密码）' : ''}`, 'ok');
                         })
                         .catch(err => {
                             showToast('导出连接配置失败: ' + err, 'error');
@@ -3933,7 +3811,7 @@
                     box-shadow: var(--shadow); z-index: 2000;
                     border-left: 4px solid ${colors[type] || colors.info};
                     animation: fadeIn 0.2s ease;
-                    max-width: 90vw; overflow-wrap: anywhere;
+                    max-width: 90vw;
                 `;
                 toast.textContent = msg;
                 document.body.appendChild(toast);
@@ -4200,11 +4078,9 @@
                             showToast('当前数据库没有可导出的 Key', 'info');
                             return;
                         }
-                        saveJsonFile(`maidi-export-${todayStamp()}.json`, res.content).then(saved => {
-                            if (!saved) return; // 兜底下载已经提示过失败原因
-                            showToast(`已导出 ${count} 个 Key → ${shortenPath(saved.path)}`, 'success', 4000);
-                            appendTerminal(`EXPORT ${count} keys → ${saved.path}`, 'ok');
-                        });
+                        downloadJson(`maidi-export-${todayStamp()}.json`, res.content);
+                        showToast(`已导出 ${count} 个 Key`, 'success');
+                        appendTerminal(`EXPORT ${count} keys → OK`, 'ok');
                     })
                     .catch((err) => {
                         showToast('导出失败: ' + err, 'error');
@@ -4596,10 +4472,10 @@
                 renderDetail,
             };
 
-            // ==================== 设置下拉（工作区 / 主题） ====================
+            // ==================== 主题切换 ====================
             const THEME_KEY = 'mc_cache_theme';
-            const settingsBtn = document.getElementById('btnSettings');
-            const settingsMenu = document.getElementById('settingsMenu');
+            const themeBtn = document.getElementById('btnTheme');
+            const themeMenu = document.getElementById('themeMenu');
 
             function applyTheme(name) {
                 if (!name) name = 'autumn';
@@ -4608,153 +4484,25 @@
 
             function updateThemeMenu(name) {
                 if (!name) name = 'autumn';
-                document.querySelectorAll('#settingsMenu .theme-option').forEach(opt => {
+                document.querySelectorAll('#themeMenu .theme-option').forEach(opt => {
                     opt.classList.toggle('active', opt.getAttribute('data-theme-value') === name);
                 });
             }
 
-            settingsBtn.addEventListener('click', (e) => {
+            themeBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                settingsMenu.classList.toggle('open');
+                themeMenu.classList.toggle('open');
             });
-            document.addEventListener('click', () => settingsMenu.classList.remove('open'));
+            document.addEventListener('click', () => themeMenu.classList.remove('open'));
 
-            // ==================== 工作区 ====================
-            // 「工作区」是导出文件的落盘目录：默认是用户主目录，用户可以在这里换成任意文件夹。
-            // 选择结果存在后端（配置目录的 workspace.json），所以重开窗口、重启应用后仍然是同一个
-            // 目录；每次导出都会提示落盘后的完整路径 —— 不用再猜文件保存到哪了。
-            let WORKSPACE = null;
-
-            // 路径显示：主目录缩成 ~，过长时保留头尾（完整路径放在 title 里）
-            function shortenPath(p) {
-                if (!p) return '';
-                let text = p;
-                const home = WORKSPACE && WORKSPACE.default;
-                if (home && (text === home || text.indexOf(home + '/') === 0)) {
-                    text = '~' + text.slice(home.length);
-                }
-                const parts = text.split('/');
-                if (text.length > 46 && parts.length > 4) {
-                    text = parts[0] + '/…/' + parts.slice(-2).join('/');
-                }
-                return text;
-            }
-
-            function renderWorkspace() {
-                const pathEl = document.getElementById('wsPath');
-                const recentEl = document.getElementById('wsRecent');
-                const resetBtn = document.getElementById('wsReset');
-                if (!WORKSPACE) {
-                    pathEl.textContent = '读取中…';
-                    pathEl.title = '';
-                    recentEl.innerHTML = '';
-                    resetBtn.disabled = true;
-                    return;
-                }
-                pathEl.textContent = shortenPath(WORKSPACE.current);
-                pathEl.title = WORKSPACE.current + (WORKSPACE.isDefault ? '（默认工作区：用户主目录）' : '');
-                pathEl.classList.toggle('is-default', !!WORKSPACE.isDefault);
-                document.getElementById('wsHint').textContent = WORKSPACE.isDefault
-                    ? '默认工作区（用户主目录），导出文件保存在这里'
-                    : '导出文件保存到这个目录';
-                resetBtn.disabled = !!WORKSPACE.isDefault;
-                recentEl.innerHTML = (WORKSPACE.recent || []).map(p => `
-                    <div class="ws-item${p === WORKSPACE.current ? ' active' : ''}" data-path="${escapeHtml(p)}" title="${escapeHtml(p)}">
-                        <i class="fas fa-folder"></i>
-                        <span class="ws-name">${escapeHtml(shortenPath(p))}</span>
-                        <button class="ws-forget" data-forget="${escapeHtml(p)}" title="从列表移除"><i class="fas fa-xmark"></i></button>
-                    </div>
-                `).join('');
-            }
-
-            function applyWorkspaceView(view) {
-                if (!view) return;
-                WORKSPACE = view;
-                renderWorkspace();
-            }
-
-            function loadWorkspace() {
-                return invoke('get_workspace').then(view => {
-                    applyWorkspaceView(view);
-                    // 启动时把导出目录写进终端：新开窗口也能一眼看到文件会存到哪
-                    if (view && view.current) appendTerminal(`工作区（导出目录）: ${view.current}`, '');
-                }).catch(err => {
-                    console.warn('读取工作区设置失败:', err);
-                    document.getElementById('wsPath').textContent = '读取失败';
-                });
-            }
-
-            // 弹出系统文件夹选择框；用户取消时后端返回 null，不提示也不改设置
-            function chooseWorkspace() {
-                const btn = document.getElementById('wsChoose');
-                const original = btn.innerHTML;
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 等待选择…';
-                return invoke('choose_workspace')
-                    .then(view => {
-                        if (!view) return;
-                        applyWorkspaceView(view);
-                        showToast('工作区已切换到 ' + shortenPath(view.current), 'success', 3200);
-                        appendTerminal(`WORKSPACE → ${view.current}`, 'ok');
-                    })
-                    .catch(err => showToast('选择工作区失败: ' + err, 'error', 4000))
-                    .finally(() => {
-                        btn.disabled = false;
-                        btn.innerHTML = original;
-                    });
-            }
-
-            function openWorkspace() {
-                invoke('open_workspace')
-                    .then(dir => showToast('已在文件管理器中打开 ' + shortenPath(dir), 'info', 3200))
-                    .catch(err => showToast('打开工作区失败: ' + err, 'error'));
-            }
-
-            function switchWorkspace(path) {
-                invoke('set_workspace', { path })
-                    .then(view => {
-                        applyWorkspaceView(view);
-                        showToast('工作区已切换到 ' + shortenPath(view.current), 'success', 3200);
-                        appendTerminal(`WORKSPACE → ${view.current}`, 'ok');
-                    })
-                    .catch(err => showToast('切换工作区失败: ' + err, 'error', 4000));
-            }
-
-            function forgetWorkspace(path) {
-                invoke('remove_workspace', { path })
-                    .then(applyWorkspaceView)
-                    .catch(err => showToast('移除工作区失败: ' + err, 'error'));
-            }
-
-            settingsMenu.addEventListener('click', (e) => {
+            themeMenu.addEventListener('click', (e) => {
                 const opt = e.target.closest('.theme-option');
-                if (opt) {
-                    let name = opt.getAttribute('data-theme-value') || 'autumn';
-                    applyTheme(name);
-                    try { localStorage.setItem(THEME_KEY, name); } catch (err) {}
-                    updateThemeMenu(name);
-                    settingsMenu.classList.remove('open');
-                    return;
-                }
-                // 工作区块：操作后保持菜单展开，方便连续切换与查看结果
-                const forget = e.target.closest('.ws-forget');
-                if (forget) {
-                    e.stopPropagation();
-                    forgetWorkspace(forget.dataset.forget);
-                    return;
-                }
-                const item = e.target.closest('.ws-item');
-                if (item) {
-                    e.stopPropagation();
-                    if (!WORKSPACE || item.dataset.path !== WORKSPACE.current) switchWorkspace(item.dataset.path);
-                    return;
-                }
-                const action = e.target.closest('#wsChoose, #wsOpen, #wsReset');
-                if (!action || action.disabled) return;
-                e.stopPropagation();
-                if (action.id === 'wsChoose') chooseWorkspace();
-                else if (action.id === 'wsOpen') openWorkspace();
-                else switchWorkspace(null);
+                if (!opt) return;
+                let name = opt.getAttribute('data-theme-value') || 'autumn';
+                applyTheme(name);
+                localStorage.setItem(THEME_KEY, name);
+                updateThemeMenu(name);
+                themeMenu.classList.remove('open');
             });
 
             // 恢复用户上次选择的主题
@@ -4767,7 +4515,7 @@
 
             // ==================== 原生「设置」菜单 ====================
             // 菜单项在 macOS 侧点击后 emit 事件，这里复用标题栏同一套逻辑，
-            // 让菜单与标题栏不会出现两套主题/工作区状态。
+            // 让菜单与标题栏不会出现两套主题状态。
             function listenMenu(event, handler) {
                 const internals = window.__TAURI_INTERNALS__;
                 if (!internals || !internals.transformCallback) return;
@@ -4784,11 +4532,6 @@
             });
 
             listenMenu('menu:check-update', () => checkUpdate(false));
-
-            listenMenu('menu:choose-workspace', () => chooseWorkspace());
-            listenMenu('menu:open-workspace', () => openWorkspace());
-
-            loadWorkspace();
 
         })();
     </script>

@@ -7,9 +7,8 @@
 //! 复制粘贴能力。菜单栏不再单列 Edit，于是这些标准编辑项改挂在应用菜单内部：不展开菜单就
 //! 看不到它们，快捷键照常生效。
 //!
-//! 菜单项只负责把点击转成前端事件（见 [`EVENT_SET_THEME`] / [`EVENT_CHECK_UPDATE`] /
-//! [`EVENT_CHOOSE_WORKSPACE`] / [`EVENT_OPEN_WORKSPACE`]），具体行为复用前端已有逻辑，
-//! 避免主题、工作区、更新检查出现两套状态。
+//! 菜单项只负责把点击转成前端事件（见 [`EVENT_SET_THEME`] / [`EVENT_CHECK_UPDATE`]），
+//! 具体行为复用前端已有逻辑，避免主题、更新检查出现两套状态。
 
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Emitter, Wry};
@@ -27,19 +26,11 @@ const THEMES: [(&str, &str); 5] = [
 const THEME_ID_PREFIX: &str = "settings.theme.";
 /// 「检查更新」菜单项 id。
 const CHECK_UPDATE_ID: &str = "settings.check_update";
-/// 「选择工作区…」菜单项 id。
-const CHOOSE_WORKSPACE_ID: &str = "settings.choose_workspace";
-/// 「打开工作区」菜单项 id。
-const OPEN_WORKSPACE_ID: &str = "settings.open_workspace";
 
 /// 前端事件：切换主题，payload 为主题名（与 `data-theme` 取值一致）。
 const EVENT_SET_THEME: &str = "menu:set-theme";
 /// 前端事件：触发一次更新检查。
 const EVENT_CHECK_UPDATE: &str = "menu:check-update";
-/// 前端事件：弹出文件夹选择框，把选中目录设为工作区。
-const EVENT_CHOOSE_WORKSPACE: &str = "menu:choose-workspace";
-/// 前端事件：在系统文件管理器里打开当前工作区。
-const EVENT_OPEN_WORKSPACE: &str = "menu:open-workspace";
 
 /// 构建菜单栏，交给 `tauri::Builder::menu` 使用。
 ///
@@ -90,23 +81,6 @@ pub fn build(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         &[
             &theme_menu(app)?,
             &PredefinedMenuItem::separator(app)?,
-            // 工作区：导出文件的落盘目录。菜单只给「选择 / 打开」两个入口，
-            // 最近用过的目录列表留给标题栏下拉框（菜单项在构建后不随列表变化重建）
-            &MenuItem::with_id(
-                app,
-                CHOOSE_WORKSPACE_ID,
-                "Choose Workspace…",
-                true,
-                None::<&str>,
-            )?,
-            &MenuItem::with_id(
-                app,
-                OPEN_WORKSPACE_ID,
-                "Open Workspace Folder",
-                true,
-                None::<&str>,
-            )?,
-            &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(
                 app,
                 CHECK_UPDATE_ID,
@@ -133,8 +107,6 @@ pub fn on_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let emitted = match id.strip_prefix(THEME_ID_PREFIX) {
         Some(theme) => app.emit(EVENT_SET_THEME, theme),
         None if id == CHECK_UPDATE_ID => app.emit(EVENT_CHECK_UPDATE, ()),
-        None if id == CHOOSE_WORKSPACE_ID => app.emit(EVENT_CHOOSE_WORKSPACE, ()),
-        None if id == OPEN_WORKSPACE_ID => app.emit(EVENT_OPEN_WORKSPACE, ()),
         None => return,
     };
 
