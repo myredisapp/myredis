@@ -6,8 +6,13 @@ pub mod commands;
 mod config;
 pub mod connection_pool;
 pub mod error;
+/// 菜单栏仅在 macOS 上定制：其他平台原本就没有原生菜单栏，保持系统默认行为。
+#[cfg(target_os = "macos")]
+mod menu;
 pub mod models;
 mod storage;
+/// 工作区（导出文件的落盘目录）设置与读写。
+pub mod workspace;
 
 use std::path::PathBuf;
 
@@ -16,6 +21,7 @@ use tauri::Manager;
 use crate::config::AppConfig;
 use crate::connection_pool::Pool;
 use crate::storage::ConnectionRepo;
+use crate::workspace::WorkspaceStore;
 
 /// 应用全局状态，注入 Tauri。
 pub struct AppState {
@@ -37,13 +43,27 @@ impl AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // 文件夹选择对话框：只在 Rust 侧调用（见 commands::workspace），前端不直接走插件的 IPC 命令
+        .plugin(tauri_plugin_dialog::init());
+
+    // macOS 菜单栏：Window / Settings / Help（编辑快捷键用的标准编辑项挂在应用菜单里，见 menu 模块）。
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(menu::build).on_menu_event(menu::on_event);
+
+    builder
         .setup(|app| {
             let config_dir = app
                 .path()
                 .app_config_dir()
                 .unwrap_or_else(|_| std::env::temp_dir());
+            // 默认工作区是用户主目录：拿不到时退回临时目录，保证导出仍有地方可写
+            let home_dir = app
+                .path()
+                .home_dir()
+                .unwrap_or_else(|_| std::env::temp_dir());
+            app.manage(WorkspaceStore::load(config_dir.clone(), home_dir));
             app.manage(AppState::new(config_dir));
             // 连接池作为独立的状态，便于命令按需借用
             app.manage(Pool::new());
@@ -86,6 +106,12 @@ pub fn run() {
             commands::terminal::execute_command,
             commands::import_export::export_keys,
             commands::import_export::import_keys,
+            commands::workspace::get_workspace,
+            commands::workspace::choose_workspace,
+            commands::workspace::set_workspace,
+            commands::workspace::remove_workspace,
+            commands::workspace::save_workspace_file,
+            commands::workspace::open_workspace,
             commands::update::check_update,
             commands::update::start_update_download,
             commands::update::get_update_progress,

@@ -30,3 +30,4 @@ sysinfo = "0.39"
 # ===== 自动更新 =====
 # 更新包由 CI 用 minisign 私钥签名，客户端用 tauri.conf.json 里的 pubkey 校验通过后才安装
 tauri-plugin-updater = "2"
+tauri-plugin-dialog = "2.7.3"

@@ -9,3 +9,4 @@ pub mod key_content;
 pub mod server;
 pub mod terminal;
 pub mod update;
+pub mod workspace;

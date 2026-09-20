@@ -121,6 +121,11 @@
       增 / 删 Key 只改本地列表，不再整表重扫
 - [x] **连接配置导入 / 导出**：侧栏连接区两个入口，导出弹确认框（可选是否包含明文密码），
       导入前确认覆盖策略，报告新增/覆盖、跳过、失败数量
+- [x] **macOS 菜单栏**（`src-tauri/src/menu.rs`，仅 macOS 生效）：Window / Settings / Help，
+      Settings 下挂「Theme」子菜单（五款主题）与「Check for Updates…」，点击后由 Rust `emit` 事件、
+      前端复用标题栏同一套逻辑（不会出现两套主题状态）；菜单栏不再单列 Edit —— macOS 的编辑快捷键靠
+      菜单项派发到响应链，所以 Undo / Redo / Cut / Copy / Paste / Select All 这几个标准编辑项改挂在
+      应用菜单内部（不展开就看不到），删掉它们才会让输入框和终端失去 ⌘Z / ⌘X / ⌘C / ⌘V / ⌘A
 
 ### 1.6 工程与发布（✅ 完成）
 
@@ -254,6 +259,8 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-16 | — | 菜单栏去掉 **Edit**（§1.5）：`menu.rs` 不再单列 Edit 子菜单，Undo / Redo / Cut / Copy / Paste / Select All 六个标准编辑项移入应用菜单，保证 ⌘Z / ⌘X / ⌘C / ⌘V / ⌘A 仍能派发到响应链 |
+| 2026-09-16 | — | 新增 **macOS 菜单栏**（§1.5）：`src-tauri/src/menu.rs` 自建菜单，顺序 Window / Settings / Help（File、View 去掉，Edit 保留以支撑编辑快捷键）；Settings 下挂主题子菜单与「检查更新」，菜单项走 `emit` + 前端监听（`plugin:event|listen`）复用标题栏逻辑，主题切换与标题栏共享同一份 `localStorage` 记录 |
 | 2026-09-15 | — | 标题栏更新入口改为**默认不显示**：只有查到新版本才出现（`#btnCheckUpdate.show`），没新版完全不占位；配套加 30 分钟一次静默复查（`UPDATE_RECHECK_MS`），避免挂机期间发新版看不到入口；安装包已下好时点入口直接弹「更新已就绪」（§1.7） |
 | 2026-09-15 | — | 新增 `scripts/rotate-signing-key.sh`：交互式输入密码 → 重新生成更新签名密钥对 → 旧密钥自动备份 → 新公钥写回 `tauri.conf.json` → 覆盖两个 CI secret → 真签自检；`update-dryrun.sh` 支持带密码的私钥（终端里问一次）；修掉几处「`$var` 紧邻中文」的写法（macOS bash 3.2 会把中文并进变量名，CI 的 bash 5 不会，本地跑 `check-deploy-env.sh` 会静默吞标点或直接报错） |
 | 2026-09-15 | — | 发布流水线加**签名私钥闸门** `check-signing-key.mjs`（流水线第一步 + 构建 job 签名前各跑一次）：真签一次判定私钥能否解开、与公钥是否配对（比对 key id），并检查 `endpoints`/`createUpdaterArtifacts`；发布 job 加**清单回读校验**（按客户端用的两个地址匿名取回逐字节比对，`latest` 别名带重试）；`check-deploy-env.sh` 的私钥检查降为「存在性」，深度校验归新脚本 |
