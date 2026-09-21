@@ -1,10 +1,9 @@
 # 开发进度与问题记录
 
 > 本文档用于跟踪「麦地缓存」开发进度、已决策事项、已知缺口与待办事项。随开发持续更新。
-> 最近更新：2026-09-15，状态：**v0.0.12 已发布；Hash/List/Set/ZSet 编辑、终端真实转发、Key 导入导出、
-> 连接配置导入导出、Key 列表分页与虚拟滚动均已落地（后三项尚未进入任何发布 tag）；
-> 新增自动更新（后台下载 + 重启生效，见 §1.7 / §8.9）。
-> §2.1 的功能缺口已清空，剩余为代码质量与工程流程债务**。
+> 最近更新：2026-09-21，状态：**v0.0.12 已发布；根目录 `README.md` 已补齐**（含官网 myredis.cn 与界面截图，
+> 截图素材在 `docs/screenshots/`，由 `frontend/index.html` + mock `__TAURI_INTERNALS__.invoke`  harness 渲染截取）。
+> §2.1 的功能缺口已清空，§2.3 的 README 缺项已完成，剩余为代码质量与工程流程债务。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -215,13 +214,17 @@
 - [ ] ⬜ **CI 缺少质量门禁**：`release.yml` 只做「构建 → 改名 → 发 Release → 推网站」，
       全流程没有 `cargo test` / `cargo clippy -- -D warnings` / `cargo fmt --check`。
       §6 把这些列为提交前强制项，目前完全靠人工自觉，标了 `#[ignore]` 的集成测试也永远不会被执行。
-- [ ] ⬜ **根目录缺 `README.md`**：仓库首页目前是空的（`design/README.md` 只是设计素材说明）。
+- [x] ✅ **根目录缺 `README.md`**（2026-09-21 完成）
+  - 实现：根目录 [`README.md`](README.md)，含官网 **myredis.cn** 入口与界面截图
+    （官网首页 + 深秋/初秋两款主题、Key 树 / Hash / ZSet 编辑，素材在 `docs/screenshots/`）。
+  - 截图生成方式：headless Chrome 渲染 `frontend/index.html`，注入 mock `__TAURI_INTERNALS__.invoke`
+    返回固定演示数据（非 mock 假数据时代的那种静态假值，而是驱动真实 UI 渲染），`--screenshot` 分状态截取。
 - [ ] ⬜ **`PROJECT_PLAN.md` 需要回填或标注**：它是 v0.1「草案，待评审」，里程碑 M1–M5 状态未更新；
       §4.4 列的命令名（`get_key` / `exists_key` / `expire_key` / 各类型专属命令）与实际实现
       （`get_string` / `set_key` / `del_key`）不一致。
 - [ ] ⬜ **清理陈旧本地分支**：`feat/logo`、`feat/redis-cluster-support`、`feat/redis-username-auth`、
       `feat/test-connection-button`、`feature/ttl-input`、`fix/single-mode-cluster-moved-hint`
-      均已合入 `main`，可删除。
+      均已合入 `main`，可删除。2026-09-21 核对：上述分支仍在，另新增 `v0.0.14` 本地分支（是否保留请确认）。
 
 ---
 
@@ -259,6 +262,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-21 | — | 补齐根目录 [`README.md`](README.md)（§2.3 勾掉）：官网 **myredis.cn** 入口 + 界面截图（`docs/screenshots/`，headless Chrome + mock invoke harness 渲染截取）；§2 其余待办逐项核对仍成立（超时未接线、`rediss://` 提示未补、N+1 未收拢、阻塞 IO 未包 `spawn_blocking`、死代码未清理、CI 无质量门禁、陈旧分支未删） |
 | 2026-09-16 | — | 菜单栏去掉 **Edit**（§1.5）：`menu.rs` 不再单列 Edit 子菜单，Undo / Redo / Cut / Copy / Paste / Select All 六个标准编辑项移入应用菜单，保证 ⌘Z / ⌘X / ⌘C / ⌘V / ⌘A 仍能派发到响应链 |
 | 2026-09-16 | — | 新增 **macOS 菜单栏**（§1.5）：`src-tauri/src/menu.rs` 自建菜单，顺序 Window / Settings / Help（File、View 去掉，Edit 保留以支撑编辑快捷键）；Settings 下挂主题子菜单与「检查更新」，菜单项走 `emit` + 前端监听（`plugin:event|listen`）复用标题栏逻辑，主题切换与标题栏共享同一份 `localStorage` 记录 |
 | 2026-09-15 | — | 标题栏更新入口改为**默认不显示**：只有查到新版本才出现（`#btnCheckUpdate.show`），没新版完全不占位；配套加 30 分钟一次静默复查（`UPDATE_RECHECK_MS`），避免挂机期间发新版看不到入口；安装包已下好时点入口直接弹「更新已就绪」（§1.7） |
