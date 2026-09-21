@@ -1,7 +1,10 @@
 # 麦地缓存 — 开发方案书
 
-> 版本：v0.1（草案，待评审）
-> 文档状态：**待确认**
+> 版本：v0.1
+> 文档状态：**已落地（历史基线）** —— 本方案所述功能已于 2026-09 全部实现并发版。
+> 开发进度、待办与最新实现细节以 [`DEVELOPMENT.md`](DEVELOPMENT.md) 为准；
+> 本文保留原始设计决策（§9 ADR）与最初的功能规划，作为追溯用途。
+> §1.1「当前现状」描述的是立项时的 mock 状态，已被真实实现取代，仅作历史记录。
 > 技术栈：Tauri 2 + Rust + 原生 HTML/CSS/JS
 
 ---
@@ -250,23 +253,30 @@ Key 量大时，前端一次性渲染会导致卡顿。本方案采用**后端�
 
 #### 泛型 Key 操作
 
+> 2026-09 回填：命令名以实际实现为准（见 `src/commands/key.rs` / `key_content.rs`），
+> 与本表原始草案的差异已在此修正。
+
 | Command | 请求参数 | 响应 | redis 命令 |
 |---------|---------|------|-----------|
-| `list_keys` | `conn_id, pattern, cursor, count` | `{ keys: Vec<KeyMeta>, next_cursor }` | `SCAN` |
-| `get_key` | `conn_id, key` | `KeyData` | `DUMP`, `TYPE`, `TTL` |
-| `set_key` | `Connection, key, value` | `()` | `RESTORE` / `SET` |
-| `delete_key` | `conn_id, key` | `u64` (影响行数) | `DEL` |
-| `exists_key` | `conn_id, key` | `bool` | `EXISTS` |
-| `expire_key` | `conn_id, key, ttl` | `bool` | `EXPIRE` |
+| `list_keys` | `conn_id, pattern, cursor, count` | `{ keys: Vec<KeyMeta>, next_cursor }` | `SCAN`（游标分页 + pipeline 批量 `TYPE`/`TTL`） |
+| `get_string` | `conn_id, key` | `Option<String>` | `GET` |
+| `set_key` | `conn_id, key, value, ttl` | `()` | `SET`（+ 可选 `EXPIRE`） |
+| `del_key` | `conn_id, key` | `u64`（影响行数） | `DEL` |
+| `set_key_ttl` | `conn_id, key, ttl` | `()` | `EXPIRE` / `PERSIST` |
 
 #### 各类型专属操作
 
 | Command | 说明 | redis 命令 |
 |---------|------|-----------|
-| `get_hash` / `set_hash` / `hget_all` | Hash 操作 | `HGETALL`, `HSET`, ... |
-| `push_list` / `range_list` / `pop_list` | List 操作 | `LRANGE`, `LPUSH`, `LPOP` |
-| `get_set` / `set_member` | Set 操作 | `SMEMBERS`, `SADD` |
-| `get_zset` / `zadd_zset` | Sorted Set 操作 | `ZADD`, `ZRANGE` |
+| `get_hash` / `hash_set_field` / `hash_del_fields` | Hash 读取与字段级编辑 | `HGETALL`, `HSET`, `HDEL` |
+| `get_list` / `list_push_element` / `list_set_element` / `list_del_element` | List 读取与元素级编辑 | `LRANGE`, `LPUSH` / `RPUSH`（可选方向）, `LSET`, `LREM` |
+| `get_set` / `set_add_member` / `set_del_member` | Set 读取与成员级编辑 | `SMEMBERS`, `SADD`, `SREM` |
+| `get_zset` / `zset_add_member` / `zset_del_member` | ZSet 读取与成员级编辑 | `ZRANGE WITHSCORES`, `ZADD`, `ZREM` |
+
+> 草案中的 `get_key` / `delete_key` / `exists_key` / `expire_key` 未按原名实现：
+> 读取按类型拆为 `get_string` / `get_hash` / `get_list` / `get_set` / `get_zset`，
+> 删除为 `del_key`，过期设置并入 `set_key_ttl`，`exists_key` 最终没有独立命令
+> （存在性由读取返回的 `Option` 表达）。
 ---
 
 ### 4.4 终端（命令执行）
@@ -465,11 +475,14 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 
 | 里程碑 | 内容 | 交付 |
 |--------|------|------|
-| **M1 前端接入后端** | 前端调用 Rust 后端 `list_keys / get_key` | 能从真实 Redis 读出 key，替代 mock |
-| **M2 连接管理** | 连接 CRUD + 配置持久化到本地文件 | 可新增/编辑/删除连接 |
-| **M3 Key 完整 CRUD** | string/hash/list/set/zset 全部类型可视化读写 | 基础管理能力闭环 |
-| **M4 终端与搜索** | 替换 `executeCommand` mock 为真实命令转发 | 终端可执行 Redis 命令 |
-| **M5 服务器监控** | 解析 `INFO` 显示真实指标 | 状态栏显示真实服务器状态 |
+| **M1 前端接入后端** | 前端调用 Rust 后端 `list_keys / get_key` | ✅ 已完成（2026-09）—— 从真实 Redis 读出 key，替代 mock |
+| **M2 连接管理** | 连接 CRUD + 配置持久化到本地文件 | ✅ 已完成（2026-09）—— 新增/编辑/删除连接，导入导出 |
+| **M3 Key 完整 CRUD** | string/hash/list/set/zset 全部类型可视化读写 | ✅ 已完成（2026-09）—— 含字段/元素级编辑（见 §2.1 `DEVELOPMENT.md`） |
+| **M4 终端与搜索** | 替换 `executeCommand` mock 为真实命令转发 | ✅ 已完成（2026-09）—— `execute_command` 真实转发并渲染 RESP |
+| **M5 服务器监控** | 解析 `INFO` 显示真实指标 | ✅ 已完成（2026-09）—— 状态栏真实指标 |
+
+> 后续迭代（超出本方案 M1–M5）：自动更新（下载/验签/重启安装）、`rediss://` 友好提示、
+> 命令与建连超时保护、key 列表 pipeline 富化等，见 `DEVELOPMENT.md` 各章节。
 
 ---
 

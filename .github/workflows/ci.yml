@@ -1,0 +1,31 @@
+name: CI
+
+# 每次推分支、开 / 更新 PR 都跑质量门禁，把 fmt / clippy / 测试问题拦在
+# 打 tag 之前。发版时的全量门禁在 release.yml 的 quality job 里（同一 composite action）。
+on:
+  push:
+    branches:
+      - '**'
+    # tag 推送由 release.yml 处理，其 quality job 会跑同样的门禁，不重复触发
+    tags-ignore:
+      - '**'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  quality:
+    name: 质量门禁（fmt / clippy / 全量测试）
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/rust-quality

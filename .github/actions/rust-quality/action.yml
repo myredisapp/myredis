@@ -1,0 +1,50 @@
+name: Rust 质量门禁
+description: |
+  cargo fmt --check / cargo clippy -D warnings / 全量测试（含 #[ignore] 集成用例）。
+  集成用例需要本机 Redis（6379）与三节点集群（7001 起），动作内部负责拉起
+  （见 .github/scripts/start-test-redis.sh）。只支持 Linux runner。
+runs:
+  using: composite
+  steps:
+    # tauri 依赖 webkit2gtk / appindicator 等系统库，不装连 cargo test 都编译不过
+    - name: 安装 Linux 系统依赖
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libwebkit2gtk-4.1-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev \
+          libxdo-dev \
+          libssl-dev \
+          build-essential
+
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: src-tauri
+
+    # 默认用例不依赖 Redis，但反正要起 #[ignore] 组（含单机与集群用例），
+    # 一次 --include-ignored 全跑。集群用例共享同一 keyspace，串行跑才稳定
+    # （见 DEVELOPMENT.md §2.3）
+    - name: 启动测试用 Redis（单机 + 三节点集群）
+      shell: bash
+      run: bash .github/scripts/start-test-redis.sh
+
+    - name: cargo fmt --check
+      shell: bash
+      working-directory: src-tauri
+      run: cargo fmt --check
+
+    - name: cargo clippy（警告即失败）
+      shell: bash
+      working-directory: src-tauri
+      run: cargo clippy --all-targets -- -D warnings
+
+    - name: 全量测试（含 #[ignore]，串行）
+      shell: bash
+      working-directory: src-tauri
+      run: cargo test -- --include-ignored --test-threads=1
