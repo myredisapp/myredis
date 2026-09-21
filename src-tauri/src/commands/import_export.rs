@@ -26,7 +26,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::connection_pool::Pool;
-use crate::error::command_error_message;
+use crate::connection_pool::PooledConn;
+use crate::error::command_error_text;
 
 /// 导入单条失败的原因。
 #[derive(Debug, Clone, Serialize)]
@@ -102,35 +103,33 @@ pub async fn export_keys_inner(
 
     let mut entries = Vec::with_capacity(keys.len());
     for key in &keys {
-        let ktype: String = redis::cmd("TYPE")
-            .arg(key)
-            .query_async(&mut con)
+        let ktype: String = con
+            .query(redis::cmd("TYPE").arg(key))
             .await
-            .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+            .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
         if ktype == "none" {
             continue;
         }
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .unwrap_or(-1);
+        let ttl: i64 = con.query(redis::cmd("TTL").arg(key)).await.unwrap_or(-1);
 
         let value = match ktype.as_str() {
             "string" => {
-                let v: String = redis::cmd("GET")
-                    .arg(key)
-                    .query_async(&mut con)
+                // 读 TYPE 到读 GET 之间 key 可能已被删除或过期：nil 说明它已经不在了，
+                // 按「读取期间消失的 key 静默跳过」处理（否则会报一条看不懂的类型错误）
+                let v: Option<String> = con
+                    .query(redis::cmd("GET").arg(key))
                     .await
-                    .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
-                serde_json::Value::String(v)
+                    .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
+                match v {
+                    Some(v) => serde_json::Value::String(v),
+                    None => continue,
+                }
             }
             "hash" => {
-                let pairs: Vec<(String, String)> = redis::cmd("HGETALL")
-                    .arg(key)
-                    .query_async(&mut con)
+                let pairs: Vec<(String, String)> = con
+                    .query(redis::cmd("HGETALL").arg(key))
                     .await
-                    .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+                    .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
                 pairs
                     .into_iter()
                     .map(|(f, v)| (f, serde_json::Value::String(v)))
@@ -138,35 +137,33 @@ pub async fn export_keys_inner(
                     .into()
             }
             "list" => {
-                let items: Vec<String> = redis::cmd("LRANGE")
-                    .arg(key)
-                    .arg(0)
-                    .arg(-1)
-                    .query_async(&mut con)
+                let items: Vec<String> = con
+                    .query(redis::cmd("LRANGE").arg(key).arg(0).arg(-1))
                     .await
-                    .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+                    .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
                 serde_json::Value::Array(items.into_iter().map(serde_json::Value::String).collect())
             }
             "set" => {
-                let mut members: Vec<String> = redis::cmd("SMEMBERS")
-                    .arg(key)
-                    .query_async(&mut con)
+                let mut members: Vec<String> = con
+                    .query(redis::cmd("SMEMBERS").arg(key))
                     .await
-                    .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+                    .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
                 members.sort();
                 serde_json::Value::Array(
                     members.into_iter().map(serde_json::Value::String).collect(),
                 )
             }
             "zset" => {
-                let items: Vec<(String, f64)> = redis::cmd("ZRANGE")
-                    .arg(key)
-                    .arg(0)
-                    .arg(-1)
-                    .arg("WITHSCORES")
-                    .query_async(&mut con)
+                let items: Vec<(String, f64)> = con
+                    .query(
+                        redis::cmd("ZRANGE")
+                            .arg(key)
+                            .arg(0)
+                            .arg(-1)
+                            .arg("WITHSCORES"),
+                    )
                     .await
-                    .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+                    .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
                 serde_json::Value::Array(
                     items
                         .into_iter()
@@ -292,44 +289,38 @@ fn extract_entries(doc: &serde_json::Value) -> Option<Vec<ExportEntry>> {
 }
 
 /// 导入单条 key，返回其结果。
-async fn import_one<C: redis::aio::ConnectionLike>(
-    con: &mut C,
+async fn import_one(
+    con: &mut PooledConn,
     conn_cfg: &crate::models::Connection,
     item: &ExportEntry,
     overwrite: bool,
 ) -> Result<ImportOutcome, String> {
-    let exists: bool = redis::cmd("EXISTS")
-        .arg(&item.key)
-        .query_async(&mut *con)
+    let exists: bool = con
+        .query(redis::cmd("EXISTS").arg(&item.key))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(conn_cfg)))?;
     if exists {
         if !overwrite {
             return Ok(ImportOutcome::Skipped);
         }
-        redis::cmd("DEL")
-            .arg(&item.key)
-            .query_async::<_, ()>(&mut *con)
+        con.query::<()>(redis::cmd("DEL").arg(&item.key))
             .await
-            .map_err(|e: redis::RedisError| command_error_message(&e, Some(conn_cfg)))?;
+            .map_err(|e| command_error_text(&e, Some(conn_cfg)))?;
     }
 
     write_value(con, conn_cfg, item).await?;
 
     if item.ttl > 0 {
-        redis::cmd("EXPIRE")
-            .arg(&item.key)
-            .arg(item.ttl)
-            .query_async::<_, ()>(&mut *con)
+        con.query::<()>(redis::cmd("EXPIRE").arg(&item.key).arg(item.ttl))
             .await
-            .map_err(|e: redis::RedisError| command_error_message(&e, Some(conn_cfg)))?;
+            .map_err(|e| command_error_text(&e, Some(conn_cfg)))?;
     }
     Ok(ImportOutcome::Imported)
 }
 
 /// 按类型把 `value` 写入 Redis（调用前已按需 `DEL` 清理旧值）。
-async fn write_value<C: redis::aio::ConnectionLike>(
-    con: &mut C,
+async fn write_value(
+    con: &mut PooledConn,
     conn_cfg: &crate::models::Connection,
     item: &ExportEntry,
 ) -> Result<(), String> {
@@ -340,11 +331,7 @@ async fn write_value<C: redis::aio::ConnectionLike>(
                 .value
                 .as_str()
                 .ok_or("string 类型的 value 必须是字符串")?;
-            redis::cmd("SET")
-                .arg(key)
-                .arg(value)
-                .query_async::<_, ()>(&mut *con)
-                .await
+            con.query::<()>(redis::cmd("SET").arg(key).arg(value)).await
         }
         "hash" => {
             let obj = item
@@ -360,7 +347,7 @@ async fn write_value<C: redis::aio::ConnectionLike>(
                 let s = v.as_str().ok_or("hash 字段值必须是字符串")?;
                 cmd.arg(f).arg(s);
             }
-            cmd.query_async::<_, ()>(&mut *con).await
+            con.query::<()>(&cmd).await
         }
         "list" => {
             let arr = item
@@ -376,7 +363,7 @@ async fn write_value<C: redis::aio::ConnectionLike>(
                 let s = v.as_str().ok_or("list 元素必须是字符串")?;
                 cmd.arg(s);
             }
-            cmd.query_async::<_, ()>(&mut *con).await
+            con.query::<()>(&cmd).await
         }
         "set" => {
             let arr = item.value.as_array().ok_or("set 类型的 value 必须是数组")?;
@@ -389,7 +376,7 @@ async fn write_value<C: redis::aio::ConnectionLike>(
                 let s = v.as_str().ok_or("set 成员必须是字符串")?;
                 cmd.arg(s);
             }
-            cmd.query_async::<_, ()>(&mut *con).await
+            con.query::<()>(&cmd).await
         }
         "zset" => {
             let arr = item
@@ -412,11 +399,11 @@ async fn write_value<C: redis::aio::ConnectionLike>(
                     .ok_or("zset 元素缺少 score 字段")?;
                 cmd.arg(score).arg(member);
             }
-            cmd.query_async::<_, ()>(&mut *con).await
+            con.query::<()>(&cmd).await
         }
         other => return Err(format!("不支持的类型: {other}")),
     }
-    .map_err(|e: redis::RedisError| command_error_message(&e, Some(conn_cfg)))?;
+    .map_err(|e| command_error_text(&e, Some(conn_cfg)))?;
     Ok(())
 }
 
@@ -481,37 +468,19 @@ mod tests {
         let mut con = pool.conn(&conn_id).unwrap();
 
         // 造数据：四种类型各一个
-        redis::cmd("SET")
-            .arg("maidi:ie:s")
-            .arg("v1")
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("SET").arg("maidi:ie:s").arg("v1"))
             .await
             .unwrap();
-        redis::cmd("HSET")
-            .arg("maidi:ie:h")
-            .arg("f")
-            .arg("v")
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("HSET").arg("maidi:ie:h").arg("f").arg("v"))
             .await
             .unwrap();
-        redis::cmd("RPUSH")
-            .arg("maidi:ie:l")
-            .arg("a")
-            .arg("b")
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("RPUSH").arg("maidi:ie:l").arg("a").arg("b"))
             .await
             .unwrap();
-        redis::cmd("SADD")
-            .arg("maidi:ie:t")
-            .arg("m")
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("SADD").arg("maidi:ie:t").arg("m"))
             .await
             .unwrap();
-        redis::cmd("ZADD")
-            .arg("maidi:ie:z")
-            .arg(1.5)
-            .arg("zm")
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("ZADD").arg("maidi:ie:z").arg(1.5).arg("zm"))
             .await
             .unwrap();
 
@@ -526,11 +495,7 @@ mod tests {
         assert_eq!(doc.count, 5, "5 个 key 应全部导出: {doc:?}");
 
         // 删掉后重新导入（覆盖模式）
-        redis::cmd("DEL")
-            .arg(&keys)
-            .query_async::<_, ()>(&mut con)
-            .await
-            .unwrap();
+        con.query::<()>(redis::cmd("DEL").arg(&keys)).await.unwrap();
         let result = import_keys_inner(&pool, &conn_id, &doc.content, true).await?;
         assert_eq!(result.imported, 5, "5 个 key 应全部导入: {result:?}");
         assert!(result.failed.is_empty(), "不应有失败: {result:?}");
@@ -541,31 +506,23 @@ mod tests {
         assert_eq!(result.imported, 0);
 
         // 抽查值
-        let v: String = redis::cmd("GET")
-            .arg("maidi:ie:s")
-            .query_async(&mut con)
+        let v: String = con
+            .query(redis::cmd("GET").arg("maidi:ie:s"))
             .await
             .unwrap();
         assert_eq!(v, "v1");
-        let len: i64 = redis::cmd("LLEN")
-            .arg("maidi:ie:l")
-            .query_async(&mut con)
+        let len: i64 = con
+            .query(redis::cmd("LLEN").arg("maidi:ie:l"))
             .await
             .unwrap();
         assert_eq!(len, 2);
-        let score: f64 = redis::cmd("ZSCORE")
-            .arg("maidi:ie:z")
-            .arg("zm")
-            .query_async(&mut con)
+        let score: f64 = con
+            .query(redis::cmd("ZSCORE").arg("maidi:ie:z").arg("zm"))
             .await
             .unwrap();
         assert_eq!(score, 1.5);
 
-        redis::cmd("DEL")
-            .arg(&keys)
-            .query_async::<_, ()>(&mut con)
-            .await
-            .unwrap();
+        con.query::<()>(redis::cmd("DEL").arg(&keys)).await.unwrap();
         Ok(())
     }
 
@@ -588,10 +545,7 @@ mod tests {
         let key = format!("maidi:ie:all:{}", unique_id());
         {
             let mut con = pool.conn(&conn_id).unwrap();
-            redis::cmd("SET")
-                .arg(&key)
-                .arg("v")
-                .query_async::<_, ()>(&mut con)
+            con.query::<()>(redis::cmd("SET").arg(&key).arg("v"))
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -605,9 +559,7 @@ mod tests {
         );
 
         let mut con = pool.conn(&conn_id).unwrap();
-        redis::cmd("DEL")
-            .arg(&key)
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("DEL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         Ok(())

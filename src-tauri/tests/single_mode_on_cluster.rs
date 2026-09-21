@@ -102,9 +102,7 @@ async fn single_mode_write_pins_to_connected_node() {
     // 该节点负责的 slot 区间
     let nodes: String = {
         let mut c = pool.conn("single_pin").unwrap();
-        redis::cmd("CLUSTER")
-            .arg("NODES")
-            .query_async(&mut c)
+        c.query(redis::cmd("CLUSTER").arg("NODES"))
             .await
             .expect("CLUSTER NODES 失败")
     };
@@ -124,18 +122,15 @@ async fn single_mode_write_pins_to_connected_node() {
 
     // 1) 写入属于本节点的 key：应成功
     let mut single = pool.conn("single_pin").unwrap();
-    let ok: String = redis::cmd("SET")
-        .arg(&own_key)
-        .arg("v-own")
-        .query_async(&mut single)
+    let ok: String = single
+        .query(redis::cmd("SET").arg(&own_key).arg("v-own"))
         .await
         .expect("单机模式写入本节点 slot 的 key 应成功");
     assert_eq!(ok, "OK");
 
     // 数据确实在直连节点上（本节点 GET 不跨节点，成功即证明存储在此）
-    let v: String = redis::cmd("GET")
-        .arg(&own_key)
-        .query_async(&mut single)
+    let v: String = single
+        .query(redis::cmd("GET").arg(&own_key))
         .await
         .expect("本节点应能读到自己 slot 的 key");
     assert_eq!(v, "v-own");
@@ -145,18 +140,15 @@ async fn single_mode_write_pins_to_connected_node() {
         .await
         .expect("集群模式连接失败");
     let mut cluster = pool.conn("cluster_view").unwrap();
-    let v: String = redis::cmd("GET")
-        .arg(&own_key)
-        .query_async(&mut cluster)
+    let v: String = cluster
+        .query(redis::cmd("GET").arg(&own_key))
         .await
         .expect("集群模式应能读到该 key");
     assert_eq!(v, "v-own");
 
     // 2) 写入不属于本节点 slot 的 key：服务器必须拒绝（MOVED），不落在任何节点
-    let err = redis::cmd("SET")
-        .arg(&foreign_key)
-        .arg("v-foreign")
-        .query_async::<_, String>(&mut single)
+    let err = single
+        .query::<String>(redis::cmd("SET").arg(&foreign_key).arg("v-foreign"))
         .await
         .expect_err("单机模式写入其他节点 slot 的 key 应返回 MOVED 错误")
         .to_string();
@@ -166,24 +158,20 @@ async fn single_mode_write_pins_to_connected_node() {
         "错误应为 MOVED，实际: {err}"
     );
     // 集群视角也应读不到（证明真的没有写入任何节点）
-    let v: Option<String> = redis::cmd("GET")
-        .arg(&foreign_key)
-        .query_async(&mut cluster)
+    let v: Option<String> = cluster
+        .query(redis::cmd("GET").arg(&foreign_key))
         .await
         .expect("GET 查询失败");
     assert!(v.is_none(), "被拒绝的 key 不应存在于集群任何节点");
 
     // 3) 集群模式写同一个 foreign key：成功，且数据落在别的节点（本节点读不到 → MOVED）
-    let ok: String = redis::cmd("SET")
-        .arg(&foreign_key)
-        .arg("v-foreign")
-        .query_async(&mut cluster)
+    let ok: String = cluster
+        .query(redis::cmd("SET").arg(&foreign_key).arg("v-foreign"))
         .await
         .expect("集群模式写入任意 key 应成功");
     assert_eq!(ok, "OK");
-    let err = redis::cmd("GET")
-        .arg(&foreign_key)
-        .query_async::<_, String>(&mut single)
+    let err = single
+        .query::<String>(redis::cmd("GET").arg(&foreign_key))
         .await
         .expect_err("foreign key 不应落在直连节点上")
         .to_string();
@@ -193,10 +181,8 @@ async fn single_mode_write_pins_to_connected_node() {
     );
 
     // 清理
-    let _: i64 = redis::cmd("DEL")
-        .arg(&own_key)
-        .arg(&foreign_key)
-        .query_async(&mut cluster)
+    let _: i64 = cluster
+        .query(redis::cmd("DEL").arg(&own_key).arg(&foreign_key))
         .await
         .expect("清理失败");
 }

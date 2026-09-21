@@ -51,7 +51,8 @@ fn cluster_conn(id: &str) -> Connection {
 #[tokio::test]
 #[ignore]
 async fn cluster_test_returns_pong() {
-    let pong = Pool::test(&cluster_conn("cluster_test"))
+    let pong = Pool::new()
+        .test(&cluster_conn("cluster_test"))
         .await
         .expect("集群连接测试失败，请确认集群已启动");
     assert_eq!(pong, "PONG");
@@ -75,41 +76,33 @@ async fn cluster_connect_ping_and_crud() {
     let mut con = pool.conn("cluster_crud").expect("获取集群句柄失败");
     let key = "myredis:cluster:itest:key";
 
-    let _: String = redis::cmd("SET")
-        .arg(key)
-        .arg("hello-cluster")
-        .query_async(&mut con)
+    let _: String = con
+        .query(redis::cmd("SET").arg(key).arg("hello-cluster"))
         .await
         .expect("集群 SET 失败");
 
-    let val: String = redis::cmd("GET")
-        .arg(key)
-        .query_async(&mut con)
+    let val: String = con
+        .query(redis::cmd("GET").arg(key))
         .await
         .expect("集群 GET 失败");
     assert_eq!(val, "hello-cluster");
 
-    let deleted: i64 = redis::cmd("DEL")
-        .arg(key)
-        .query_async(&mut con)
+    let deleted: i64 = con
+        .query(redis::cmd("DEL").arg(key))
         .await
         .expect("集群 DEL 失败");
     assert_eq!(deleted, 1);
 
-    let after: Option<String> = redis::cmd("GET")
-        .arg(key)
-        .query_async(&mut con)
+    let after: Option<String> = con
+        .query(redis::cmd("GET").arg(key))
         .await
         .expect("集群 GET 失败");
     assert!(after.is_none(), "删除后不应再取到值");
 
     // SCAN 在集群连接上会被路由到随机一个节点（redis-rs 不做聚合），
     // 这里仅验证命令本身不报错；完整性与稳定性由 cluster_list_keys 用例覆盖。
-    let _: redis::Value = redis::cmd("SCAN")
-        .arg(0)
-        .arg("COUNT")
-        .arg(10)
-        .query_async(&mut con)
+    let _: redis::Value = con
+        .query(redis::cmd("SCAN").arg(0).arg("COUNT").arg(10))
         .await
         .expect("集群 SCAN 失败");
 
@@ -142,10 +135,8 @@ async fn cluster_get_server_info_and_scan() {
 
     // list_keys 应能列出探针 key；修复前 SCAN 只扫随机一个节点，结果时有时无
     let mut con = pool.conn("cluster_info").unwrap();
-    let _: String = redis::cmd("SET")
-        .arg("myredis:cluster:scan:probe")
-        .arg("1")
-        .query_async(&mut con)
+    let _: String = con
+        .query(redis::cmd("SET").arg("myredis:cluster:scan:probe").arg("1"))
         .await
         .expect("集群 SET 失败");
 
@@ -156,9 +147,8 @@ async fn cluster_get_server_info_and_scan() {
     );
     println!("list_keys 共列出 {} 个 key", listed.len());
 
-    let _: i64 = redis::cmd("DEL")
-        .arg("myredis:cluster:scan:probe")
-        .query_async(&mut con)
+    let _: i64 = con
+        .query(redis::cmd("DEL").arg("myredis:cluster:scan:probe"))
         .await
         .expect("清理失败");
 
@@ -177,10 +167,8 @@ async fn cluster_list_keys_stable_and_complete() {
     let mut probes = Vec::new();
     for i in 0..12 {
         let key = format!("myredis:cluster:lk:{{t{i}}}:probe");
-        let _: String = redis::cmd("SET")
-            .arg(&key)
-            .arg("1")
-            .query_async(&mut con)
+        let _: String = con
+            .query(redis::cmd("SET").arg(&key).arg("1"))
             .await
             .expect("集群 SET 失败");
         probes.push(key);
@@ -207,9 +195,8 @@ async fn cluster_list_keys_stable_and_complete() {
 
     // 清理
     for probe in &probes {
-        let _: i64 = redis::cmd("DEL")
-            .arg(probe)
-            .query_async(&mut con)
+        let _: i64 = con
+            .query(redis::cmd("DEL").arg(probe))
             .await
             .expect("清理失败");
     }
@@ -232,10 +219,8 @@ async fn cluster_list_keys_pages_span_nodes_without_loss() {
     let mut written = Vec::new();
     for i in 0..total {
         let key = format!("{prefix}:{{t{}}}:{i:04}", i % 3);
-        let _: String = redis::cmd("SET")
-            .arg(&key)
-            .arg("1")
-            .query_async(&mut con)
+        let _: String = con
+            .query(redis::cmd("SET").arg(&key).arg("1"))
             .await
             .expect("集群 SET 失败");
         written.push(key);
@@ -278,12 +263,130 @@ async fn cluster_list_keys_pages_span_nodes_without_loss() {
     assert_eq!(actual, expected, "集群分页必须覆盖全部 key 且不重复");
 
     for key in &written {
-        let _: i64 = redis::cmd("DEL")
-            .arg(key)
-            .query_async(&mut con)
+        let _: i64 = con
+            .query(redis::cmd("DEL").arg(key))
             .await
             .expect("清理失败");
     }
 
     pool.disconnect("cluster_paging");
+}
+
+/// 集群下的类型/TTL 富化：类型与 TTL 必须挂在正确的 key 上，且能跨节点把所有 key 都富化到。
+///
+/// 分两轮验证：
+/// 1. **每页 1 个 key** —— 游标逐节点推进，每个节点各自跑一遍富化 pipeline；
+/// 2. **一页跨多节点** —— 不同 slot 的 key 落在同一页里，富化必须按节点拆开 pipeline：
+///    若实现把整页的 key 塞进同一条 pipeline（集群连接会按第一个 key 路由），
+///    服务端会直接判 CROSSSLOT，本用例随即失败。
+///
+/// 类型与 TTL 错位（pipeline 的返回按命令顺序排列）同样会被断言挡住。
+#[tokio::test]
+#[ignore]
+async fn cluster_list_keys_reports_types_across_nodes() {
+    let pool = Pool::new();
+    let conn = cluster_conn("cluster_types");
+    pool.connect(&conn).await.expect("连接失败");
+    let mut con = pool.conn("cluster_types").unwrap();
+
+    let prefix = "myredis:cluster:types";
+    // 3 个 hash tag 把它们分散到 3 个主节点：string / hash / 带 TTL 的 list
+    let string_key = format!("{prefix}:{{t0}}:string");
+    let hash_key = format!("{prefix}:{{t1}}:hash");
+    let list_key = format!("{prefix}:{{t2}}:expiring-list");
+    let _: String = con
+        .query(redis::cmd("SET").arg(&string_key).arg("v"))
+        .await
+        .expect("集群 SET 失败");
+    let _: i64 = con
+        .query(redis::cmd("HSET").arg(&hash_key).arg("f").arg("v"))
+        .await
+        .expect("集群 HSET 失败");
+    let _: i64 = con
+        .query(redis::cmd("RPUSH").arg(&list_key).arg("a"))
+        .await
+        .expect("集群 RPUSH 失败");
+    let _: i64 = con
+        .query(redis::cmd("EXPIRE").arg(&list_key).arg(120))
+        .await
+        .expect("集群 EXPIRE 失败");
+
+    // 每页 1 个 key：游标必然逐节点推进，每个节点的富化 pipeline 都会被单独执行
+    let mut cursor = "0".to_string();
+    let mut visited_nodes = std::collections::HashSet::new();
+    let mut found: std::collections::HashMap<String, (String, i64)> =
+        std::collections::HashMap::new();
+    let mut pages = 0usize;
+    loop {
+        let page = list_keys_inner(&pool, "cluster_types", &cursor, 1, Some(prefix))
+            .await
+            .expect("集群列表富化失败（跨节点的 key 混进同一条 pipeline 会报 CROSSSLOT）");
+        for entry in page.keys {
+            found.insert(entry.key, (entry.type_, entry.ttl));
+        }
+        pages += 1;
+        assert!(pages < 100, "分页未收敛，游标处理可能有误");
+        if page.next_cursor == "0" {
+            break;
+        }
+        let (addr, _) = page
+            .next_cursor
+            .rsplit_once(':')
+            .expect("集群游标应带节点地址");
+        visited_nodes.insert(addr.to_string());
+        cursor = page.next_cursor;
+    }
+
+    assert_eq!(
+        found.get(&string_key).map(|(t, _)| t.as_str()),
+        Some("string"),
+        "string key 的类型应当正确: {found:?}"
+    );
+    assert_eq!(
+        found.get(&hash_key).map(|(t, _)| t.as_str()),
+        Some("hash"),
+        "hash key 的类型应当正确: {found:?}"
+    );
+    assert_eq!(
+        found.get(&list_key).map(|(t, _)| t.as_str()),
+        Some("list"),
+        "list key 的类型应当正确: {found:?}"
+    );
+    assert_eq!(
+        found.get(&string_key).map(|(_, ttl)| *ttl),
+        Some(-1),
+        "未设过期的 key 应报 -1"
+    );
+    let ttl = found.get(&list_key).map(|(_, ttl)| *ttl).unwrap_or(-2);
+    assert!(ttl > 0 && ttl <= 120, "带过期的 key 应报正数 TTL: {ttl}");
+    assert!(
+        visited_nodes.len() > 1,
+        "探针 key 应分布在多个主节点上，实际只经过 {visited_nodes:?}"
+    );
+
+    // 一页跨多节点：不同 slot 的 key 同页返回，富化必须按节点各自成批
+    let page = list_keys_inner(&pool, "cluster_types", "0", 50, Some(prefix))
+        .await
+        .expect("一页跨多节点的富化失败（整页混进同一条 pipeline 会被判 CROSSSLOT）");
+    let page_keys: std::collections::HashMap<&str, &KeyEntry> =
+        page.keys.iter().map(|e| (e.key.as_str(), e)).collect();
+    for (key, expected_type) in [
+        (&string_key, "string"),
+        (&hash_key, "hash"),
+        (&list_key, "list"),
+    ] {
+        let entry = page_keys
+            .get(key.as_str())
+            .unwrap_or_else(|| panic!("{key} 应当出现在同一页里"));
+        assert_eq!(entry.type_, expected_type, "跨节点一页里的类型应当正确");
+    }
+
+    for key in [&string_key, &hash_key, &list_key] {
+        let _: i64 = con
+            .query(redis::cmd("DEL").arg(key))
+            .await
+            .expect("清理失败");
+    }
+
+    pool.disconnect("cluster_types");
 }

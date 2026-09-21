@@ -3711,12 +3711,30 @@
                 if (e.target.id === 'confirmModal') closeConfirm(false);
             });
 
+            // 主机字段里填了带协议的地址（如 rediss://host）时给出提示。
+            // 后端在保存 / 导入 / 建连三处也会拦（校验在 models/connection.rs），
+            // 这里先拦一次只是省一趟往返、并把提示显示在用户正看着的位置。
+            function hostSchemeError(host) {
+                const m = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec((host || '').trim());
+                if (!m) return '';
+                const scheme = m[1].toLowerCase();
+                if (scheme === 'rediss' || scheme === 'tls' || scheme === 'ssl') {
+                    return '暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接';
+                }
+                return `主机字段只需填主机名（如 127.0.0.1），不要带 ${scheme}:// 前缀`;
+            }
+
             function saveConnection() {
                 const name = document.getElementById('connName').value.trim();
                 const host = document.getElementById('connHost').value.trim();
                 const port = parseInt(document.getElementById('connPort').value) || 6379;
                 if (!name || !host) {
                     showToast('请填写名称和主机', 'error');
+                    return;
+                }
+                const hostError = hostSchemeError(host);
+                if (hostError) {
+                    showToast(hostError, 'error');
                     return;
                 }
                 const id = editingConnId || ('conn_' + Date.now());
@@ -3757,6 +3775,11 @@
                 const port = parseInt(document.getElementById('connPort').value) || 0;
                 if (!host || !port) {
                     showTestStatus('请填写主机和端口', 'error');
+                    return;
+                }
+                const hostError = hostSchemeError(host);
+                if (hostError) {
+                    showTestStatus('✗ ' + hostError, 'error');
                     return;
                 }
 

@@ -25,7 +25,8 @@ async fn test_connection_returns_pong() {
         username: None,
         password: None,
     };
-    let pong = Pool::test(&conn)
+    let pong = Pool::new()
+        .test(&conn)
         .await
         .expect("测试连接失败，请确认 Redis 已启动");
     assert_eq!(pong, "PONG");
@@ -47,6 +48,13 @@ async fn test_connection_fails_on_wrong_port() {
         username: None,
         password: None,
     };
-    let result = Pool::test(&conn).await;
+    // 连不上的端口必须在连接超时预算内失败，而不是永久等待
+    let started = std::time::Instant::now();
+    let result = Pool::new().test(&conn).await;
     assert!(result.is_err(), "错误端口应当返回连接失败");
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "连接失败应当有界，实际耗时 {:?}",
+        started.elapsed()
+    );
 }

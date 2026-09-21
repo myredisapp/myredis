@@ -23,10 +23,6 @@ pub enum AppError {
     #[error("操作超时: {0}")]
     Timeout(String),
 
-    /// 连接未就绪，需重新连接。
-    #[error("连接未就绪: {0}")]
-    NotConnected(String),
-
     /// TLS 加密连接尚未支持。
     #[error("暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接")]
     TlsNotSupported,
@@ -109,6 +105,18 @@ pub fn command_error_message(err: &redis::RedisError, direct: Option<&Connection
     }
 }
 
+/// 把命令层的错误转成面向用户的提示。
+///
+/// 与 [`command_error_message`] 的区别在于输入：命令层执行完 [`crate::connection_pool::PooledConn::query`]
+/// 后拿到的是 [`AppError`]，其中既有底层 Redis 报错，也有超时这类客户端侧错误（没有对应的
+/// `RedisError`）。只有 Redis 报错需要转写 MOVED / ASK 建议，其余直接取 [`AppError`] 自己的文案。
+pub fn command_error_text(err: &AppError, direct: Option<&Connection>) -> String {
+    match err {
+        AppError::Redis(e) => command_error_message(e, direct),
+        other => other.to_string(),
+    }
+}
+
 // 让 Tauri 命令能返回 AppError（Tauri 2 要求错误实现 Serialize）
 impl Serialize for AppError {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -118,7 +126,7 @@ impl Serialize for AppError {
 
 #[cfg(test)]
 mod tests {
-    use super::command_error_message;
+    use super::{command_error_message, command_error_text};
     use crate::models::{ConnType, Connection};
 
     fn direct_conn() -> Connection {
@@ -198,5 +206,22 @@ mod tests {
     fn other_errors_pass_through() {
         let err = redis::RedisError::from((redis::ErrorKind::TypeError, "WRONGTYPE message"));
         assert_eq!(command_error_message(&err, None), err.to_string());
+    }
+
+    /// 命令层现在拿到的是 [`AppError`]：Redis 报错仍要转写，客户端侧错误直接取文案。
+    #[test]
+    fn command_error_text_rewrites_redis_redirect_errors() {
+        let err = super::AppError::Redis(moved_error("7253 127.0.0.1:7102"));
+        let msg = command_error_text(&err, Some(&direct_conn()));
+        assert!(msg.contains("集群模式"), "MOVED 应转写成可操作建议: {msg}");
+        assert!(msg.contains("127.0.0.1:7102"), "应提示负责节点: {msg}");
+    }
+
+    #[test]
+    fn command_error_text_keeps_client_side_errors() {
+        let err = crate::config::ConnectionTimeout::default().command_timeout_error();
+        let msg = command_error_text(&err, None);
+        assert!(msg.contains("10 秒"), "超时文案应带上配置的秒数: {msg}");
+        assert_eq!(msg, err.to_string(), "客户端侧错误应原样透出");
     }
 }

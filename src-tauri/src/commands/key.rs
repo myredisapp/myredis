@@ -5,8 +5,9 @@
 
 use serde::Serialize;
 
-use crate::connection_pool::{Conn, Pool};
-use crate::error::command_error_message;
+use crate::config::ConnectionTimeout;
+use crate::connection_pool::{Conn, Pool, PooledConn};
+use crate::error::command_error_text;
 use crate::models::{ConnType, Connection};
 
 /// 列表中的单个 key。
@@ -48,7 +49,7 @@ pub struct KeyPage {
 /// 分页列出 key。
 ///
 /// 使用 `SCAN` 游标遍历（**不用 `KEYS *`**，避免阻塞生产实例），并附带每个 key 的
-/// 类型与 TTL。参数说明：
+/// 类型与 TTL（一次 pipeline 取回，见 [`enrich_keys`]）。参数说明：
 ///
 /// - `cursor`：上一页返回的 `next_cursor`，首页传 `"0"`。
 /// - `count`：期望的单页 key 数（`0` 表示用 [`DEFAULT_PAGE_SIZE`]），上限 [`MAX_PAGE_SIZE`]。
@@ -88,7 +89,9 @@ pub async fn list_keys_inner(
     };
     let page_size = u64::from(page_size);
 
-    let (key_names, next_cursor) = if conn_cfg.conn_type == ConnType::Cluster {
+    // 两条路径都返回已富化的条目：类型与 TTL 的往返次数与扫描方式绑定，
+    // 放在各自内部做才能各自压到最少（见两个函数的说明）
+    let (mut keys, next_cursor) = if conn_cfg.conn_type == ConnType::Cluster {
         scan_page_cluster(
             &conn_cfg,
             &mut con,
@@ -98,32 +101,80 @@ pub async fn list_keys_inner(
         )
         .await?
     } else {
-        scan_page_single(&mut con, cursor, page_size, match_pattern.as_deref()).await?
+        // 单机模式的「直连节点」就是这条连接：出错时把节点地址带上（MOVED 提示要用）
+        scan_page_single(
+            &conn_cfg,
+            &mut con,
+            cursor,
+            page_size,
+            match_pattern.as_deref(),
+        )
+        .await?
     };
-
-    let mut keys: Vec<KeyEntry> = Vec::with_capacity(key_names.len());
-    for key in &key_names {
-        let ktype: String = redis::cmd("TYPE")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .unwrap_or_else(|_| "none".to_string());
-
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .unwrap_or(-1);
-
-        keys.push(KeyEntry {
-            key: key.clone(),
-            ttl: if ttl < 0 { -1 } else { ttl },
-            type_: ktype,
-        });
-    }
 
     keys.sort_by(|a, b| a.key.cmp(&b.key));
     Ok(KeyPage { keys, next_cursor })
+}
+
+/// 富化一批 key：用**一次 pipeline** 取回全部 TYPE 与 TTL。
+///
+/// 命令按 `TYPE k1, TTL k1, TYPE k2, TTL k2, …` 排队，因此返回的 `2n` 个值与 key
+/// 顺序一一对应。原先每个 key 各发两次命令（一页 100 个 key 就是 200 次往返），
+/// 现在整批只占一次往返；单条 pipeline 最多 [`MAX_PAGE_SIZE`] × 2 = 2000 条命令。
+///
+/// 调用方需保证 `con` **能直接服务这批 key**：集群里一条 pipeline 只能发给一个节点，
+/// 跨节点的 key 混在一起会被服务端判 `CROSSSLOT`，所以集群路径按节点分组后各自调用。
+///
+/// 服务端对不存在的 key 也照常应答（TYPE → `none`、TTL → `-2`），不会整批失败；
+/// 只有整批拿不到响应时才返回错误 —— 连接不可用时把整页当成 `none` / `-1` 返回，
+/// 反而是在骗用户。
+///
+/// `direct` 与 [`command_error_text`] 的第二个参数同义：单机模式传当前连接配置，
+/// 让迁移中的 key 报 MOVED 时能点明「当前直连的是谁」，集群模式传 `None`。
+async fn enrich_keys(
+    con: &mut PooledConn,
+    keys: &[String],
+    direct: Option<&Connection>,
+) -> Result<Vec<KeyEntry>, String> {
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut pipe = redis::pipe();
+    for key in keys {
+        pipe.cmd("TYPE").arg(key).cmd("TTL").arg(key);
+    }
+    let values: Vec<redis::Value> = con
+        .query_pipeline(&pipe)
+        .await
+        .map_err(|e| command_error_text(&e, direct))?;
+
+    let expected = keys.len() * 2;
+    if values.len() != expected {
+        // 正常情况下驱动会严格按命令数返回；数量不符说明协议层出了问题，
+        // 此时按下标取值会把类型和 TTL 错位配到别的 key 上，宁可报错
+        return Err(format!(
+            "TYPE/TTL 批量查询返回了 {} 个结果，期望 {expected} 个",
+            values.len()
+        ));
+    }
+
+    let entries = keys
+        .iter()
+        .enumerate()
+        .map(|(i, key)| {
+            // 单条解析失败按「查不到」处理（与逐条查询时 unwrap_or 的兜底一致）
+            let type_ = redis::from_redis_value::<String>(&values[i * 2])
+                .unwrap_or_else(|_| "none".to_string());
+            let ttl = redis::from_redis_value::<i64>(&values[i * 2 + 1]).unwrap_or(-1);
+            KeyEntry {
+                key: key.clone(),
+                type_,
+                ttl: if ttl < 0 { -1 } else { ttl },
+            }
+        })
+        .collect();
+    Ok(entries)
 }
 
 /// 把用户输入的原始搜索文本转成 `SCAN` 的 `MATCH` 模式。
@@ -164,8 +215,8 @@ fn to_match_pattern(search: &str) -> Option<String> {
 /// 执行一次 `SCAN`，返回（下一个游标，本批 key）。
 ///
 /// `cursor` 为 `0` 且返回游标也为 `0` 时表示扫描结束。
-async fn scan_once<C: redis::aio::ConnectionLike>(
-    con: &mut C,
+async fn scan_once(
+    con: &mut PooledConn,
     cursor: u64,
     count: u64,
     pattern: Option<&str>,
@@ -175,35 +226,39 @@ async fn scan_once<C: redis::aio::ConnectionLike>(
     if let Some(p) = pattern {
         cmd.arg("MATCH").arg(p);
     }
-    cmd.query_async(con)
+    con.query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, None))
+        .map_err(|e| command_error_text(&e, None))
 }
 
-/// 单机分页：从 `cursor` 开始扫描，累积到至少 `page_size` 个 key 或游标归零为止。
+/// 单机分页：从 `cursor` 开始扫描，累积到至少 `page_size` 个 key 或游标归零为止，
+/// 再用一趟 pipeline 补齐类型与 TTL。
 ///
 /// 不做「凑满 `page_size` 就丢弃多余 key」的裁剪 —— `SCAN` 的一批 key 无法退还，
 /// 丢掉的 key 就再也不会出现在后续分页里。因此单页大小是「至少 `page_size`」。
-async fn scan_page_single<C: redis::aio::ConnectionLike>(
-    con: &mut C,
+async fn scan_page_single(
+    conn_cfg: &Connection,
+    con: &mut PooledConn,
     cursor: &str,
     page_size: u64,
     pattern: Option<&str>,
-) -> Result<(Vec<String>, String), String> {
+) -> Result<(Vec<KeyEntry>, String), String> {
     let mut current: u64 = cursor
         .parse()
         .map_err(|_| format!("游标不合法: {cursor}"))?;
-    let mut keys: Vec<String> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
 
     for _ in 0..MAX_SCAN_ROUNDS {
         let (next, batch) = scan_once(con, current, page_size, pattern).await?;
-        keys.extend(batch);
+        names.extend(batch);
         current = next;
-        if current == 0 || keys.len() as u64 >= page_size {
+        if current == 0 || names.len() as u64 >= page_size {
             break;
         }
     }
 
+    // 单机连接就是这些 key 的归属连接：整页一次 pipeline 即可
+    let keys = enrich_keys(con, &names, Some(conn_cfg)).await?;
     Ok((keys, current.to_string()))
 }
 
@@ -245,10 +300,14 @@ fn format_cluster_cursor(addr: &str, inner: u64) -> String {
 }
 
 /// 按原连接配置（含认证信息）连接集群中的某个主节点。
+///
+/// 返回带超时配置的直连句柄：节点连接同样受 [`ConnectionTimeout::connect`] 约束，
+/// 命令超时沿用调用方句柄的配置（`timeout`）。
 async fn connect_cluster_node(
     conn_cfg: &Connection,
     addr: &str,
-) -> Result<redis::aio::MultiplexedConnection, String> {
+    timeout: ConnectionTimeout,
+) -> Result<PooledConn, String> {
     // 调用方已保证 `host:port` 格式
     let (host, port) = addr.rsplit_once(':').expect("主节点地址格式异常");
     let port: u16 = port
@@ -260,30 +319,37 @@ async fn connect_cluster_node(
         ..conn_cfg.clone()
     };
     let client = redis::Client::open(node_cfg.to_connection_url())
-        .map_err(|e: redis::RedisError| format!("连接集群节点 {addr} 失败: {e}"))?;
-    client
-        .get_multiplexed_async_connection()
+        .map_err(|e| format!("连接集群节点 {addr} 失败: {e}"))?;
+    let conn = tokio::time::timeout(timeout.connect, client.get_multiplexed_async_connection())
         .await
-        .map_err(|e: redis::RedisError| format!("连接集群节点 {addr} 失败: {e}"))
+        .map_err(|_| timeout.connect_timeout_error().to_string())?
+        .map_err(|e| format!("连接集群节点 {addr} 失败: {e}"))?;
+    Ok(PooledConn::new(Conn::Node(conn), timeout))
 }
 
 /// 集群分页：从游标继续扫描，一页可以跨多个主节点。
 ///
 /// 一个节点扫完后自动跳到下一个节点；所有节点都扫完时返回 `"0"`。
+/// 类型与 TTL 在**每个节点自己的连接上**就地富化：`SCAN` 只返回该节点负责的 key，
+/// 一个节点的 key 刚好能放进同一条 pipeline（跨节点会 CROSSSLOT）；
+/// 也省掉了「富化时再按 slot 路由一遍」的往返与重连。
+///
+/// 代价是这批 key 不再跟随 MOVED / ASK 重定向（集群连接会跟，节点直连不会）：
+/// 首页扫过之后槽才迁走的 key（要求此刻正在做 resharding）会让这一页报 MOVED，
+/// 提示里带着新的负责节点，刷新一次即可 —— 不做隐式重试，重试也只是把同样的竞态再撞一次。
 async fn scan_page_cluster(
     conn_cfg: &Connection,
-    con: &mut Conn,
+    con: &mut PooledConn,
     cursor: &str,
     page_size: u64,
     pattern: Option<&str>,
-) -> Result<(Vec<String>, String), String> {
+) -> Result<(Vec<KeyEntry>, String), String> {
     let cursor = parse_cluster_cursor(cursor)?;
 
-    let nodes: String = redis::cmd("CLUSTER")
-        .arg("NODES")
-        .query_async(&mut *con)
+    let nodes: String = con
+        .query(redis::cmd("CLUSTER").arg("NODES"))
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let addrs = parse_master_addrs(&nodes, &conn_cfg.host);
     if addrs.is_empty() {
@@ -301,18 +367,20 @@ async fn scan_page_cluster(
     };
     let mut node_cursor = cursor.inner;
 
-    let mut keys: Vec<String> = Vec::new();
+    let mut entries: Vec<KeyEntry> = Vec::new();
     let mut rounds = 0usize;
 
-    'nodes: while node_idx < addrs.len() {
-        let mut node_con = connect_cluster_node(conn_cfg, &addrs[node_idx]).await?;
+    while node_idx < addrs.len() {
+        let mut node_con = connect_cluster_node(conn_cfg, &addrs[node_idx], con.timeout()).await?;
+        // 本节点这一批（扫完整个节点，或扫到页满 / 轮次用尽为止）
+        let mut names: Vec<String> = Vec::new();
         loop {
-            if rounds >= MAX_SCAN_ROUNDS || keys.len() as u64 >= page_size {
-                break 'nodes;
+            if rounds >= MAX_SCAN_ROUNDS || (entries.len() + names.len()) as u64 >= page_size {
+                break;
             }
             rounds += 1;
             let (next, batch) = scan_once(&mut node_con, node_cursor, page_size, pattern).await?;
-            keys.extend(batch);
+            names.extend(batch);
             node_cursor = next;
             if node_cursor == 0 {
                 // 当前节点扫完，接着扫下一个节点
@@ -321,17 +389,23 @@ async fn scan_page_cluster(
                 break;
             }
         }
+
+        // 扫到一半也要先富化（page_size 已满足时，这批 key 若不返回就再也拿不到了）
+        entries.extend(enrich_keys(&mut node_con, &names, None).await?);
+        if rounds >= MAX_SCAN_ROUNDS || entries.len() as u64 >= page_size {
+            break;
+        }
     }
 
     let next_cursor = match addrs.get(node_idx) {
         Some(addr) => format_cluster_cursor(addr, node_cursor),
         None => "0".to_string(),
     };
-    Ok((keys, next_cursor))
+    Ok((entries, next_cursor))
 }
 
 /// 在单个连接上完整执行一轮 `SCAN`，返回所有 key 名（导出等需要全量的场景使用）。
-async fn scan_key_names<C: redis::aio::ConnectionLike>(con: &mut C) -> Result<Vec<String>, String> {
+async fn scan_key_names(con: &mut PooledConn) -> Result<Vec<String>, String> {
     let mut cursor = 0u64;
     let mut keys: Vec<String> = Vec::new();
     loop {
@@ -376,13 +450,12 @@ fn parse_master_addrs(cluster_nodes: &str, fallback_host: &str) -> Vec<String> {
 /// 集群模式下枚举所有主节点并逐节点 `SCAN`，合并去重后返回全部 key 名。
 async fn scan_cluster_key_names(
     conn_cfg: &Connection,
-    con: &mut Conn,
+    con: &mut PooledConn,
 ) -> Result<Vec<String>, String> {
-    let nodes: String = redis::cmd("CLUSTER")
-        .arg("NODES")
-        .query_async(&mut *con)
+    let nodes: String = con
+        .query(redis::cmd("CLUSTER").arg("NODES"))
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let addrs = parse_master_addrs(&nodes, &conn_cfg.host);
     if addrs.is_empty() {
@@ -391,7 +464,7 @@ async fn scan_cluster_key_names(
 
     let mut keys: Vec<String> = Vec::new();
     for addr in addrs {
-        let mut c = connect_cluster_node(conn_cfg, &addr).await?;
+        let mut c = connect_cluster_node(conn_cfg, &addr, con.timeout()).await?;
         keys.extend(scan_key_names(&mut c).await?);
     }
 
@@ -406,7 +479,7 @@ async fn scan_cluster_key_names(
 /// 避免一次性把整个 keyspace 拉进内存。集群模式下逐主节点扫描后合并去重。
 pub(crate) async fn collect_all_key_names(
     conn_cfg: &Connection,
-    con: &mut Conn,
+    con: &mut PooledConn,
 ) -> Result<Vec<String>, String> {
     if conn_cfg.conn_type == ConnType::Cluster {
         scan_cluster_key_names(conn_cfg, con).await
@@ -458,10 +531,10 @@ async fn set_key_inner(
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
 
     let cmd = build_set_cmd(&key, &value, ttl);
-    let ok: String = cmd
-        .query_async(&mut con)
+    let ok: String = con
+        .query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
 
     Ok(ok)
 }
@@ -470,11 +543,17 @@ async fn set_key_inner(
 mod tests {
     use super::{
         build_set_cmd, format_cluster_cursor, list_keys_inner, parse_cluster_cursor,
-        parse_master_addrs, set_key_inner, to_match_pattern, ClusterCursor,
+        parse_master_addrs, set_key_inner, to_match_pattern, ClusterCursor, KeyEntry,
     };
+    use crate::config::ConnectionTimeout;
     use crate::connection_pool::Pool;
     use crate::models::{ConnType, Connection};
+    use std::collections::HashMap;
+    use std::io::{BufRead, BufReader, Write};
+    use std::net::{TcpListener, TcpStream};
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::thread::JoinHandle;
+    use std::time::Duration;
 
     static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -491,24 +570,130 @@ mod tests {
         format!("maidi:test:{}:{}", prefix, unique_id())
     }
 
-    async fn test_pool(conn_id: &str) -> Result<Pool, String> {
-        let pool = Pool::new();
-        let conn = Connection {
-            id: conn_id.into(),
+    fn conn_config(id: &str, port: u16) -> Connection {
+        Connection {
+            id: id.into(),
             name: "integration".into(),
             host: "127.0.0.1".into(),
-            port: 6379,
+            port,
             conn_type: ConnType::Single,
             readonly: false,
             separator: ":".into(),
             db: 0,
             username: None,
             password: None,
-        };
-        pool.connect(&conn)
+        }
+    }
+
+    async fn test_pool(conn_id: &str) -> Result<Pool, String> {
+        let pool = Pool::new();
+        pool.connect(&conn_config(conn_id, 6379))
             .await
             .map_err(|e| format!("连接 Redis 失败，请确认服务已启动: {e}"))?;
         Ok(pool)
+    }
+
+    /// 一个最小的 RESP 假服务器，专门验证「整页一次 pipeline」。
+    ///
+    /// 约定：`SCAN` 回一批固定的 key（游标 `0`，一趟扫完），之后**必须收齐 2n 条
+    /// TYPE / TTL 才逐条回包**。这个「不齐不回」本身就是断言 —— 逐 key 往返的实现会
+    /// 在等第一条回复时死等，直到命令超时才返回错误；只有把整批命令一次性发出去的
+    /// 实现能拿到回复。
+    ///
+    /// 回复内容按收到的参数生成（TYPE → `type-<key>`，TTL → 该 key 在批次里的序号），
+    /// 于是「值有没有配错 key」也能一并断言。
+    ///
+    /// 线程在测试结束后自行泄漏，进程退出即回收（与 `connection_pool.rs` 的桩服务器一致）。
+    fn spawn_batch_stub(keys: Vec<String>) -> (u16, JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("绑定本地端口失败");
+        let port = listener.local_addr().expect("读取本地端口失败").port();
+        let handle = std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { break };
+                let keys = keys.clone();
+                std::thread::spawn(move || serve_batch(stream, &keys));
+            }
+        });
+        (port, handle)
+    }
+
+    /// 见 [`spawn_batch_stub`]：单条连接上的服务循环。
+    fn serve_batch(stream: TcpStream, keys: &[String]) {
+        let Ok(mut writer) = stream.try_clone() else {
+            return;
+        };
+        let mut reader = BufReader::new(stream);
+        let mut scanned = false;
+        let mut pending: Vec<String> = Vec::new();
+
+        while let Some((name, args)) = read_command(&mut reader) {
+            let name = name.to_ascii_uppercase();
+            if !scanned {
+                // 建连握手（CLIENT SETINFO 等）照常回 +OK，否则连不上
+                let reply = if name == "SCAN" {
+                    scanned = true;
+                    scan_reply(keys)
+                } else {
+                    "+OK\r\n".to_string()
+                };
+                if writer.write_all(reply.as_bytes()).is_err() {
+                    return;
+                }
+                continue;
+            }
+
+            // 富化阶段：只收集不回，等整批到齐
+            let key = args.last().cloned().unwrap_or_default();
+            let index = keys.iter().position(|k| *k == key).unwrap_or(0);
+            pending.push(match name.as_str() {
+                "TYPE" => format!("+type-{key}\r\n"),
+                "TTL" => format!(":{index}\r\n"),
+                _ => "+OK\r\n".to_string(),
+            });
+            if pending.len() == keys.len() * 2 {
+                for reply in pending.drain(..) {
+                    if writer.write_all(reply.as_bytes()).is_err() {
+                        return;
+                    }
+                }
+                if writer.flush().is_err() {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// `SCAN` 的固定回复：游标 `0` + 给定的一批 key。
+    fn scan_reply(keys: &[String]) -> String {
+        let mut reply = format!("*2\r\n$1\r\n0\r\n*{}\r\n", keys.len());
+        for key in keys {
+            reply.push_str(&format!("${}\r\n{key}\r\n", key.len()));
+        }
+        reply
+    }
+
+    /// 从 RESP 请求流里读出一条命令，返回（命令名, 参数列表）；流结束返回 `None`。
+    fn read_command(reader: &mut impl BufRead) -> Option<(String, Vec<String>)> {
+        let mut header = String::new();
+        if reader.read_line(&mut header).ok()? == 0 {
+            return None;
+        }
+        let argc: usize = header.trim().trim_start_matches('*').parse().ok()?;
+        let mut args = Vec::with_capacity(argc);
+        for _ in 0..argc {
+            let mut len_line = String::new();
+            if reader.read_line(&mut len_line).ok()? == 0 {
+                return None;
+            }
+            let len: usize = len_line.trim().trim_start_matches('$').parse().ok()?;
+            let mut arg = vec![0u8; len];
+            reader.read_exact(&mut arg).ok()?;
+            let mut crlf = [0u8; 2];
+            reader.read_exact(&mut crlf).ok()?;
+            args.push(String::from_utf8_lossy(&arg).into_owned());
+        }
+        let name = args.first().cloned().unwrap_or_default();
+        Some((name, args))
     }
 
     #[test]
@@ -612,6 +797,45 @@ mod tests {
         );
     }
 
+    /// 整页的类型与 TTL 走**一次 pipeline**：假服务器要求收齐全部 TYPE/TTL 才回包，
+    /// 逐 key 往返的实现在这里会一直等到命令超时（即回到 N+1 的老路，测试立刻红）。
+    ///
+    /// 顺带断言「值没有配错 key」：假服务器按收到的参数生成回复（类型里带 key 名、
+    /// TTL 用该 key 的序号），错位就会立刻暴露。
+    #[tokio::test]
+    async fn list_keys_enriches_a_page_with_one_pipelined_round_trip() {
+        let keys: Vec<String> = ["alpha", "beta", "gamma"]
+            .iter()
+            .map(|s| format!("maidi:test:pipeline:{s}"))
+            .collect();
+        let (port, _server) = spawn_batch_stub(keys.clone());
+        let timeout = ConnectionTimeout {
+            connect: Duration::from_secs(5),
+            command: Duration::from_millis(500),
+        };
+        let pool = Pool::with_timeout(timeout);
+        let conn = conn_config("pipeline_stub", port);
+        pool.connect(&conn)
+            .await
+            .expect("假服务器会回握手命令，建连应当成功");
+
+        let page = list_keys_inner(&pool, "pipeline_stub", "0", keys.len() as u32, None)
+            .await
+            .expect("整页富化应当一次往返完成，而不是逐条等待");
+        assert_eq!(page.next_cursor, "0", "假服务器一趟扫完，游标应归零");
+        assert_eq!(page.keys.len(), keys.len());
+
+        let by_key: HashMap<&str, &KeyEntry> =
+            page.keys.iter().map(|e| (e.key.as_str(), e)).collect();
+        for (index, key) in keys.iter().enumerate() {
+            let entry = by_key
+                .get(key.as_str())
+                .unwrap_or_else(|| panic!("{key} 应当出现在结果里"));
+            assert_eq!(entry.type_, format!("type-{key}"), "类型配错了 key");
+            assert_eq!(entry.ttl, index as i64, "TTL 配错了 key");
+        }
+    }
+
     // 以下测试依赖本地 Redis，默认标记为 #[ignore]；
     // 启动 Redis 后可通过 `cargo test -- --ignored` 运行。
 
@@ -626,9 +850,10 @@ mod tests {
         let result = set_key_inner(&pool, conn_id.clone(), key.clone(), value, -1).await;
         assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
 
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -646,9 +871,10 @@ mod tests {
         let result = set_key_inner(&pool, conn_id.clone(), key.clone(), value, 10).await;
         assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
 
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -670,9 +896,10 @@ mod tests {
             .await
             .map_err(|e| format!("首次 SET 失败: {e}"))?;
 
-        let initial_ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let initial_ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(initial_ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -681,9 +908,10 @@ mod tests {
             .await
             .map_err(|e| format!("更新 TTL 的 SET 失败: {e}"))?;
 
-        let updated_ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let updated_ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -753,10 +981,7 @@ mod tests {
         {
             let mut con = pool.conn(&conn_id).unwrap();
             for i in 0..total {
-                redis::cmd("SET")
-                    .arg(format!("{prefix}:{i:04}"))
-                    .arg("v")
-                    .query_async::<_, ()>(&mut con)
+                con.query::<()>(redis::cmd("SET").arg(format!("{prefix}:{i:04}")).arg("v"))
                     .await
                     .map_err(|e| e.to_string())?;
             }
@@ -788,9 +1013,7 @@ mod tests {
         );
 
         let mut con = pool.conn(&conn_id).unwrap();
-        redis::cmd("DEL")
-            .arg(&expected)
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("DEL").arg(&expected))
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
@@ -809,6 +1032,87 @@ mod tests {
         Ok(())
     }
 
+    /// 真实 Redis 上的批量富化：五种类型 + 一个带 TTL 的 key，类型与 TTL 必须各自
+    /// 挂在正确的 key 上（pipeline 的返回值按命令顺序排列，错位会张冠李戴）。
+    #[tokio::test]
+    #[ignore]
+    async fn list_keys_reports_type_and_ttl_per_key() -> Result<(), String> {
+        let conn_id = format!("key_test_enrich:{}", unique_id());
+        let pool = test_pool(&conn_id).await?;
+        let prefix = unique_key("enrich");
+        let string_key = format!("{prefix}:string");
+        let hash_key = format!("{prefix}:hash");
+        let list_key = format!("{prefix}:list");
+        let set_key = format!("{prefix}:set");
+        let zset_key = format!("{prefix}:zset");
+        let expiring_key = format!("{prefix}:expiring");
+
+        {
+            let mut con = pool.conn(&conn_id).unwrap();
+            con.query::<()>(redis::cmd("SET").arg(&string_key).arg("v"))
+                .await
+                .map_err(|e| e.to_string())?;
+            con.query::<i64>(redis::cmd("HSET").arg(&hash_key).arg("f").arg("v"))
+                .await
+                .map_err(|e| e.to_string())?;
+            con.query::<i64>(redis::cmd("RPUSH").arg(&list_key).arg("a").arg("b"))
+                .await
+                .map_err(|e| e.to_string())?;
+            con.query::<i64>(redis::cmd("SADD").arg(&set_key).arg("m"))
+                .await
+                .map_err(|e| e.to_string())?;
+            con.query::<i64>(redis::cmd("ZADD").arg(&zset_key).arg(1.5).arg("m"))
+                .await
+                .map_err(|e| e.to_string())?;
+            con.query::<String>(
+                redis::cmd("SET")
+                    .arg(&expiring_key)
+                    .arg("v")
+                    .arg("EX")
+                    .arg(120),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+
+        let page = list_keys_inner(&pool, &conn_id, "0", 100, Some(&prefix)).await?;
+        let by_key: HashMap<&str, &KeyEntry> =
+            page.keys.iter().map(|e| (e.key.as_str(), e)).collect();
+        let type_of = |key: &String| -> String {
+            by_key
+                .get(key.as_str())
+                .unwrap_or_else(|| panic!("{key} 应当出现在结果里"))
+                .type_
+                .clone()
+        };
+        assert_eq!(type_of(&string_key), "string");
+        assert_eq!(type_of(&hash_key), "hash");
+        assert_eq!(type_of(&list_key), "list");
+        assert_eq!(type_of(&set_key), "set");
+        assert_eq!(type_of(&zset_key), "zset");
+        assert_eq!(type_of(&expiring_key), "string");
+
+        // TTL：永不过期的报 -1（服务器回 -1，缺失的 key 回 -2 也该归一成 -1），
+        // 设了过期的报正数且不超过设置值
+        assert_eq!(by_key[string_key.as_str()].ttl, -1);
+        let ttl = by_key[expiring_key.as_str()].ttl;
+        assert!(ttl > 0 && ttl <= 120, "过期 key 应带正数 TTL: {ttl}");
+
+        let mut con = pool.conn(&conn_id).unwrap();
+        let written = vec![
+            string_key,
+            hash_key,
+            list_key,
+            set_key,
+            zset_key,
+            expiring_key,
+        ];
+        con.query::<()>(redis::cmd("DEL").arg(&written))
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     #[tokio::test]
     #[ignore]
     async fn list_keys_pattern_is_case_insensitive_contains() -> Result<(), String> {
@@ -822,10 +1126,7 @@ mod tests {
         {
             let mut con = pool.conn(&conn_id).unwrap();
             for key in [&upper, &lower, &star, &star_lookalike] {
-                redis::cmd("SET")
-                    .arg(key)
-                    .arg("v")
-                    .query_async::<_, ()>(&mut con)
+                con.query::<()>(redis::cmd("SET").arg(key).arg("v"))
                     .await
                     .map_err(|e| e.to_string())?;
             }
@@ -848,9 +1149,7 @@ mod tests {
 
         let mut con = pool.conn(&conn_id).unwrap();
         for key in [&upper, &lower, &star, &star_lookalike] {
-            redis::cmd("DEL")
-                .arg(key)
-                .query_async::<_, ()>(&mut con)
+            con.query::<()>(redis::cmd("DEL").arg(key))
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -883,10 +1182,10 @@ pub async fn del_key(
     for k in &keys {
         cmd.arg(k);
     }
-    let n: i64 = cmd
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -899,10 +1198,9 @@ pub async fn get_string(
 ) -> Result<Option<String>, String> {
     let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
-    let val: Option<String> = redis::cmd("GET")
-        .arg(&key)
-        .query_async(&mut con)
+    let val: Option<String> = con
+        .query(redis::cmd("GET").arg(&key))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(val)
 }

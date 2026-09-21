@@ -622,7 +622,7 @@
                         </thead>
                         <tbody>
                             <tr><td><strong>连接名称</strong></td><td>只用于显示，随便起个能认出来的名字，例如「本地开发」「生产环境」。</td></tr>
-                            <tr><td><strong>主机</strong></td><td>Redis 服务器地址，例如 <code>127.0.0.1</code> 或 <code>redis.example.com</code>。</td></tr>
+                            <tr><td><strong>主机</strong></td><td>Redis 服务器地址，例如 <code>127.0.0.1</code> 或 <code>redis.example.com</code>。<strong>只填主机名</strong>，不要带 <code>redis://</code> / <code>rediss://</code> 这类协议前缀 —— 带上会被直接拦下并提示，见<a class="link" href="#faq">常见问题</a>。</td></tr>
                             <tr><td><strong>端口</strong></td><td>默认 <code>6379</code>。</td></tr>
                             <tr><td>用户名（可选）</td><td>Redis 6.0 及以上支持 ACL 用户名；留空则按传统单密码方式认证。</td></tr>
                             <tr><td>密码（可选）</td><td>服务器设置了 <code>requirepass</code> 时填写；没有密码就留空。</td></tr>
@@ -954,9 +954,17 @@
                     <li>内置终端：命令真实转发到服务器执行，结果按 redis-cli 风格展示</li>
                     <li>Key 导入 / 导出（JSON 格式，导入前确认覆盖策略）</li>
                     <li>服务器指标：内存、连接数、Key 总数、磁盘占用</li>
+                    <li>超时保护：建连 5 秒、单条命令 10 秒，服务器无响应时明确提示原因，界面不会一直等待</li>
+                    <li>连接参数校验：主机字段里的 <code>rediss://</code> 等协议前缀会在测试 / 保存 / 导入时直接提示，而不是给一条地址解析错误</li>
                     <li>自动更新：后台下载新版本（下载期间可继续使用），下好后重启应用即完成升级</li>
                     <li>五款四季主题、面板拖拽与布局记忆</li>
                     <li>macOS 菜单栏：<strong>Window</strong> / <strong>Settings</strong>（主题、检查更新）/ <strong>Help</strong>，其中 Window、Help 与系统一致，Settings 是应用自己的设置入口</li>
+                </ul>
+                <h3>明确不支持</h3>
+                <ul>
+                    <li>TLS / SSL 加密连接（<code>rediss://</code> / <code>tls://</code>）：只支持明文 <code>redis://</code>，不加载 CA 证书。填了这类前缀会提示「暂不支持 TLS 加密连接 (rediss)」，详见<a class="link" href="#faq">常见问题</a></li>
+                    <li>SSH 隧道：请自行在本地建好隧道后连接本机端口</li>
+                    <li>主从 / Sentinel 故障转移：只透传命令，不做故障转移（集群模式的自动路由不受影响）</li>
                 </ul>
                 <h3>仍在开发中</h3>
                 <p>当前没有明确排期的功能缺口。已知的改进项（性能、工程流程）记录在仓库的 <code>DEVELOPMENT.md</code> 里。</p>
@@ -978,6 +986,32 @@
                             <li>服务器防火墙 / 安全组是否放行了该端口。</li>
                         </ul>
                         <p>先点「测试连接」拿到具体报错，通常比猜更快。</p>
+                        <p>
+                            连接与命令都有超时保护：<strong>建连 5 秒、单条命令 10 秒</strong>。
+                            超时后界面会直接给出提示（而不是一直转圈），常见原因是服务器繁忙、网络中途断了，
+                            或在终端里执行了 <code>BLPOP</code> 之类的阻塞命令 —— 阻塞命令在 10 秒后同样会提示超时，
+                            需要长时间阻塞的场景请在其它工具里执行。
+                        </p>
+                    </div>
+                </details>
+
+                <details class="faq">
+                    <summary>支持 TLS / SSL（<code>rediss://</code>）加密连接吗？</summary>
+                    <div class="faq-body">
+                        <p>
+                            不支持。当前版本只支持明文的 <code>redis://</code> 连接，不提供 <code>rediss://</code> /
+                            <code>tls://</code> 协议，也不加载任何 CA 证书。
+                        </p>
+                        <p>
+                            在「主机」里填了带 <code>rediss://</code> 前缀的地址时，<strong>测试连接、保存连接</strong>
+                            都会直接提示「暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接」——
+                            不会静默去掉前缀去连一个明文端口，也不会只给一条看不懂的地址解析错误。
+                        </p>
+                        <p>
+                            服务器强制加密（配了 <code>tls-port</code>）时，需要加密连接请先用
+                            <code>redis-cli --tls</code> 等支持 TLS 的工具；若只是本机管理，可以在服务器上另开一个
+                            仅监听 <code>127.0.0.1</code> 的明文端口专供本应用使用。
+                        </p>
                     </div>
                 </details>
 
