@@ -207,13 +207,8 @@ pub fn parse_command_line(input: &str) -> Option<(String, Vec<String>)> {
                     quote = Some(c);
                     in_token = true;
                 } else if c == '\\' {
-                    match chars.next() {
-                        Some(next) => {
-                            current.push(next);
-                            in_token = true;
-                        }
-                        None => return None,
-                    }
+                    current.push(chars.next()?);
+                    in_token = true;
                 } else {
                     current.push(c);
                     in_token = true;
