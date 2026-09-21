@@ -176,6 +176,9 @@
 ## 2. 待办事项
 
 > 状态标记：✅ 已完成 / 🚧 进行中 / ⬜ 未开始 / ❌ 不做（见 §3）
+>
+> **2026-09-21：全部待办已完成清空** —— §2.1 功能缺口、§2.2 代码质量、§2.3 文档与工程流程均无遗留项。
+> 新工作请先进 §4「待确认 / 风险」或本节新建条目。
 
 ### 2.1 功能缺口（P1，用户可见）
 
@@ -282,27 +285,37 @@
 
 ### 2.3 文档与工程流程（P2）
 
-- [ ] ⬜ **CI 缺少质量门禁**：`release.yml` 只做「构建 → 改名 → 发 Release → 推网站」，
-      全流程没有 `cargo test` / `cargo clippy -- -D warnings` / `cargo fmt --check`。
-      §6 把这些列为提交前强制项，目前完全靠人工自觉，标了 `#[ignore]` 的集成测试也永远不会被执行。
-      - 接入时要留意的三点（2026-09-21 核对）：
-        1. `cargo test` 不应依赖真实 Redis：`tests/ping_integration.rs` 里两条依赖 Redis 的用例
-           漏了 `#[ignore]`（文件头却写着「默认通过 #[ignore] 忽略」），已补上，现在没有 Redis 也能全绿；
-        2. 集群用例共享同一 keyspace，**并行跑会互相干扰**（`cluster_list_keys_*` 会看到别的用例
-           写入/删除的探针 key，出现「结果不一致」的假失败），跑集群用例请加 `--test-threads=1`；
-        3. `--ignored` 组需要一个本地 Redis（6379）与一个本地集群（7001 起，可用 `MYREDIS_CLUSTER_PORT` 改），
-           CI 里要先起好再跑。
+- [x] ✅ **CI 缺少质量门禁**（2026-09-21 完成）
+  - 实现：新增 composite action [`.github/actions/rust-quality`](.github/actions/rust-quality/action.yml)
+    —— `cargo fmt --check` / `cargo clippy --all-targets -- -D warnings` /
+    `cargo test -- --include-ignored --test-threads=1`（一条命令跑全量，含 `#[ignore]` 组）。
+  - 测试环境：新增 [`.github/scripts/start-test-redis.sh`](.github/scripts/start-test-redis.sh)，
+    拉起单机（6379）+ 三主节点集群（7001–7003，无副本），等 `cluster_state:ok` 才放行；
+    脚本在 macOS（homebrew redis，换端口验证）与 CI 的 ubuntu-22.04 都跑通过。
+  - 接入位置：`release.yml` 新增 `quality` job，与 `check-deploy-env` 并行（一个拦代码、一个拦凭据），
+    `build` 改为 `needs: [quality, check-deploy-env]` —— 代码有问题就不浪费三平台编译时间；
+    日常推分支 / PR 由新增的 [`ci.yml`](.github/workflows/ci.yml) 拦截（同一 composite action，
+    tag 推送不重复触发，交给 release.yml 的 quality）。
+  - 留意点（与原待办核对一致）：集群用例共享 keyspace，门禁固定 `--test-threads=1`；
+    单机用例写死 6379、集群入口 7001，脚本与测试约定一致。
 - [x] ✅ **根目录缺 `README.md`**（2026-09-21 完成）
   - 实现：根目录 [`README.md`](README.md)，含官网 **myredis.cn** 入口与界面截图
     （官网首页 + 深秋/初秋两款主题、Key 树 / Hash / ZSet 编辑，素材在 `docs/screenshots/`）。
   - 截图生成方式：headless Chrome 渲染 `frontend/index.html`，注入 mock `__TAURI_INTERNALS__.invoke`
     返回固定演示数据（非 mock 假数据时代的那种静态假值，而是驱动真实 UI 渲染），`--screenshot` 分状态截取。
-- [ ] ⬜ **`PROJECT_PLAN.md` 需要回填或标注**：它是 v0.1「草案，待评审」，里程碑 M1–M5 状态未更新；
-      §4.4 列的命令名（`get_key` / `exists_key` / `expire_key` / 各类型专属命令）与实际实现
-      （`get_string` / `set_key` / `del_key`）不一致。
-- [ ] ⬜ **清理陈旧本地分支**：`feat/logo`、`feat/redis-cluster-support`、`feat/redis-username-auth`、
-      `feat/test-connection-button`、`feature/ttl-input`、`fix/single-mode-cluster-moved-hint`
-      均已合入 `main`，可删除。2026-09-21 核对：上述分支仍在，另新增 `v0.0.14` 本地分支（是否保留请确认）。
+- [x] ✅ **`PROJECT_PLAN.md` 需要回填或标注**（2026-09-21 完成）
+  - 头部状态改为「已落地（历史基线）」：标注 §1.1 描述的 mock 状态是立项时历史记录，
+    进度以本文档为准；§8 里程碑 M1–M5 全部标 ✅ 完成并注明日期。
+  - §4.4 命令清单按实际实现修正（`get_string` / `set_key` / `del_key` / `set_key_ttl`
+    与 `key_content.rs` 的字段级编辑命令，redis 命令逐一核对过源码），并说明草案中
+    `get_key` / `exists_key` / `expire_key` 未按原名落地的去向。
+- [x] ✅ **清理陈旧本地分支**（2026-09-21 完成）
+  - 已删 9 个本地分支，全部先验证 tip 提交是 `origin/main` 祖先（`git merge-base --is-ancestor`）：
+    `feat/logo`、`feat/redis-cluster-support`、`feat/redis-username-auth`、
+    `feat/test-connection-button`、`feature/new-commands`、`feature/ttl-input`、
+    `fix/single-mode-cluster-moved-hint`、`fix/timeout-wiring`（PR #2 已合并、远端已删）、
+    `v0.0.14`（已合入 main，不留）。
+  - 现在本地只剩 `main`；`git fetch --prune` 后远端跟踪引用也已同步清理。
 
 ---
 
@@ -340,6 +353,8 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-21 | — | **§2.3 三项全部完成，待办清单清空**：① **CI 质量门禁** —— 新增 composite action `.github/actions/rust-quality`（fmt / clippy `-D warnings` / `cargo test -- --include-ignored --test-threads=1`）与 `start-test-redis.sh`（单机 6379 + 三主节点集群 7001–7003，等到 `cluster_state:ok`）；`release.yml` 加 `quality` job 与 `check-deploy-env` 并行、`build` 改为双依赖；新增 `ci.yml` 在推分支 / PR 时跑同一门禁（tag 推送不重复触发）；② **`PROJECT_PLAN.md` 回填** —— 头部改为「已落地（历史基线）」并指向本文档，M1–M5 全标完成，§4.4 命令名与 redis 命令按 `key.rs` / `key_content.rs` 实际实现修正；③ **分支清理** —— 删除 9 个已合入 `main` 的本地分支（含 PR #2 的 `fix/timeout-wiring` 与 `v0.0.14`，删除前逐一用 `merge-base --is-ancestor` 验证），本地只剩 `main`。验证：本地 `fmt --check` / `clippy -D warnings` 干净，`--include-ignored --test-threads=1` 全量 99 条用例通过（与 CI 门禁同一命令）；集群脚本在 macOS（换端口）实测建槽、进 ok 态 |
+| 2026-09-21 | — | CI 门禁首次运行抓到一处版本差问题：CI 的 stable 工具链（Rust 1.98）比本地（1.96）新，新 `question_mark` lint 标了 `terminal.rs` 里一个可改写为 `?` 的 `match`（本地 clippy 不报）——已按建议改写，行为不变；**教训：CI stable 会随新版引入新 lint，本地报错对不上时先核对工具链版本** |
 | 2026-09-21 | — | **§2.2 剩余的三个 P2 全部完成（本节清空），另顺带修掉一个导出竞态**：① `list_keys` 的 N+1 —— 新增 `PooledConn::query_pipeline`（与 `query` 共用 `with_command_timeout`）与 `enrich_keys()`，一页 key 的 TYPE/TTL 收成一条 pipeline（单机整页 1 次往返；集群在每个主节点各自一条，避免 CROSSSLOT，并省掉按 slot 重路由）；② 阻塞 IO —— `storage.rs` 加 `load_async` / `save_all_async`（`tauri::async_runtime::spawn_blocking`），`commands/connection.rs` 的 5 读 3 写全部切过去，`ConnectionRepo::new` 不再建目录（改由 `save_all` 按需创建），`AppState::repo()` 随之变成无 IO 的纯构造；③ 死代码 —— 删除 `Pool::ensure_conn` 与 `AppError::NotConnected`；④ 导出竞态 —— `TYPE` 与 `GET` 之间 key 消失时 `GET` 回 nil 会让整次导出报 TypeError（与「静默跳过」的文档相矛盾），改为跳过该 key。测试：新增 4 条不依赖 Redis 的用例（假服务器锁「整页一次往返」1 条、storage 3 条）、真实 Redis 的混合类型/TTL 用例、集群跨节点类型用例；`cargo test` / `--ignored`（含集群 `--test-threads=1`）全绿，`clippy -D warnings` / `fmt --check` 干净。详见 §2.2 各项 |
 | 2026-09-21 | — | §2.2 的**第二个 P1「`rediss://` 缺乏友好提示」完成**：新增 `Connection::check_supported_scheme()` 做协议前缀校验（TLS 系返回此前无人构造的 `AppError::TlsNotSupported`，其它协议提示「只需填主机名」），三处调用覆盖四个入口 —— `Pool::connect_handle`（`connect` / `test_connection`，建连前拦截）、`save_connection`、导入用的 `validate_connection`；前端连接对话框给「测试连接」「保存连接」加了同规则的预检提示（并在渲染页里交互验证过：TLS 提示、无后端往返、普通主机名照常放行）；`tests/ping_integration.rs::tls_not_supported` 从「只断言报错」改成断言文案（旧断言在功能缺失时同样是绿的），新增 6 条单测；`web/docs/index.html` 的主机字段说明、「功能现状」（新增「明确不支持」列表）与 FAQ 已同步（§6 第 7 条） |
 | 2026-09-21 | — | §2.2 的 **P1「超时配置接线」完成**：`ConnectionTimeout`（5s 建连 / 10s 命令）注入 `Pool`，新增 `PooledConn` 句柄 —— `PooledConn::query` 成为命令执行唯一出口（`tokio::time::timeout` + `AppError::Timeout`），命令层 ~80 处 `query_async(&mut con)` 全部切到 `con.query(&cmd)`（含集群节点直连与 `SCAN` 辅助函数），建连/握手/`READONLY` 共用一个连接预算，`error.rs` 新增 `command_error_text` 统一「Redis 报错转写 / 客户端错误透传」分流；顺带删除 `Pool::manager()`、`Pool::test` 改为方法、`config.rs` 去掉 `#![allow(dead_code)]`；新增 2 条不依赖 Redis 的超时单测 + 1 条 BLPOP 集成测试；补上 `tests/ping_integration.rs` 里两条漏标的 `#[ignore]`（此前没起 Redis 时 `cargo test` 会失败），并记录集群用例需 `--test-threads=1`；`web/docs/index.html` 的「功能现状」与连接超时 FAQ 已同步（§6 第 7 条） |
