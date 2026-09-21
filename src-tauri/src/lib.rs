@@ -32,9 +32,9 @@ impl AppState {
         Self { config_dir }
     }
 
-    /// 返回连接配置仓库（懒创建，目录不存在自动建）。
-    pub fn repo(&self) -> Result<ConnectionRepo, String> {
-        ConnectionRepo::new(self.config_dir.clone()).map_err(|e| e.to_string())
+    /// 返回连接配置仓库（纯路径封装，不产生 IO；目录在首次保存时按需创建）。
+    pub fn repo(&self) -> ConnectionRepo {
+        ConnectionRepo::new(self.config_dir.clone())
     }
 }
 

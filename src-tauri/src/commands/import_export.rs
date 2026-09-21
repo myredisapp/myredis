@@ -114,11 +114,16 @@ pub async fn export_keys_inner(
 
         let value = match ktype.as_str() {
             "string" => {
-                let v: String = con
+                // 读 TYPE 到读 GET 之间 key 可能已被删除或过期：nil 说明它已经不在了，
+                // 按「读取期间消失的 key 静默跳过」处理（否则会报一条看不懂的类型错误）
+                let v: Option<String> = con
                     .query(redis::cmd("GET").arg(key))
                     .await
                     .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
-                serde_json::Value::String(v)
+                match v {
+                    Some(v) => serde_json::Value::String(v),
+                    None => continue,
+                }
             }
             "hash" => {
                 let pairs: Vec<(String, String)> = con

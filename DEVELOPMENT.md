@@ -3,8 +3,9 @@
 > 本文档用于跟踪「麦地缓存」开发进度、已决策事项、已知缺口与待办事项。随开发持续更新。
 > 最近更新：2026-09-21，状态：**v0.0.12 已发布；根目录 `README.md` 已补齐**（含官网 myredis.cn 与界面截图，
 > 截图素材在 `docs/screenshots/`，由 `frontend/index.html` + mock `__TAURI_INTERNALS__.invoke`  harness 渲染截取）。
-> §2.1 的功能缺口已清空，§2.3 的 README 缺项已完成，§2.2 的两个 P1（超时配置接线、`rediss://` 友好提示）均已完成，
-> 剩余为代码质量与工程流程债务。
+> §2.1 的功能缺口已清空；**§2.2 全部清空**（两个 P1：超时配置接线、`rediss://` 友好提示；四个 P2：
+> 分页与虚拟滚动、`list_keys` 的 N+1、阻塞 IO、死代码 —— 本轮另修掉一个导出竞态）。
+> §2.3 剩余为工程流程债务（CI 质量门禁、`PROJECT_PLAN.md` 回填、陈旧分支清理）。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -21,7 +22,7 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-| 当前 HEAD | 开发中 | 核心链路完整；§2 剩余为代码质量与工程流程债务 |
+| 当前 HEAD | 开发中 | 核心链路完整；§2.2 已清空，§2 剩余为工程流程债务（§2.3） |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
@@ -73,6 +74,9 @@
       签名 `list_keys(conn_id, cursor, count, pattern) -> { keys, next_cursor }`，返回 `key / type / ttl`
       - 单页大小由调用方给定（默认 100，上限 1000），页内累积到 `count` 或游标归零为止；
         单页最多 32 轮 `SCAN`，命中不足时先返回已扫到的部分与继续用的游标，保证单次请求工作量有界
+      - 类型与 TTL 由 `enrich_keys` 用**一次 pipeline** 批量取回（§2.2）：单机整页一条
+        （100 个 key 从 200 次往返降到 1 次），集群在**每个主节点各自一条**（同节点的 key 才能
+        放进同一条 pipeline，跨节点会被判 `CROSSSLOT`）
       - 集群下游标是 `节点地址:节点内游标` 的复合值，一页可跨多个主节点；用节点**地址**而非序号，
         避免 `CLUSTER NODES` 输出顺序变化导致翻页漏读或重复（节点已不在集群时报错提示刷新）
       - `pattern` 收的是用户原始搜索文本，后端按「不区分大小写的包含匹配」语义转成 `MATCH` 模式：
@@ -100,6 +104,7 @@
       超时文案后另附一句阻塞类命令的说明
 - [x] **Key 导入 / 导出**（`commands/import_export.rs`）：导出为 JSON 文档
       （string/hash/list/set/zset 五种类型 + TTL，逐 key 独立命令读取，集群模式不触发跨 slot 错误；
+      读取期间被删除 / 过期的 key 静默跳过 —— 含 `TYPE` 说是 string、`GET` 却回 nil 的竞态（§2.2）；
       `keys` 传 `null` 时由后端全量枚举当前 keyspace —— 前端分页浏览时只持有已加载的那部分 key，
       拿它当导出范围会漏数据，所以全量枚举放在后端做）；
       导入支持覆盖 / 跳过两种冲突策略，逐 key 写入（SET / HSET / RPUSH / SADD / ZADD + EXPIRE），
@@ -229,20 +234,51 @@
   - 实现：`list_keys` 改为游标分页（见 §1.3），前端改成虚拟滚动 + 滚动预取 + 状态条「加载更多」，
     搜索下推后端 `SCAN MATCH`。与 `PROJECT_PLAN.md` §4.3 的设计对齐。
 
-- [ ] ⬜ **P2｜`list_keys` 的 N+1 命令**
-  - 现状：对拿到的**每个 key** 各发一次 `TYPE` 和一次 `TTL`（`commands/key.rs`）。
-    分页后单次请求的往返数已被页大小封顶（默认 100 个 key → 200 次往返），
-    但仍是 O(页大小) 次往返，可用 pipeline 收拢成 1 次。
+- [x] ✅ **P2｜`list_keys` 的 N+1 命令**（2026-09-21 完成）
+  - 实现：新增 `enrich_keys()`（`commands/key.rs`）—— 把一页 key 的 `TYPE` / `TTL` 排进**一条
+    pipeline**（`TYPE k1, TTL k1, TYPE k2, TTL k2, …`），一趟取回后按序号还原；返回值数量与
+    期望不符时报错而不是按下标硬取（那会把类型/TTL 错位配到别的 key 上）。
+  - 出口：`PooledConn::query_pipeline`（`connection_pool.rs`）与 `query` 共用同一个超时包装
+    （`with_command_timeout`），所以 pipeline 同样受 §6 第 3 条约束 —— **整批共用一个命令预算**，
+    不按命令条数叠加。
+  - 单机：整页一条 pipeline，100 个 key 从 200 次往返降到 1 次。集群：pipeline 只能发给一个节点，
+    跨节点会 `CROSSSLOT`，所以**在每个节点自己的连接上就地富化**（`scan_page_cluster` 扫完一个
+    节点的批次就立刻富化）—— 同时省掉了原先「再按 slot 路由一遍」的往返。
+  - 行为变化：`TYPE`/`TTL` 不再逐条吞掉错误（原来是 `unwrap_or("none")` / `unwrap_or(-1)`）；
+    整批拿不到响应时如实报错，而不是把整页显示成「none」骗用户。服务端对不存在的 key 照常应答
+    （TYPE → none、TTL → -2），所以「扫到之后被删掉的 key」仍按原语义归一成 `none` / `-1`。
+  - 已知代价：集群下这批 key 不再跟随 MOVED/ASK 重定向（节点直连没有这层路由）。只有在翻页途中
+    正好在做 resharding、槽已迁走时才会碰到，此时该页报 MOVED 并给出新的负责节点，刷新即可。
+  - 防回归：`list_keys_enriches_a_page_with_one_pipelined_round_trip` 用假 RESP 服务器保证
+    「整页一次往返」——服务器**收齐全部 TYPE/TTL 才回包**，退回逐条查询会一直等到命令超时
+    （已实测：把实现改回逐条查询，这条用例立即变红）；另加集群用例
+    `cluster_list_keys_reports_types_across_nodes`（每页 1 个 key 走遍各节点 + 一页跨多节点的
+    类型断言，整页混成一条 pipeline 会撞 CROSSSLOT）与真实 Redis 的
+    `list_keys_reports_type_and_ttl_per_key`（五种类型 + 带 TTL 的 key）。
 
-- [ ] ⬜ **P2｜同步阻塞 IO 跑在 async 上下文**
-  - 现状：`storage.rs` 的模块注释写明「调用方应放在 `spawn_blocking` 中执行」，
-    但 `commands/connection.rs` 等处直接在 async fn 里调 `repo.load()` / `save_all()`。
-    文件小的时候无感，属潜在卡顿点。
+- [x] ✅ **P2｜同步阻塞 IO 跑在 async 上下文**（2026-09-21 完成）
+  - 实现：`storage.rs` 新增 `load_async` / `save_all_async`（内部 `tauri::async_runtime::spawn_blocking`，
+    join 失败转成可展示的错误），`commands/connection.rs` 的 5 处读 / 3 处写全部切过去，
+    async 路径上不再有文件读写。
+  - 顺带：`ConnectionRepo::new` 不再创建目录（构造仓库每个命令都要做，不该带 IO）。目录改为
+    `save_all` 按需创建，于是 `AppState::repo()` 变成无 IO 的纯构造函数（`Result` 随之去掉，
+    调用点从 `state.repo()?` 简化成 `state.repo()`）。
+  - 覆盖：新增 3 条不依赖 Redis 的用例（保存 → 加载往返、文件缺失返回空列表、坏 JSON 报错）。
 
-- [ ] ⬜ **P2｜清理死代码**
-  - `Pool::ensure_conn()`（`connection_pool.rs`）已无调用方。
-  - `AppError::NotConnected`（`error.rs`）同样无使用者。
+- [x] ✅ **P2｜清理死代码**（2026-09-21 完成）
+  - `Pool::ensure_conn()`（`connection_pool.rs`）已删除（无调用方，校验连接只看 `get` / `readonly`
+    / `ensure_writable`）。
+  - `AppError::NotConnected`（`error.rs`）已删除（定义后从未构造，前端只按文案展示错误）。
   - （`Pool::manager()` 已在 2026-09-21 的「超时配置接线」里随 `conn()` 改造一并删除。）
+
+- [x] ✅ **P2｜导出时 key 中途消失会让整次导出失败**（2026-09-21 完成，本轮验证时发现）
+  - 现状（修复前）：`export_keys` 先 `TYPE` 再取值的空档里 key 被删除或过期，`GET` 会回 nil，
+    而 `query::<String>` 对 nil 直接报 `Response type not string compatible` ——
+    整次导出失败，且报错与用户行为毫无关系。这与该模块自己写的「读取期间被删除的 key 静默跳过」
+    相矛盾。
+  - 修法：string 分支改用 `Option<String>`，nil 时 `continue` 跳过该 key（其余类型本来就返回空集合，
+    不报错）。发现过程：`cargo test -- --ignored` 下 `export_without_keys_scans_whole_keyspace`
+    偶发失败（改动前 3 次里失败 1 次，属既有 flake），根因就是这个竞态。
 
 ### 2.3 文档与工程流程（P2）
 
@@ -292,7 +328,7 @@
 | # | 事项 | 状态 | 备注 |
 |---|------|:----:|------|
 | 1 | 密码明文存 `connections.json` | 已知风险 | 任何有本机读权限的进程都能取到；后续可改系统密钥链（macOS Keychain / Windows Credential Manager / Secret Service） |
-| 2 | 超时值是否暴露给用户配置 | 待定 | 现为硬编码默认值（5s 连接 / 10s 命令）；2026-09-21 已接线生效（§2.2），改默认值改 `config.rs`。**注意 10 秒是单条命令的预算**：大 key 的整表读取（`LRANGE 0 -1` / `HGETALL` / `SMEMBERS`）超过 10 秒会被判超时 —— 这正是「要不要暴露给用户配置」要解决的问题 |
+| 2 | 超时值是否暴露给用户配置 | 待定 | 现为硬编码默认值（5s 连接 / 10s 命令）；2026-09-21 已接线生效（§2.2），改默认值改 `config.rs`。**注意 10 秒是单条命令的预算**：大 key 的整表读取（`LRANGE 0 -1` / `HGETALL` / `SMEMBERS`）超过 10 秒会被判超时 —— 这正是「要不要暴露给用户配置」要解决的问题。Key 列表的 TYPE/TTL 批量查走 pipeline，**整页共用一个 10 秒**（不按条数叠加），页大小上限 1000 时相当于 2000 条命令挤同一个预算 |
 | 3 | 兼容 Redis 6.0 以下 | 需持续注意 | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级 |
 | 4 | 前端 `frontend/index.html` 单文件已约 4000 行 | 观察中 | 复杂度继续上升时再评估拆分为多文件 + esbuild，与桌面客户端解耦，不影响后端 |
 | 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件 |
@@ -304,6 +340,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-21 | — | **§2.2 剩余的三个 P2 全部完成（本节清空），另顺带修掉一个导出竞态**：① `list_keys` 的 N+1 —— 新增 `PooledConn::query_pipeline`（与 `query` 共用 `with_command_timeout`）与 `enrich_keys()`，一页 key 的 TYPE/TTL 收成一条 pipeline（单机整页 1 次往返；集群在每个主节点各自一条，避免 CROSSSLOT，并省掉按 slot 重路由）；② 阻塞 IO —— `storage.rs` 加 `load_async` / `save_all_async`（`tauri::async_runtime::spawn_blocking`），`commands/connection.rs` 的 5 读 3 写全部切过去，`ConnectionRepo::new` 不再建目录（改由 `save_all` 按需创建），`AppState::repo()` 随之变成无 IO 的纯构造；③ 死代码 —— 删除 `Pool::ensure_conn` 与 `AppError::NotConnected`；④ 导出竞态 —— `TYPE` 与 `GET` 之间 key 消失时 `GET` 回 nil 会让整次导出报 TypeError（与「静默跳过」的文档相矛盾），改为跳过该 key。测试：新增 4 条不依赖 Redis 的用例（假服务器锁「整页一次往返」1 条、storage 3 条）、真实 Redis 的混合类型/TTL 用例、集群跨节点类型用例；`cargo test` / `--ignored`（含集群 `--test-threads=1`）全绿，`clippy -D warnings` / `fmt --check` 干净。详见 §2.2 各项 |
 | 2026-09-21 | — | §2.2 的**第二个 P1「`rediss://` 缺乏友好提示」完成**：新增 `Connection::check_supported_scheme()` 做协议前缀校验（TLS 系返回此前无人构造的 `AppError::TlsNotSupported`，其它协议提示「只需填主机名」），三处调用覆盖四个入口 —— `Pool::connect_handle`（`connect` / `test_connection`，建连前拦截）、`save_connection`、导入用的 `validate_connection`；前端连接对话框给「测试连接」「保存连接」加了同规则的预检提示（并在渲染页里交互验证过：TLS 提示、无后端往返、普通主机名照常放行）；`tests/ping_integration.rs::tls_not_supported` 从「只断言报错」改成断言文案（旧断言在功能缺失时同样是绿的），新增 6 条单测；`web/docs/index.html` 的主机字段说明、「功能现状」（新增「明确不支持」列表）与 FAQ 已同步（§6 第 7 条） |
 | 2026-09-21 | — | §2.2 的 **P1「超时配置接线」完成**：`ConnectionTimeout`（5s 建连 / 10s 命令）注入 `Pool`，新增 `PooledConn` 句柄 —— `PooledConn::query` 成为命令执行唯一出口（`tokio::time::timeout` + `AppError::Timeout`），命令层 ~80 处 `query_async(&mut con)` 全部切到 `con.query(&cmd)`（含集群节点直连与 `SCAN` 辅助函数），建连/握手/`READONLY` 共用一个连接预算，`error.rs` 新增 `command_error_text` 统一「Redis 报错转写 / 客户端错误透传」分流；顺带删除 `Pool::manager()`、`Pool::test` 改为方法、`config.rs` 去掉 `#![allow(dead_code)]`；新增 2 条不依赖 Redis 的超时单测 + 1 条 BLPOP 集成测试；补上 `tests/ping_integration.rs` 里两条漏标的 `#[ignore]`（此前没起 Redis 时 `cargo test` 会失败），并记录集群用例需 `--test-threads=1`；`web/docs/index.html` 的「功能现状」与连接超时 FAQ 已同步（§6 第 7 条） |
 | 2026-09-21 | — | 补齐根目录 [`README.md`](README.md)（§2.3 勾掉）：官网 **myredis.cn** 入口 + 界面截图（`docs/screenshots/`，headless Chrome + mock invoke harness 渲染截取）；§2 其余待办逐项核对仍成立（超时未接线、`rediss://` 提示未补、N+1 未收拢、阻塞 IO 未包 `spawn_blocking`、死代码未清理、CI 无质量门禁、陈旧分支未删） |
@@ -328,8 +365,12 @@
 1. **注释**：核心公有结构 / 方法必须有 `///` 文档注释；逻辑处写行内注释说明「为什么」。
 2. **错误处理**：禁止 `unwrap()` / `panic!` 直接抛出（除配置加载等一次性场景可 `expect`）。
 3. **超时**：所有网络 IO 包 `tokio::time::timeout`，防止卡死。
-   > 命令的统一出口是 `PooledConn::query`（超时在那里包一次），建连由 `Pool::connect` / `test` 包。
-   > 新命令**必须**用 `con.query(&cmd)` 执行，不要绕到 `redis::Cmd::query_async` —— 那是无超时保护的路径。
+   > 命令的统一出口是 `PooledConn::query`（单条）与 `PooledConn::query_pipeline`（多条一次往返，
+   > 如 Key 列表的 TYPE/TTL 批量查询）—— 超时在 `with_command_timeout` 里包一次，两者共用；
+   > 建连由 `Pool::connect` / `test` 包。
+   > 新命令**必须**用 `con.query(&cmd)` / `con.query_pipeline(&pipe)` 执行，不要绕到
+   > `redis::Cmd::query_async` / `redis::Pipeline::query_async` —— 那是无超时保护的路径。
+   > 注意 pipeline 的预算是**整批一次**，不按命令条数叠加（1000 个 key 的页 = 2000 条命令共用一个 10 秒）。
 4. **提交**：遵循 Conventional Commits。
 5. **检查**：提交前运行 `cargo clippy` 和 `cargo fmt --check`，保证无警告。
    > ⚠️ CI 未强制这两步，见 §2.3，需靠人工执行。
@@ -366,6 +407,11 @@ cargo fmt --check
 「只接受连接不回包」与「某条命令不回包」，断言 300ms 内返回超时错误），
 `blocking_command_is_interrupted_by_command_timeout` 需要真实 Redis（用 `BLPOP` 验证
 阻塞命令会被打断、且被放弃的响应到达后连接仍可用）。
+
+另外两条同样**不需要 Redis** 的用例，需要时可以直接跑：
+`commands::key::tests::list_keys_enriches_a_page_with_one_pipelined_round_trip`（假 RESP 服务器
+要求收齐整批 TYPE/TTL 才回包，锁住「整页一次往返」）与 `storage::tests::*` 三条（阻塞线程池上的
+保存/加载往返、文件缺失、坏 JSON）。
 
 前端无构建步骤，改 `frontend/index.html` 后由 WebView 直接加载（`cargo tauri dev` 会热重载）。
 

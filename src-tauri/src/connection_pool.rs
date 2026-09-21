@@ -3,8 +3,9 @@
 //! 管理到 Redis 的活跃连接。支持**单机**与**集群**（Cluster）两种模式，
 //! 并可标记连接为**只读**（在命令层拦截写命令）。
 //!
-//! 命令层通过 [`Pool::conn`] 取 [`PooledConn`] 句柄执行命令 —— 这是命令执行的唯一出口，
-//! 每条命令与每次建连都按 [`ConnectionTimeout`] 包一层 `tokio::time::timeout`
+//! 命令层通过 [`Pool::conn`] 取 [`PooledConn`] 句柄执行命令 —— 这是命令执行的唯一出口
+//! （单条走 [`PooledConn::query`]，多条一次往返走 [`PooledConn::query_pipeline`]），
+//! 每条命令/每个 pipeline 与每次建连都按 [`ConnectionTimeout`] 包一层 `tokio::time::timeout`
 //! （默认 5 秒建连 / 10 秒命令）：服务器卡住时界面拿到明确错误，而不是永久等待。
 
 use std::collections::HashMap;
@@ -85,8 +86,8 @@ impl ConnectionLike for Conn {
 
 /// 连接句柄 + 该连接的超时配置，命令层实际持有的类型。
 ///
-/// 所有 Redis 命令都必须经 [`PooledConn::query`] 执行，超时保护因此在**一个地方**生效，
-/// 不会出现「某个命令忘了包超时」的漏网之鱼。
+/// 所有 Redis 命令都必须经 [`PooledConn::query`]（单条）或 [`PooledConn::query_pipeline`]
+/// （多条一次往返）执行，超时保护因此在**一个地方**生效，不会出现「某个命令忘了包超时」的漏网之鱼。
 pub struct PooledConn {
     inner: Conn,
     timeout: ConnectionTimeout,
@@ -110,11 +111,37 @@ impl PooledConn {
     /// - Redis 报错 → [`AppError::Redis`]，需要 MOVED / ASK 之类转写时用
     ///   [`crate::error::command_error_text`] 生成用户提示。
     pub async fn query<T: FromRedisValue>(&mut self, cmd: &redis::Cmd) -> Result<T, AppError> {
-        match tokio::time::timeout(self.timeout.command, cmd.query_async(&mut self.inner)).await {
-            Ok(Ok(value)) => Ok(value),
-            Ok(Err(err)) => Err(AppError::Redis(err)),
-            Err(_) => Err(self.timeout.command_timeout_error()),
-        }
+        with_command_timeout(self.timeout, cmd.query_async(&mut self.inner)).await
+    }
+
+    /// 执行一个 pipeline（多条命令**一次往返**）并解析返回值。
+    ///
+    /// 与 [`Self::query`] 共用同一套错误语义，区别在超时预算：命令超时包的是**整批**命令
+    /// 而不是其中一条（例如「100 个 key 的 TYPE + TTL」这一批共用一个
+    /// [`ConnectionTimeout::command`]，而不是每条各给一个预算）。
+    ///
+    /// 返回值与 pipeline 中未被 `ignore()` 的命令一一对应、顺序一致；其中任意一条命令
+    /// 收到错误响应时，整批查询返回该错误（redis-rs 的行为，无法只挑出出错的那条）。
+    pub async fn query_pipeline<T: FromRedisValue>(
+        &mut self,
+        pipe: &redis::Pipeline,
+    ) -> Result<T, AppError> {
+        with_command_timeout(self.timeout, pipe.query_async(&mut self.inner)).await
+    }
+}
+
+/// 命令执行的统一超时包装：超时 → [`AppError::Timeout`]，Redis 报错 → [`AppError::Redis`]。
+///
+/// 单条命令与 pipeline 都从这里出去，超时文案与错误类型只有一处定义
+/// （见 DEVELOPMENT.md §6 第 3 条）。
+async fn with_command_timeout<T, F>(timeout: ConnectionTimeout, future: F) -> Result<T, AppError>
+where
+    F: Future<Output = Result<T, redis::RedisError>>,
+{
+    match tokio::time::timeout(timeout.command, future).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(err)) => Err(AppError::Redis(err)),
+        Err(_) => Err(timeout.command_timeout_error()),
     }
 }
 
@@ -268,15 +295,6 @@ impl Pool {
             .get(id)
             .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
         Ok(entry.conn.is_readonly())
-    }
-
-    /// 校验写命令是否被允许（连接存在且非只读）。方便调用方统一处理。
-    pub fn ensure_conn(&self, id: &str) -> Result<(), AppError> {
-        let guard = self.inner.lock().unwrap();
-        guard
-            .get(id)
-            .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
-        Ok(())
     }
 
     /// 获取连接配置的克隆。

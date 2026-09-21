@@ -23,10 +23,6 @@ pub enum AppError {
     #[error("操作超时: {0}")]
     Timeout(String),
 
-    /// 连接未就绪，需重新连接。
-    #[error("连接未就绪: {0}")]
-    NotConnected(String),
-
     /// TLS 加密连接尚未支持。
     #[error("暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接")]
     TlsNotSupported,

@@ -22,10 +22,12 @@ pub async fn disconnect(pool: State<'_, Pool>, conn_id: String) -> Result<bool, 
 }
 
 /// 列出所有已保存的连接配置。
+///
+/// 文件读写走阻塞线程池（[`crate::storage::ConnectionRepo::load_async`]），不卡 async 工作线程。
 #[tauri::command]
 pub async fn list_connections(state: State<'_, AppState>) -> Result<Vec<Connection>, String> {
-    let repo = state.repo()?;
-    repo.load().map_err(|e| e.to_string())
+    let repo = state.repo();
+    repo.load_async().await.map_err(|e| e.to_string())
 }
 
 /// 保存（新增或更新）一个连接配置，持久化到本地。
@@ -34,14 +36,14 @@ pub async fn list_connections(state: State<'_, AppState>) -> Result<Vec<Connecti
 #[tauri::command]
 pub async fn save_connection(state: State<'_, AppState>, conn: Connection) -> Result<(), String> {
     conn.check_supported_scheme().map_err(|e| e.to_string())?;
-    let repo = state.repo()?;
-    let mut all = repo.load().map_err(|e| e.to_string())?;
+    let repo = state.repo();
+    let mut all = repo.load_async().await.map_err(|e| e.to_string())?;
     if let Some(existing) = all.iter_mut().find(|c| c.id == conn.id) {
         *existing = conn;
     } else {
         all.push(conn);
     }
-    repo.save_all(&all).map_err(|e| e.to_string())
+    repo.save_all_async(&all).await.map_err(|e| e.to_string())
 }
 
 /// 删除一个连接配置，返回是否删除成功。
@@ -50,11 +52,11 @@ pub async fn delete_connection(
     state: State<'_, AppState>,
     conn_id: String,
 ) -> Result<bool, String> {
-    let repo = state.repo()?;
-    let mut all = repo.load().map_err(|e| e.to_string())?;
+    let repo = state.repo();
+    let mut all = repo.load_async().await.map_err(|e| e.to_string())?;
     let before = all.len();
     all.retain(|c| c.id != conn_id);
-    repo.save_all(&all).map_err(|e| e.to_string())?;
+    repo.save_all_async(&all).await.map_err(|e| e.to_string())?;
     Ok(all.len() != before)
 }
 
@@ -113,8 +115,8 @@ pub async fn export_connections(
     state: State<'_, AppState>,
     include_passwords: bool,
 ) -> Result<ConnectionExport, String> {
-    let repo = state.repo()?;
-    let conns = repo.load().map_err(|e| e.to_string())?;
+    let repo = state.repo();
+    let conns = repo.load_async().await.map_err(|e| e.to_string())?;
     let doc = build_export_doc(&conns, include_passwords);
     let content = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
     Ok(ConnectionExport {
@@ -134,10 +136,12 @@ pub async fn import_connections(
     overwrite: bool,
 ) -> Result<ConnectionImportResult, String> {
     let (incoming, failed) = parse_import_doc(&content)?;
-    let repo = state.repo()?;
-    let existing = repo.load().map_err(|e| e.to_string())?;
+    let repo = state.repo();
+    let existing = repo.load_async().await.map_err(|e| e.to_string())?;
     let (merged, imported, skipped) = merge_connections(&existing, incoming, overwrite);
-    repo.save_all(&merged).map_err(|e| e.to_string())?;
+    repo.save_all_async(&merged)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(ConnectionImportResult {
         imported,
         skipped,

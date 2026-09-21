@@ -2,9 +2,10 @@
 //!
 //! 集中管理应用的各项可调参数（超时、路径等）。
 //!
-//! 超时值由连接池接线：建连走 [`ConnectionTimeout::connect`]，每条命令走
+//! 超时值由连接池接线：建连走 [`ConnectionTimeout::connect`]，命令走
 //! [`ConnectionTimeout::command`]，两者都以 `tokio::time::timeout` 兜住
-//! （见 [`crate::connection_pool::PooledConn::query`]）。
+//! （见 [`crate::connection_pool::PooledConn::query`] 与
+//! [`crate::connection_pool::PooledConn::query_pipeline`]）。
 
 use std::time::Duration;
 
@@ -21,9 +22,11 @@ pub struct ConnectionTimeout {
     /// 这是一次**连接调用**的总预算，包含 TCP 连接、认证握手与 redis-rs 内部的重试退避
     /// （见 [`crate::connection_pool`] 中 `CONNECT_RETRIES` 的说明）；不含之后的命令往返。
     pub connect: Duration,
-    /// 单条 Redis 命令从发出到返回的最长等待时间。
+    /// 一批命令从发出到返回的最长等待时间。
     ///
-    /// 防止 `BLPOP` 这类阻塞命令或网络异常导致界面永久卡死。
+    /// 防止 `BLPOP` 这类阻塞命令或网络异常导致界面永久卡死。单条命令与 pipeline
+    /// （多条命令一次往返，如 Key 列表的 TYPE/TTL 批量查询）共用这个预算：
+    /// pipeline 的等待**整批**只算一次，不按命令条数叠加。
     pub command: Duration,
 }
 
