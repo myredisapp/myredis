@@ -29,8 +29,11 @@ pub async fn list_connections(state: State<'_, AppState>) -> Result<Vec<Connecti
 }
 
 /// 保存（新增或更新）一个连接配置，持久化到本地。
+///
+/// 不受支持的协议前缀（如 `rediss://`）在这里就拦下，避免存下一条永远连不上的配置。
 #[tauri::command]
 pub async fn save_connection(state: State<'_, AppState>, conn: Connection) -> Result<(), String> {
+    conn.check_supported_scheme().map_err(|e| e.to_string())?;
     let repo = state.repo()?;
     let mut all = repo.load().map_err(|e| e.to_string())?;
     if let Some(existing) = all.iter_mut().find(|c| c.id == conn.id) {
@@ -210,6 +213,9 @@ fn parse_import_doc(
 }
 
 /// 校验一条导入的连接配置是否可用。
+///
+/// 协议前缀同样要校验：导入文件里可能带着 `rediss://` 之类本版本连不上的地址，
+/// 记入失败列表比存下来、连接时再报错更早也更清楚。
 fn validate_connection(conn: &Connection) -> Result<(), String> {
     if conn.id.trim().is_empty() {
         return Err("缺少 id".into());
@@ -223,6 +229,7 @@ fn validate_connection(conn: &Connection) -> Result<(), String> {
     if conn.port == 0 {
         return Err("端口不合法".into());
     }
+    conn.check_supported_scheme().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -341,6 +348,42 @@ mod tests {
         assert!(failed.iter().any(|f| f.name == "缺主机"));
         assert!(failed.iter().any(|f| f.name == "坏端口"));
         assert!(failed.iter().any(|f| f.name == "空 id"));
+    }
+
+    /// 导入文件里的 TLS 地址（`rediss://`）记入失败列表并给出友好提示 ——
+    /// 而不是存下来、等用户连接时才报一条看不懂的错误。
+    #[test]
+    fn parse_rejects_tls_hosts_with_friendly_message() {
+        let content = r#"{"connections":[
+            {"id":"tls","name":"加密连接","host":"rediss://redis.example.com","port":6379,"type":"single"},
+            {"id":"plain","name":"明文连接","host":"redis.example.com","port":6379,"type":"single"}
+        ]}"#;
+        let (conns, failed) = parse_import_doc(content).expect("文档整体可解析");
+        assert_eq!(conns.len(), 1, "只有明文那条可以导入: {conns:?}");
+        assert_eq!(conns[0].id, "plain");
+        assert_eq!(failed.len(), 1, "TLS 条目应记入失败列表: {failed:?}");
+        assert_eq!(failed[0].name, "加密连接");
+        assert!(
+            failed[0].error.contains("暂不支持 TLS 加密连接"),
+            "提示应说明不支持 TLS: {}",
+            failed[0].error
+        );
+    }
+
+    /// 校验函数对协议前缀的判定：TLS 拦下，粘贴的 `redis://` 给出填法提示，普通主机名放行。
+    #[test]
+    fn validate_connection_checks_scheme() {
+        assert!(super::validate_connection(&sample("c1", "本地", None)).is_ok());
+
+        let mut tls = sample("c2", "加密", None);
+        tls.host = "rediss://redis.example.com".into();
+        let err = super::validate_connection(&tls).expect_err("TLS 地址不应通过校验");
+        assert!(err.contains("暂不支持 TLS 加密连接"), "{err}");
+
+        let mut pasted = sample("c3", "粘贴的 URL", None);
+        pasted.host = "redis://127.0.0.1".into();
+        let err = super::validate_connection(&pasted).expect_err("带协议前缀不应通过校验");
+        assert!(err.contains("只需填主机名"), "{err}");
     }
 
     #[test]

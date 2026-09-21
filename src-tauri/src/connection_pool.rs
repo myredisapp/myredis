@@ -202,6 +202,9 @@ impl Pool {
 
     /// 按连接配置建立连接句柄（不缓存、不发送 `READONLY`）。
     async fn connect_handle(&self, conn: &Connection) -> Result<Conn, AppError> {
+        // 入口协议校验：`rediss://` 之类不受支持的前缀必须在这里给出明确提示，
+        // 而不是拼出一条畸形 URL 交给 redis-rs 报语法错（`PROJECT_PLAN.md` §4.2.3）。
+        conn.check_supported_scheme()?;
         match conn.conn_type {
             ConnType::Single => {
                 let url = conn.to_connection_url();
@@ -484,6 +487,32 @@ mod tests {
             Ok(_) => panic!("不存在的连接应当报错"),
         };
         assert!(matches!(err, AppError::ConnectionNotFound(_)), "{err:?}");
+    }
+
+    /// 不受支持的协议前缀在**建连之前**就被拦下：`connect` 与 `test` 都要返回 TLS 提示，
+    /// 且立刻返回（不能先去试连一个畸形地址），失败后池里也不留下条目。
+    ///
+    /// 这是需求 `PROJECT_PLAN.md` §4.2.3 / §9.4.1 的落点：用户把 `rediss://x` 填进主机字段时，
+    /// 看到的必须是「暂不支持 TLS 加密连接 (rediss)」，而不是 URL 解析错误。
+    #[tokio::test]
+    async fn unsupported_tls_host_is_rejected_before_any_connection_attempt() {
+        let pool = Pool::with_timeout(fast_timeout());
+        let mut cfg = conn_config("tls", 6379);
+        cfg.host = "rediss://redis.example.com".into();
+
+        let started = Instant::now();
+        let err = pool.connect(&cfg).await.expect_err("TLS 连接应当被拦下");
+        assert!(matches!(err, AppError::TlsNotSupported), "实际: {err:?}");
+
+        let err = pool.test(&cfg).await.expect_err("测试连接同样应当被拦下");
+        assert!(matches!(err, AppError::TlsNotSupported), "实际: {err:?}");
+
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "应在建连前立即返回，实际耗时 {:?}",
+            started.elapsed()
+        );
+        assert!(pool.conn("tls").is_err(), "被拦下的连接不应写进连接池");
     }
 
     /// 句柄沿用池的超时配置（集群逐节点扫描时，节点直连句柄也照此配置）。

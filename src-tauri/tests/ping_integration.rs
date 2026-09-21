@@ -34,8 +34,12 @@ async fn redis_ping_returns_pong() {
     println!("PING 返回: {}", pong);
 }
 
-#[test]
-fn tls_not_supported() {
+/// `rediss://` 主机在入口就被拦下，并给出可操作的提示（不依赖 Redis：校验发生在建连之前）。
+///
+/// 只断言「报错」是不够的 —— 旧实现拼出畸形 URL 也算报错，这正是本用例要防的回归，
+/// 所以这里断言的是文案（见 `Connection::check_supported_scheme`）。
+#[tokio::test]
+async fn tls_not_supported() {
     let pool = Pool::new();
     let conn = Connection {
         id: "tls".into(),
@@ -49,10 +53,11 @@ fn tls_not_supported() {
         username: None,
         password: None,
     };
-    let fut = pool.connect(&conn);
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let result = rt.block_on(fut);
-    assert!(result.is_err());
+    let err = pool.connect(&conn).await.expect_err("TLS 连接应当被拒绝");
+    assert!(
+        err.to_string().contains("暂不支持 TLS 加密连接"),
+        "应给出明确提示，而不是通用 URL 解析错误: {err}"
+    );
 }
 
 #[test]

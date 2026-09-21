@@ -3,7 +3,7 @@
 > 本文档用于跟踪「麦地缓存」开发进度、已决策事项、已知缺口与待办事项。随开发持续更新。
 > 最近更新：2026-09-21，状态：**v0.0.12 已发布；根目录 `README.md` 已补齐**（含官网 myredis.cn 与界面截图，
 > 截图素材在 `docs/screenshots/`，由 `frontend/index.html` + mock `__TAURI_INTERNALS__.invoke`  harness 渲染截取）。
-> §2.1 的功能缺口已清空，§2.3 的 README 缺项已完成，§2.2 的「超时配置接线」（P1）已完成，
+> §2.1 的功能缺口已清空，§2.3 的 README 缺项已完成，§2.2 的两个 P1（超时配置接线、`rediss://` 友好提示）均已完成，
 > 剩余为代码质量与工程流程债务。
 >
 > 相关文档分工：
@@ -46,6 +46,9 @@
 - [x] `test_connection` 不写连接池，仅建立连接后 `PING` 再释放（前端「先测试，再保存」）
 - [x] 只读连接：连接时发送 `READONLY`，写命令前经 `Pool::ensure_writable` 拦截
 - [x] 自定义 Key 分隔符（默认 `:`），用于前端按分隔符折叠成目录树
+- [x] **连接参数入口校验**：主机字段里带 `rediss://` / `tls://` / `ssl://` 前缀时，测试 / 保存 / 导入 / 建连
+      四处统一返回「暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接」；带 `redis://` 前缀（粘贴整条 URL）
+      则提示「只需填主机名」（§2.2 的 P1）
 - [x] **建连与命令都有超时兜底**（`config.rs` 的 `ConnectionTimeout`：**5 秒建连 / 10 秒命令**，
       由 `AppConfig` 注入 `Pool`）：连接池句柄 `PooledConn::query` 是命令执行的**唯一出口**，
       命令层与集群节点直连都走它 —— 服务器无响应或 `BLPOP` 这类阻塞命令会在超时后返回
@@ -207,10 +210,20 @@
   - 相关次级影响：`Pool::manager()` 一并删除（集群改造后已无调用方，`conn()` 也换了返回类型）；
     `Pool::test` 从关联函数变成方法（用池的超时配置）；`test_connection` 命令因此多了一个注入的 `State<Pool>`。
 
-- [ ] ⬜ **P1｜`rediss://` 缺乏友好提示**
-  - 现状：`AppError::TlsNotSupported` 已定义但**无任何代码路径构造它**；`to_connection_url()` 无条件拼 `redis://`，
-    用户在主机名里填 `rediss://x` 只会得到一条通用 URL 解析错误。
-  - `PROJECT_PLAN.md` §9.4.1 / §4.2.3 要求拦截并返回「暂不支持 TLS 加密连接 (rediss)」，需补上入口校验。
+- [x] ✅ **P1｜`rediss://` 缺乏友好提示**（2026-09-21 完成）
+  - **入口校验**：`Connection::check_supported_scheme()`（`models/connection.rs`）识别主机字段里的 URL 协议前缀，
+    TLS 系（`rediss` / `tls` / `ssl`，大小写不敏感）返回 `AppError::TlsNotSupported` —— 这个变体此前定义了却
+    无人构造，现在有了唯一的构造点；其它合法协议（用户粘贴整条 `redis://host:6379`）提示「主机字段只需填主机名」。
+  - **四个入口都接上**（三处调用）：`Pool::connect_handle`（覆盖 `connect` 与 `test_connection`，在建连**之前**返回，
+    不写连接池）、`save_connection`、以及导入用的 `validate_connection`（TLS 地址记入失败列表而非存下来）。
+  - **判定不误伤**：只有形如 `scheme://` 且 scheme 符合 RFC 3986 协议名规则才算前缀，
+    `rediss.example.com` 这类含「rediss」字样的普通主机名、IPv4 / IPv6 字面量（`::1`）都照常放行。
+  - **前端**：连接对话框的「测试连接」「保存连接」各加一道同样的预检（`hostSchemeError`），
+    提示直接出现在用户正看着的位置，省一趟往返；后端仍是权威校验（旧配置、导入文件、终端外路径都覆盖）。
+  - **防回归**：`tests/ping_integration.rs::tls_not_supported` 原本只断言 `is_err()`，
+    而旧实现拼出畸形 URL（`redis://rediss://x:6380/0`）同样报错，所以这条用例一直是绿的；
+    现在改为断言「暂不支持 TLS 加密连接」文案。新增 4 条单测（协议判定 / 不误伤 / 明文前缀提示 /
+    建连前拦截）与 2 条导入 / 校验单测。
 
 - [x] ✅ **P2｜Key 列表全量加载，分页与虚拟滚动未落地**（2026-09-14 完成）
   - 实现：`list_keys` 改为游标分页（见 §1.3），前端改成虚拟滚动 + 滚动预取 + 状态条「加载更多」，
@@ -263,7 +276,7 @@
 
 | 能力 | 决策 | 说明 |
 |------|:----:|------|
-| TLS / SSL（`rediss`） | ❌ | 本期不支持，仅 `redis://` 明文；应返回友好错误（该提示尚未接线，见 §2.2） |
+| TLS / SSL（`rediss`） | ❌ | 本期不支持，仅 `redis://` 明文；主机字段填 `rediss://` / `tls://` / `ssl://` 会返回友好提示（2026-09-21 已接线，见 §2.2 P1） |
 | SSH 隧道 | ❌ | 不内置 |
 | 主从 / Sentinel 故障转移 | ❌ | 不实现故障转移，仅透传命令 |
 | 集群的故障转移 / 扩缩容 | ❌ | 由 Redis 集群自身负责 |
@@ -291,6 +304,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-21 | — | §2.2 的**第二个 P1「`rediss://` 缺乏友好提示」完成**：新增 `Connection::check_supported_scheme()` 做协议前缀校验（TLS 系返回此前无人构造的 `AppError::TlsNotSupported`，其它协议提示「只需填主机名」），三处调用覆盖四个入口 —— `Pool::connect_handle`（`connect` / `test_connection`，建连前拦截）、`save_connection`、导入用的 `validate_connection`；前端连接对话框给「测试连接」「保存连接」加了同规则的预检提示（并在渲染页里交互验证过：TLS 提示、无后端往返、普通主机名照常放行）；`tests/ping_integration.rs::tls_not_supported` 从「只断言报错」改成断言文案（旧断言在功能缺失时同样是绿的），新增 6 条单测；`web/docs/index.html` 的主机字段说明、「功能现状」（新增「明确不支持」列表）与 FAQ 已同步（§6 第 7 条） |
 | 2026-09-21 | — | §2.2 的 **P1「超时配置接线」完成**：`ConnectionTimeout`（5s 建连 / 10s 命令）注入 `Pool`，新增 `PooledConn` 句柄 —— `PooledConn::query` 成为命令执行唯一出口（`tokio::time::timeout` + `AppError::Timeout`），命令层 ~80 处 `query_async(&mut con)` 全部切到 `con.query(&cmd)`（含集群节点直连与 `SCAN` 辅助函数），建连/握手/`READONLY` 共用一个连接预算，`error.rs` 新增 `command_error_text` 统一「Redis 报错转写 / 客户端错误透传」分流；顺带删除 `Pool::manager()`、`Pool::test` 改为方法、`config.rs` 去掉 `#![allow(dead_code)]`；新增 2 条不依赖 Redis 的超时单测 + 1 条 BLPOP 集成测试；补上 `tests/ping_integration.rs` 里两条漏标的 `#[ignore]`（此前没起 Redis 时 `cargo test` 会失败），并记录集群用例需 `--test-threads=1`；`web/docs/index.html` 的「功能现状」与连接超时 FAQ 已同步（§6 第 7 条） |
 | 2026-09-21 | — | 补齐根目录 [`README.md`](README.md)（§2.3 勾掉）：官网 **myredis.cn** 入口 + 界面截图（`docs/screenshots/`，headless Chrome + mock invoke harness 渲染截取）；§2 其余待办逐项核对仍成立（超时未接线、`rediss://` 提示未补、N+1 未收拢、阻塞 IO 未包 `spawn_blocking`、死代码未清理、CI 无质量门禁、陈旧分支未删） |
 | 2026-09-16 | — | 菜单栏去掉 **Edit**（§1.5）：`menu.rs` 不再单列 Edit 子菜单，Undo / Redo / Cut / Copy / Paste / Select All 六个标准编辑项移入应用菜单，保证 ⌘Z / ⌘X / ⌘C / ⌘V / ⌘A 仍能派发到响应链 |
