@@ -56,9 +56,11 @@ pub async fn delete_connection(
 }
 
 /// 测试连接参数是否可用（不保存、不缓存连接）。
+///
+/// 建连与 `PING` 分别受连接池的超时配置约束（见 [`crate::config::ConnectionTimeout`]）。
 #[tauri::command]
-pub async fn test_connection(conn: Connection) -> Result<String, String> {
-    Pool::test(&conn).await.map_err(|e| e.to_string())
+pub async fn test_connection(pool: State<'_, Pool>, conn: Connection) -> Result<String, String> {
+    pool.test(&conn).await.map_err(|e| e.to_string())
 }
 
 // ---------- 连接配置的导入 / 导出 ----------

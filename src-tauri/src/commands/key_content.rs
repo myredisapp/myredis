@@ -9,7 +9,7 @@
 use serde::Serialize;
 
 use crate::connection_pool::Pool;
-use crate::error::command_error_message;
+use crate::error::command_error_text;
 
 /// Hash 的一个字段。
 #[derive(Debug, Clone, Serialize)]
@@ -52,11 +52,10 @@ pub async fn get_hash(
 ) -> Result<Vec<HashField>, String> {
     let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
-    let raw: Vec<(String, String)> = redis::cmd("HGETALL")
-        .arg(&key)
-        .query_async(&mut con)
+    let raw: Vec<(String, String)> = con
+        .query(redis::cmd("HGETALL").arg(&key))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(raw
         .into_iter()
         .map(|(field, value)| HashField { field, value })
@@ -72,13 +71,10 @@ pub async fn get_list(
 ) -> Result<Vec<ListItem>, String> {
     let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
-    let raw: Vec<String> = redis::cmd("LRANGE")
-        .arg(&key)
-        .arg(0)
-        .arg(-1)
-        .query_async(&mut con)
+    let raw: Vec<String> = con
+        .query(redis::cmd("LRANGE").arg(&key).arg(0).arg(-1))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(raw
         .into_iter()
         .enumerate()
@@ -98,11 +94,10 @@ pub async fn get_set(
 ) -> Result<Vec<String>, String> {
     let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
-    let mut members: Vec<String> = redis::cmd("SMEMBERS")
-        .arg(&key)
-        .query_async(&mut con)
+    let mut members: Vec<String> = con
+        .query(redis::cmd("SMEMBERS").arg(&key))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     members.sort();
     Ok(members)
 }
@@ -116,14 +111,16 @@ pub async fn get_zset(
 ) -> Result<Vec<ZSetItem>, String> {
     let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
-    let raw: Vec<(String, f64)> = redis::cmd("ZRANGE")
-        .arg(&key)
-        .arg(0)
-        .arg(-1)
-        .arg("WITHSCORES")
-        .query_async(&mut con)
+    let raw: Vec<(String, f64)> = con
+        .query(
+            redis::cmd("ZRANGE")
+                .arg(&key)
+                .arg(0)
+                .arg(-1)
+                .arg("WITHSCORES"),
+        )
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(raw
         .into_iter()
         .map(|(member, score)| ZSetItem { member, score })
@@ -164,9 +161,9 @@ pub async fn set_key_ttl_inner(
     if ttl > 0 {
         cmd.arg(ttl);
     }
-    cmd.query_async::<_, ()>(&mut con)
+    con.query::<()>(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(())
 }
 
@@ -193,13 +190,9 @@ pub async fn hash_set_field_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    redis::cmd("HSET")
-        .arg(key)
-        .arg(field)
-        .arg(value)
-        .query_async::<_, ()>(&mut con)
+    con.query::<()>(redis::cmd("HSET").arg(key).arg(field).arg(value))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(())
 }
 
@@ -229,10 +222,10 @@ pub async fn hash_del_fields_inner(
     for f in fields {
         cmd.arg(f);
     }
-    let n: i64 = cmd
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -259,13 +252,9 @@ pub async fn list_set_element_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    redis::cmd("LSET")
-        .arg(key)
-        .arg(index)
-        .arg(value)
-        .query_async::<_, ()>(&mut con)
+    con.query::<()>(redis::cmd("LSET").arg(key).arg(index).arg(value))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(())
 }
 
@@ -293,13 +282,10 @@ pub async fn list_del_element_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    let n: i64 = redis::cmd("LREM")
-        .arg(key)
-        .arg(1)
-        .arg(value)
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(redis::cmd("LREM").arg(key).arg(1).arg(value))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -327,12 +313,10 @@ pub async fn list_push_element_inner(
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
     let name = if left { "LPUSH" } else { "RPUSH" };
-    let n: i64 = redis::cmd(name)
-        .arg(key)
-        .arg(value)
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(redis::cmd(name).arg(key).arg(value))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -357,12 +341,10 @@ pub async fn set_add_member_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    let n: i64 = redis::cmd("SADD")
-        .arg(key)
-        .arg(member)
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(redis::cmd("SADD").arg(key).arg(member))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -387,12 +369,10 @@ pub async fn set_del_member_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    let n: i64 = redis::cmd("SREM")
-        .arg(key)
-        .arg(member)
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(redis::cmd("SREM").arg(key).arg(member))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -419,13 +399,10 @@ pub async fn zset_add_member_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    let n: i64 = redis::cmd("ZADD")
-        .arg(key)
-        .arg(score)
-        .arg(member)
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(redis::cmd("ZADD").arg(key).arg(score).arg(member))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -450,12 +427,10 @@ pub async fn zset_del_member_inner(
     pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
     let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
-    let n: i64 = redis::cmd("ZREM")
-        .arg(key)
-        .arg(member)
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(redis::cmd("ZREM").arg(key).arg(member))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -516,9 +491,10 @@ mod tests {
         let key = unique_key("hash");
 
         hash_set_field_inner(&pool, &conn_id, &key, "f1", "v1").await?;
-        let fields: Vec<(String, String)> = redis::cmd("HGETALL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let fields: Vec<(String, String)> = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("HGETALL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -541,21 +517,19 @@ mod tests {
         list_push_element_inner(&pool, &conn_id, &key, "a", false).await?;
         list_push_element_inner(&pool, &conn_id, &key, "b", false).await?;
         list_push_element_inner(&pool, &conn_id, &key, "first", true).await?;
-        let items: Vec<String> = redis::cmd("LRANGE")
-            .arg(&key)
-            .arg(0)
-            .arg(-1)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let items: Vec<String> = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("LRANGE").arg(&key).arg(0).arg(-1))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(items, vec!["first", "a", "b"]);
 
         list_set_element_inner(&pool, &conn_id, &key, 1, "A").await?;
-        let items: Vec<String> = redis::cmd("LRANGE")
-            .arg(&key)
-            .arg(0)
-            .arg(-1)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let items: Vec<String> = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("LRANGE").arg(&key).arg(0).arg(-1))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(items, vec!["first", "A", "b"]);
@@ -584,10 +558,10 @@ mod tests {
         let key = unique_key("zset");
 
         zset_add_member_inner(&pool, &conn_id, &key, "m1", 1.5).await?;
-        let score: f64 = redis::cmd("ZSCORE")
-            .arg(&key)
-            .arg("m1")
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let score: f64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("ZSCORE").arg(&key).arg("m1"))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(score, 1.5);

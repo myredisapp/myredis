@@ -51,7 +51,8 @@ fn cluster_conn(id: &str) -> Connection {
 #[tokio::test]
 #[ignore]
 async fn cluster_test_returns_pong() {
-    let pong = Pool::test(&cluster_conn("cluster_test"))
+    let pong = Pool::new()
+        .test(&cluster_conn("cluster_test"))
         .await
         .expect("集群连接测试失败，请确认集群已启动");
     assert_eq!(pong, "PONG");
@@ -75,41 +76,33 @@ async fn cluster_connect_ping_and_crud() {
     let mut con = pool.conn("cluster_crud").expect("获取集群句柄失败");
     let key = "myredis:cluster:itest:key";
 
-    let _: String = redis::cmd("SET")
-        .arg(key)
-        .arg("hello-cluster")
-        .query_async(&mut con)
+    let _: String = con
+        .query(redis::cmd("SET").arg(key).arg("hello-cluster"))
         .await
         .expect("集群 SET 失败");
 
-    let val: String = redis::cmd("GET")
-        .arg(key)
-        .query_async(&mut con)
+    let val: String = con
+        .query(redis::cmd("GET").arg(key))
         .await
         .expect("集群 GET 失败");
     assert_eq!(val, "hello-cluster");
 
-    let deleted: i64 = redis::cmd("DEL")
-        .arg(key)
-        .query_async(&mut con)
+    let deleted: i64 = con
+        .query(redis::cmd("DEL").arg(key))
         .await
         .expect("集群 DEL 失败");
     assert_eq!(deleted, 1);
 
-    let after: Option<String> = redis::cmd("GET")
-        .arg(key)
-        .query_async(&mut con)
+    let after: Option<String> = con
+        .query(redis::cmd("GET").arg(key))
         .await
         .expect("集群 GET 失败");
     assert!(after.is_none(), "删除后不应再取到值");
 
     // SCAN 在集群连接上会被路由到随机一个节点（redis-rs 不做聚合），
     // 这里仅验证命令本身不报错；完整性与稳定性由 cluster_list_keys 用例覆盖。
-    let _: redis::Value = redis::cmd("SCAN")
-        .arg(0)
-        .arg("COUNT")
-        .arg(10)
-        .query_async(&mut con)
+    let _: redis::Value = con
+        .query(redis::cmd("SCAN").arg(0).arg("COUNT").arg(10))
         .await
         .expect("集群 SCAN 失败");
 
@@ -142,10 +135,8 @@ async fn cluster_get_server_info_and_scan() {
 
     // list_keys 应能列出探针 key；修复前 SCAN 只扫随机一个节点，结果时有时无
     let mut con = pool.conn("cluster_info").unwrap();
-    let _: String = redis::cmd("SET")
-        .arg("myredis:cluster:scan:probe")
-        .arg("1")
-        .query_async(&mut con)
+    let _: String = con
+        .query(redis::cmd("SET").arg("myredis:cluster:scan:probe").arg("1"))
         .await
         .expect("集群 SET 失败");
 
@@ -156,9 +147,8 @@ async fn cluster_get_server_info_and_scan() {
     );
     println!("list_keys 共列出 {} 个 key", listed.len());
 
-    let _: i64 = redis::cmd("DEL")
-        .arg("myredis:cluster:scan:probe")
-        .query_async(&mut con)
+    let _: i64 = con
+        .query(redis::cmd("DEL").arg("myredis:cluster:scan:probe"))
         .await
         .expect("清理失败");
 
@@ -177,10 +167,8 @@ async fn cluster_list_keys_stable_and_complete() {
     let mut probes = Vec::new();
     for i in 0..12 {
         let key = format!("myredis:cluster:lk:{{t{i}}}:probe");
-        let _: String = redis::cmd("SET")
-            .arg(&key)
-            .arg("1")
-            .query_async(&mut con)
+        let _: String = con
+            .query(redis::cmd("SET").arg(&key).arg("1"))
             .await
             .expect("集群 SET 失败");
         probes.push(key);
@@ -207,9 +195,8 @@ async fn cluster_list_keys_stable_and_complete() {
 
     // 清理
     for probe in &probes {
-        let _: i64 = redis::cmd("DEL")
-            .arg(probe)
-            .query_async(&mut con)
+        let _: i64 = con
+            .query(redis::cmd("DEL").arg(probe))
             .await
             .expect("清理失败");
     }
@@ -232,10 +219,8 @@ async fn cluster_list_keys_pages_span_nodes_without_loss() {
     let mut written = Vec::new();
     for i in 0..total {
         let key = format!("{prefix}:{{t{}}}:{i:04}", i % 3);
-        let _: String = redis::cmd("SET")
-            .arg(&key)
-            .arg("1")
-            .query_async(&mut con)
+        let _: String = con
+            .query(redis::cmd("SET").arg(&key).arg("1"))
             .await
             .expect("集群 SET 失败");
         written.push(key);
@@ -278,9 +263,8 @@ async fn cluster_list_keys_pages_span_nodes_without_loss() {
     assert_eq!(actual, expected, "集群分页必须覆盖全部 key 且不重复");
 
     for key in &written {
-        let _: i64 = redis::cmd("DEL")
-            .arg(key)
-            .query_async(&mut con)
+        let _: i64 = con
+            .query(redis::cmd("DEL").arg(key))
             .await
             .expect("清理失败");
     }

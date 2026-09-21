@@ -5,11 +5,12 @@
 //!
 //! - 只读连接会按 [`WRITE_COMMANDS`] 名单拦截写命令（与连接池的 `ensure_writable`
 //!   策略一致：已知写命令在命令层拦截，其余透传由服务器 ACL 兜底）。
-//! - 命令执行包 `tokio::time::timeout`，`BLPOP` / `SUBSCRIBE` 这类阻塞命令
+//! - 命令执行走连接池的 [`crate::connection_pool::PooledConn::query`]，
+//!   由它统一包 `tokio::time::timeout`：`BLPOP` / `SUBSCRIBE` 这类阻塞命令
 //!   不会把 UI 永久卡死（超时返回错误提示）。
 
 use crate::connection_pool::Pool;
-use crate::error::command_error_message;
+use crate::error::{command_error_text, AppError};
 
 /// 已知会修改数据、或会阻塞 / 改变连接状态的命令。
 ///
@@ -148,15 +149,17 @@ pub async fn execute_command(
         cmd.arg(arg);
     }
 
-    // 终端允许任意命令（含用户手输的阻塞命令），必须包超时防止 UI 永久等待
-    let timeout = crate::config::ConnectionTimeout::default().command;
-    let result: redis::Value = tokio::time::timeout(timeout, cmd.query_async(&mut con))
-        .await
-        .map_err(|_| {
-            "命令执行超时（10 秒），已中断。阻塞类命令（BLPOP / SUBSCRIBE 等）请在其它工具中执行"
-                .to_string()
-        })?
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+    // 终端允许任意命令（含用户手输的阻塞命令）；超时由连接池统一兜住（见 `PooledConn::query`），
+    // 这里只在超时文案后面补一句阻塞类命令的说明。
+    let result: redis::Value = match con.query(&cmd).await {
+        Ok(value) => value,
+        Err(AppError::Timeout(msg)) => {
+            return Err(format!(
+                "{msg}。阻塞类命令（BLPOP / SUBSCRIBE 等）不会返回结果，请在其它工具中执行"
+            ))
+        }
+        Err(e) => return Err(command_error_text(&e, Some(&conn_cfg))),
+    };
 
     Ok(value_to_text(&result))
 }

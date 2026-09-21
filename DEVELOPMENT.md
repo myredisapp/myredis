@@ -3,7 +3,8 @@
 > 本文档用于跟踪「麦地缓存」开发进度、已决策事项、已知缺口与待办事项。随开发持续更新。
 > 最近更新：2026-09-21，状态：**v0.0.12 已发布；根目录 `README.md` 已补齐**（含官网 myredis.cn 与界面截图，
 > 截图素材在 `docs/screenshots/`，由 `frontend/index.html` + mock `__TAURI_INTERNALS__.invoke`  harness 渲染截取）。
-> §2.1 的功能缺口已清空，§2.3 的 README 缺项已完成，剩余为代码质量与工程流程债务。
+> §2.1 的功能缺口已清空，§2.3 的 README 缺项已完成，§2.2 的「超时配置接线」（P1）已完成，
+> 剩余为代码质量与工程流程债务。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -45,6 +46,11 @@
 - [x] `test_connection` 不写连接池，仅建立连接后 `PING` 再释放（前端「先测试，再保存」）
 - [x] 只读连接：连接时发送 `READONLY`，写命令前经 `Pool::ensure_writable` 拦截
 - [x] 自定义 Key 分隔符（默认 `:`），用于前端按分隔符折叠成目录树
+- [x] **建连与命令都有超时兜底**（`config.rs` 的 `ConnectionTimeout`：**5 秒建连 / 10 秒命令**，
+      由 `AppConfig` 注入 `Pool`）：连接池句柄 `PooledConn::query` 是命令执行的**唯一出口**，
+      命令层与集群节点直连都走它 —— 服务器无响应或 `BLPOP` 这类阻塞命令会在超时后返回
+      「操作超时: 命令 10 秒内未返回（服务器繁忙、网络异常，或命令本身会阻塞）」，
+      不再让界面永久等待（§6 第 3 条）。细节见 §2.2 已完成项
 
 ### 1.2 集群支持（✅ 完成）
 
@@ -87,7 +93,8 @@
 - [x] **终端真实命令转发**（`commands/terminal.rs`）：`execute_command` 解析整行命令
       （支持单双引号与 `\` 转义）后直接转发，`redis::Value` 渲染成 redis-cli 风格文本
       （OK / (nil) / (integer) N / (empty array)，多行数组逐行输出）；
-      只读连接按 `WRITE_COMMANDS` 名单拦截写命令，命令执行包 10s `tokio::time::timeout`
+      只读连接按 `WRITE_COMMANDS` 名单拦截写命令，命令执行走连接池的 10 秒命令超时（§1.1），
+      超时文案后另附一句阻塞类命令的说明
 - [x] **Key 导入 / 导出**（`commands/import_export.rs`）：导出为 JSON 文档
       （string/hash/list/set/zset 五种类型 + TTL，逐 key 独立命令读取，集群模式不触发跨 slot 错误；
       `keys` 传 `null` 时由后端全量枚举当前 keyspace —— 前端分页浏览时只持有已加载的那部分 key，
@@ -129,8 +136,12 @@
 ### 1.6 工程与发布（✅ 完成）
 
 - [x] 单元测试：URL 构造（单机 / 密码 / 用户名 / ACL / 特殊字符 / 集群去 db）、`SET` 命令组装、
-      `SET` TTL 校验、`CLUSTER NODES` 解析、`INFO` 解析、集群 INFO 提取与合并、磁盘挂载点匹配
-- [x] 集成测试：连真实 Redis 验证 `SET` + TTL（均标 `#[ignore]`，见 §7）
+      `SET` TTL 校验、`CLUSTER NODES` 解析、`INFO` 解析、集群 INFO 提取与合并、磁盘挂载点匹配、
+      **超时兜底**（`connection_pool.rs` 里用标准库线程起两个假服务器：一个只接受连接不回包、
+      一个回包但指定命令不回，断言建连与命令都在超时后立即返回 —— 不依赖 Redis，也不给测试引入
+      tokio 的 `net` feature）
+- [x] 集成测试：连真实 Redis 验证 `SET` + TTL、阻塞命令超时（`BLPOP` 被 500ms 命令超时打断，
+      且被放弃的响应到达后同一连接仍可用），均标 `#[ignore]`，见 §7
 - [x] 零编译警告目标 + `cargo clippy` 规范（见 §6）
 - [x] CI（`.github/workflows/release.yml`）：打 `v*` tag 触发，前置 `check-deploy-env` 快速校验部署凭据，
       三平台矩阵出包（macOS universal / Linux x64 / Windows x64），规范化产物名，发 Release，推送 `web/` 静态页
@@ -178,12 +189,23 @@
 
 ### 2.2 代码质量与健壮性（P1–P2）
 
-- [ ] ⬜ **P1｜超时配置接线**（风险最高、改动最小，建议先做）
-  - 现状：`src-tauri/src/config.rs` 整个文件挂着 `#![allow(dead_code)]`，`ConnectionTimeout`
-    目前只被 `Pool::test()` 用到；`connect()` 与全部命令层（`list_keys` / `set_key` / `del_key` /
-    `get_string` / `get_server_info`）都是裸的 `query_async(...).await`。
-  - 后果：命令没有 `tokio::time::timeout` 保护，遇到卡住的 Redis 或 `BLPOP` 类阻塞命令，UI 会永久等待。
-  - 这直接违反 §6 第 3 条强制规范。接线后请移除 `config.rs` 的 `#![allow(dead_code)]`。
+- [x] ✅ **P1｜超时配置接线**（2026-09-21 完成）
+  - 实现：`config.rs` 的 `ConnectionTimeout`（5 秒建连 / 10 秒命令）由 `AppConfig` 注入 `Pool`，
+    移除了该文件的 `#![allow(dead_code)]` 与两个没人用的 millis 辅助函数。
+  - **命令侧**：新增 `PooledConn`（连接句柄 + 超时配置），`PooledConn::query` 是命令执行的唯一出口，
+    内部用 `tokio::time::timeout(command, cmd.query_async(..))` 包住并返回 `AppError::Timeout`；
+    命令层全部从 `cmd.query_async(&mut con)` 切到 `con.query(&cmd)`（含集群逐节点 `SCAN` 的节点直连句柄）。
+  - **建连侧**：`connect()` / `test()` 的建连过程（TCP + 认证握手 + 只读 `READONLY`）共用一个
+    `connect` 预算，超时返回同一文案；单机 `ConnectionManager` 的重试次数从 redis-rs 默认的 6 次收到
+    **2 次** —— 默认退避累计可达 12 秒，会把「端口不通」这类快速失败挤成超时、丢掉 Connection refused 这个原因。
+  - **文案统一**：`config.rs` 出文案（`connect_timeout_error` / `command_timeout_error`），
+    `error.rs` 新增 `command_error_text(&AppError)` 做「Redis 报错转写 MOVED 建议 / 其余直接取文案」的分流；
+    终端在超时文案后补一句阻塞类命令的说明。
+  - **行为边界**：超时只中止**这一次等待**，不主动重连。被放弃的命令之后若返回响应，会由 redis-rs 驱动
+    按序取走并丢弃，连接保持可用（`cargo test -- --ignored` 里的 BLPOP 用例验证了这点）；
+    服务器彻底无响应时该连接后续命令同样超时，如实反映连接已不可用。
+  - 相关次级影响：`Pool::manager()` 一并删除（集群改造后已无调用方，`conn()` 也换了返回类型）；
+    `Pool::test` 从关联函数变成方法（用池的超时配置）；`test_connection` 命令因此多了一个注入的 `State<Pool>`。
 
 - [ ] ⬜ **P1｜`rediss://` 缺乏友好提示**
   - 现状：`AppError::TlsNotSupported` 已定义但**无任何代码路径构造它**；`to_connection_url()` 无条件拼 `redis://`，
@@ -205,15 +227,22 @@
     文件小的时候无感，属潜在卡顿点。
 
 - [ ] ⬜ **P2｜清理死代码**
-  - `Pool::manager()`、`Pool::ensure_conn()`（`connection_pool.rs`）已无调用方
-    —— 集群改造后命令层统一切到了 `pool.conn()`。
+  - `Pool::ensure_conn()`（`connection_pool.rs`）已无调用方。
   - `AppError::NotConnected`（`error.rs`）同样无使用者。
+  - （`Pool::manager()` 已在 2026-09-21 的「超时配置接线」里随 `conn()` 改造一并删除。）
 
 ### 2.3 文档与工程流程（P2）
 
 - [ ] ⬜ **CI 缺少质量门禁**：`release.yml` 只做「构建 → 改名 → 发 Release → 推网站」，
       全流程没有 `cargo test` / `cargo clippy -- -D warnings` / `cargo fmt --check`。
       §6 把这些列为提交前强制项，目前完全靠人工自觉，标了 `#[ignore]` 的集成测试也永远不会被执行。
+      - 接入时要留意的三点（2026-09-21 核对）：
+        1. `cargo test` 不应依赖真实 Redis：`tests/ping_integration.rs` 里两条依赖 Redis 的用例
+           漏了 `#[ignore]`（文件头却写着「默认通过 #[ignore] 忽略」），已补上，现在没有 Redis 也能全绿；
+        2. 集群用例共享同一 keyspace，**并行跑会互相干扰**（`cluster_list_keys_*` 会看到别的用例
+           写入/删除的探针 key，出现「结果不一致」的假失败），跑集群用例请加 `--test-threads=1`；
+        3. `--ignored` 组需要一个本地 Redis（6379）与一个本地集群（7001 起，可用 `MYREDIS_CLUSTER_PORT` 改），
+           CI 里要先起好再跑。
 - [x] ✅ **根目录缺 `README.md`**（2026-09-21 完成）
   - 实现：根目录 [`README.md`](README.md)，含官网 **myredis.cn** 入口与界面截图
     （官网首页 + 深秋/初秋两款主题、Key 树 / Hash / ZSet 编辑，素材在 `docs/screenshots/`）。
@@ -250,7 +279,7 @@
 | # | 事项 | 状态 | 备注 |
 |---|------|:----:|------|
 | 1 | 密码明文存 `connections.json` | 已知风险 | 任何有本机读权限的进程都能取到；后续可改系统密钥链（macOS Keychain / Windows Credential Manager / Secret Service） |
-| 2 | 超时值是否暴露给用户配置 | 待定 | 现为硬编码默认值（5s 连接 / 10s 命令），且尚未接线，见 §2.2 |
+| 2 | 超时值是否暴露给用户配置 | 待定 | 现为硬编码默认值（5s 连接 / 10s 命令）；2026-09-21 已接线生效（§2.2），改默认值改 `config.rs`。**注意 10 秒是单条命令的预算**：大 key 的整表读取（`LRANGE 0 -1` / `HGETALL` / `SMEMBERS`）超过 10 秒会被判超时 —— 这正是「要不要暴露给用户配置」要解决的问题 |
 | 3 | 兼容 Redis 6.0 以下 | 需持续注意 | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级 |
 | 4 | 前端 `frontend/index.html` 单文件已约 4000 行 | 观察中 | 复杂度继续上升时再评估拆分为多文件 + esbuild，与桌面客户端解耦，不影响后端 |
 | 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件 |
@@ -262,6 +291,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-21 | — | §2.2 的 **P1「超时配置接线」完成**：`ConnectionTimeout`（5s 建连 / 10s 命令）注入 `Pool`，新增 `PooledConn` 句柄 —— `PooledConn::query` 成为命令执行唯一出口（`tokio::time::timeout` + `AppError::Timeout`），命令层 ~80 处 `query_async(&mut con)` 全部切到 `con.query(&cmd)`（含集群节点直连与 `SCAN` 辅助函数），建连/握手/`READONLY` 共用一个连接预算，`error.rs` 新增 `command_error_text` 统一「Redis 报错转写 / 客户端错误透传」分流；顺带删除 `Pool::manager()`、`Pool::test` 改为方法、`config.rs` 去掉 `#![allow(dead_code)]`；新增 2 条不依赖 Redis 的超时单测 + 1 条 BLPOP 集成测试；补上 `tests/ping_integration.rs` 里两条漏标的 `#[ignore]`（此前没起 Redis 时 `cargo test` 会失败），并记录集群用例需 `--test-threads=1`；`web/docs/index.html` 的「功能现状」与连接超时 FAQ 已同步（§6 第 7 条） |
 | 2026-09-21 | — | 补齐根目录 [`README.md`](README.md)（§2.3 勾掉）：官网 **myredis.cn** 入口 + 界面截图（`docs/screenshots/`，headless Chrome + mock invoke harness 渲染截取）；§2 其余待办逐项核对仍成立（超时未接线、`rediss://` 提示未补、N+1 未收拢、阻塞 IO 未包 `spawn_blocking`、死代码未清理、CI 无质量门禁、陈旧分支未删） |
 | 2026-09-16 | — | 菜单栏去掉 **Edit**（§1.5）：`menu.rs` 不再单列 Edit 子菜单，Undo / Redo / Cut / Copy / Paste / Select All 六个标准编辑项移入应用菜单，保证 ⌘Z / ⌘X / ⌘C / ⌘V / ⌘A 仍能派发到响应链 |
 | 2026-09-16 | — | 新增 **macOS 菜单栏**（§1.5）：`src-tauri/src/menu.rs` 自建菜单，顺序 Window / Settings / Help（File、View 去掉，Edit 保留以支撑编辑快捷键）；Settings 下挂主题子菜单与「检查更新」，菜单项走 `emit` + 前端监听（`plugin:event|listen`）复用标题栏逻辑，主题切换与标题栏共享同一份 `localStorage` 记录 |
@@ -284,7 +314,8 @@
 1. **注释**：核心公有结构 / 方法必须有 `///` 文档注释；逻辑处写行内注释说明「为什么」。
 2. **错误处理**：禁止 `unwrap()` / `panic!` 直接抛出（除配置加载等一次性场景可 `expect`）。
 3. **超时**：所有网络 IO 包 `tokio::time::timeout`，防止卡死。
-   > ⚠️ 当前命令层尚未满足此条，见 §2.2「超时配置接线」。
+   > 命令的统一出口是 `PooledConn::query`（超时在那里包一次），建连由 `Pool::connect` / `test` 包。
+   > 新命令**必须**用 `con.query(&cmd)` 执行，不要绕到 `redis::Cmd::query_async` —— 那是无超时保护的路径。
 4. **提交**：遵循 Conventional Commits。
 5. **检查**：提交前运行 `cargo clippy` 和 `cargo fmt --check`，保证无警告。
    > ⚠️ CI 未强制这两步，见 §2.3，需靠人工执行。
@@ -301,17 +332,26 @@ cd src-tauri
 # 运行（开发）
 cargo tauri dev
 
-# 单元测试（不依赖 Redis）
+# 单元测试（不依赖 Redis，也不需要起集群）
 cargo test
 
 # 集成测试（需先启动 Redis，如 docker run -p 6379:6379 redis）
 # 所有带 #[ignore] 的 Redis 依赖测试：
 cargo test -- --ignored
 
+# 集群集成测试（需先起一个本地集群，默认连 127.0.0.1:7001）
+# ⚠️ 必须 --test-threads=1：集群用例共享 keyspace，并行跑会互相干扰出假失败
+cargo test --test cluster_integration -- --ignored --test-threads=1
+
 # 代码检查
-cargo clippy -- -D warnings
+cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
+
+超时相关的用例分布：`connection_pool.rs` 里两条**不需要 Redis**（用本地假服务器模拟
+「只接受连接不回包」与「某条命令不回包」，断言 300ms 内返回超时错误），
+`blocking_command_is_interrupted_by_command_timeout` 需要真实 Redis（用 `BLPOP` 验证
+阻塞命令会被打断、且被放弃的响应到达后连接仍可用）。
 
 前端无构建步骤，改 `frontend/index.html` 后由 WebView 直接加载（`cargo tauri dev` 会热重载）。
 

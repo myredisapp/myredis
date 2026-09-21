@@ -8,7 +8,7 @@ use serde::Serialize;
 use tauri::State;
 
 use crate::connection_pool::Pool;
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
 use crate::models::ConnType;
 
 /// 磁盘空间使用情况。
@@ -185,21 +185,12 @@ pub async fn fetch_server_info(pool: &Pool, conn_id: &str) -> AppResult<ServerIn
     let mut con = pool.conn(conn_id)?;
 
     // INFO 在单机返回纯文本，在集群返回各节点信息的嵌套结构，统一按 Value 接收
-    let info_val: redis::Value = redis::cmd("INFO")
-        .query_async(&mut con)
-        .await
-        .map_err(AppError::from)?;
-
-    let db_size: u64 = redis::cmd("DBSIZE")
-        .query_async(&mut con)
-        .await
-        .map_err(AppError::from)?;
+    let info_val: redis::Value = con.query(&redis::cmd("INFO")).await?;
+    let db_size: u64 = con.query(&redis::cmd("DBSIZE")).await?;
 
     // 查询 Redis 数据文件所在目录（持久化目录），并尝试获取其磁盘使用情况
-    let dir = redis::cmd("CONFIG")
-        .arg("GET")
-        .arg("dir")
-        .query_async::<_, Vec<String>>(&mut con)
+    let dir = con
+        .query::<Vec<String>>(redis::cmd("CONFIG").arg("GET").arg("dir"))
         .await
         .ok()
         .and_then(|mut v| {

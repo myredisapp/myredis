@@ -5,8 +5,9 @@
 
 use serde::Serialize;
 
-use crate::connection_pool::{Conn, Pool};
-use crate::error::command_error_message;
+use crate::config::ConnectionTimeout;
+use crate::connection_pool::{Conn, Pool, PooledConn};
+use crate::error::command_error_text;
 use crate::models::{ConnType, Connection};
 
 /// 列表中的单个 key。
@@ -103,17 +104,12 @@ pub async fn list_keys_inner(
 
     let mut keys: Vec<KeyEntry> = Vec::with_capacity(key_names.len());
     for key in &key_names {
-        let ktype: String = redis::cmd("TYPE")
-            .arg(key)
-            .query_async(&mut con)
+        let ktype: String = con
+            .query(redis::cmd("TYPE").arg(key))
             .await
             .unwrap_or_else(|_| "none".to_string());
 
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(key)
-            .query_async(&mut con)
-            .await
-            .unwrap_or(-1);
+        let ttl: i64 = con.query(redis::cmd("TTL").arg(key)).await.unwrap_or(-1);
 
         keys.push(KeyEntry {
             key: key.clone(),
@@ -164,8 +160,8 @@ fn to_match_pattern(search: &str) -> Option<String> {
 /// 执行一次 `SCAN`，返回（下一个游标，本批 key）。
 ///
 /// `cursor` 为 `0` 且返回游标也为 `0` 时表示扫描结束。
-async fn scan_once<C: redis::aio::ConnectionLike>(
-    con: &mut C,
+async fn scan_once(
+    con: &mut PooledConn,
     cursor: u64,
     count: u64,
     pattern: Option<&str>,
@@ -175,17 +171,17 @@ async fn scan_once<C: redis::aio::ConnectionLike>(
     if let Some(p) = pattern {
         cmd.arg("MATCH").arg(p);
     }
-    cmd.query_async(con)
+    con.query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, None))
+        .map_err(|e| command_error_text(&e, None))
 }
 
 /// 单机分页：从 `cursor` 开始扫描，累积到至少 `page_size` 个 key 或游标归零为止。
 ///
 /// 不做「凑满 `page_size` 就丢弃多余 key」的裁剪 —— `SCAN` 的一批 key 无法退还，
 /// 丢掉的 key 就再也不会出现在后续分页里。因此单页大小是「至少 `page_size`」。
-async fn scan_page_single<C: redis::aio::ConnectionLike>(
-    con: &mut C,
+async fn scan_page_single(
+    con: &mut PooledConn,
     cursor: &str,
     page_size: u64,
     pattern: Option<&str>,
@@ -245,10 +241,14 @@ fn format_cluster_cursor(addr: &str, inner: u64) -> String {
 }
 
 /// 按原连接配置（含认证信息）连接集群中的某个主节点。
+///
+/// 返回带超时配置的直连句柄：节点连接同样受 [`ConnectionTimeout::connect`] 约束，
+/// 命令超时沿用调用方句柄的配置（`timeout`）。
 async fn connect_cluster_node(
     conn_cfg: &Connection,
     addr: &str,
-) -> Result<redis::aio::MultiplexedConnection, String> {
+    timeout: ConnectionTimeout,
+) -> Result<PooledConn, String> {
     // 调用方已保证 `host:port` 格式
     let (host, port) = addr.rsplit_once(':').expect("主节点地址格式异常");
     let port: u16 = port
@@ -260,11 +260,12 @@ async fn connect_cluster_node(
         ..conn_cfg.clone()
     };
     let client = redis::Client::open(node_cfg.to_connection_url())
-        .map_err(|e: redis::RedisError| format!("连接集群节点 {addr} 失败: {e}"))?;
-    client
-        .get_multiplexed_async_connection()
+        .map_err(|e| format!("连接集群节点 {addr} 失败: {e}"))?;
+    let conn = tokio::time::timeout(timeout.connect, client.get_multiplexed_async_connection())
         .await
-        .map_err(|e: redis::RedisError| format!("连接集群节点 {addr} 失败: {e}"))
+        .map_err(|_| timeout.connect_timeout_error().to_string())?
+        .map_err(|e| format!("连接集群节点 {addr} 失败: {e}"))?;
+    Ok(PooledConn::new(Conn::Node(conn), timeout))
 }
 
 /// 集群分页：从游标继续扫描，一页可以跨多个主节点。
@@ -272,18 +273,17 @@ async fn connect_cluster_node(
 /// 一个节点扫完后自动跳到下一个节点；所有节点都扫完时返回 `"0"`。
 async fn scan_page_cluster(
     conn_cfg: &Connection,
-    con: &mut Conn,
+    con: &mut PooledConn,
     cursor: &str,
     page_size: u64,
     pattern: Option<&str>,
 ) -> Result<(Vec<String>, String), String> {
     let cursor = parse_cluster_cursor(cursor)?;
 
-    let nodes: String = redis::cmd("CLUSTER")
-        .arg("NODES")
-        .query_async(&mut *con)
+    let nodes: String = con
+        .query(redis::cmd("CLUSTER").arg("NODES"))
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let addrs = parse_master_addrs(&nodes, &conn_cfg.host);
     if addrs.is_empty() {
@@ -305,7 +305,7 @@ async fn scan_page_cluster(
     let mut rounds = 0usize;
 
     'nodes: while node_idx < addrs.len() {
-        let mut node_con = connect_cluster_node(conn_cfg, &addrs[node_idx]).await?;
+        let mut node_con = connect_cluster_node(conn_cfg, &addrs[node_idx], con.timeout()).await?;
         loop {
             if rounds >= MAX_SCAN_ROUNDS || keys.len() as u64 >= page_size {
                 break 'nodes;
@@ -331,7 +331,7 @@ async fn scan_page_cluster(
 }
 
 /// 在单个连接上完整执行一轮 `SCAN`，返回所有 key 名（导出等需要全量的场景使用）。
-async fn scan_key_names<C: redis::aio::ConnectionLike>(con: &mut C) -> Result<Vec<String>, String> {
+async fn scan_key_names(con: &mut PooledConn) -> Result<Vec<String>, String> {
     let mut cursor = 0u64;
     let mut keys: Vec<String> = Vec::new();
     loop {
@@ -376,13 +376,12 @@ fn parse_master_addrs(cluster_nodes: &str, fallback_host: &str) -> Vec<String> {
 /// 集群模式下枚举所有主节点并逐节点 `SCAN`，合并去重后返回全部 key 名。
 async fn scan_cluster_key_names(
     conn_cfg: &Connection,
-    con: &mut Conn,
+    con: &mut PooledConn,
 ) -> Result<Vec<String>, String> {
-    let nodes: String = redis::cmd("CLUSTER")
-        .arg("NODES")
-        .query_async(&mut *con)
+    let nodes: String = con
+        .query(redis::cmd("CLUSTER").arg("NODES"))
         .await
-        .map_err(|e: redis::RedisError| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
     let addrs = parse_master_addrs(&nodes, &conn_cfg.host);
     if addrs.is_empty() {
@@ -391,7 +390,7 @@ async fn scan_cluster_key_names(
 
     let mut keys: Vec<String> = Vec::new();
     for addr in addrs {
-        let mut c = connect_cluster_node(conn_cfg, &addr).await?;
+        let mut c = connect_cluster_node(conn_cfg, &addr, con.timeout()).await?;
         keys.extend(scan_key_names(&mut c).await?);
     }
 
@@ -406,7 +405,7 @@ async fn scan_cluster_key_names(
 /// 避免一次性把整个 keyspace 拉进内存。集群模式下逐主节点扫描后合并去重。
 pub(crate) async fn collect_all_key_names(
     conn_cfg: &Connection,
-    con: &mut Conn,
+    con: &mut PooledConn,
 ) -> Result<Vec<String>, String> {
     if conn_cfg.conn_type == ConnType::Cluster {
         scan_cluster_key_names(conn_cfg, con).await
@@ -458,10 +457,10 @@ async fn set_key_inner(
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
 
     let cmd = build_set_cmd(&key, &value, ttl);
-    let ok: String = cmd
-        .query_async(&mut con)
+    let ok: String = con
+        .query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
 
     Ok(ok)
 }
@@ -626,9 +625,10 @@ mod tests {
         let result = set_key_inner(&pool, conn_id.clone(), key.clone(), value, -1).await;
         assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
 
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -646,9 +646,10 @@ mod tests {
         let result = set_key_inner(&pool, conn_id.clone(), key.clone(), value, 10).await;
         assert!(result.is_ok(), "SET 应当成功: {:?}", result.err());
 
-        let ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -670,9 +671,10 @@ mod tests {
             .await
             .map_err(|e| format!("首次 SET 失败: {e}"))?;
 
-        let initial_ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let initial_ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert_eq!(initial_ttl, -1, "未设置 TTL 的 key 应当永不过期");
@@ -681,9 +683,10 @@ mod tests {
             .await
             .map_err(|e| format!("更新 TTL 的 SET 失败: {e}"))?;
 
-        let updated_ttl: i64 = redis::cmd("TTL")
-            .arg(&key)
-            .query_async(&mut pool.conn(&conn_id).unwrap())
+        let updated_ttl: i64 = pool
+            .conn(&conn_id)
+            .unwrap()
+            .query(redis::cmd("TTL").arg(&key))
             .await
             .map_err(|e| e.to_string())?;
         assert!(
@@ -753,10 +756,7 @@ mod tests {
         {
             let mut con = pool.conn(&conn_id).unwrap();
             for i in 0..total {
-                redis::cmd("SET")
-                    .arg(format!("{prefix}:{i:04}"))
-                    .arg("v")
-                    .query_async::<_, ()>(&mut con)
+                con.query::<()>(redis::cmd("SET").arg(format!("{prefix}:{i:04}")).arg("v"))
                     .await
                     .map_err(|e| e.to_string())?;
             }
@@ -788,9 +788,7 @@ mod tests {
         );
 
         let mut con = pool.conn(&conn_id).unwrap();
-        redis::cmd("DEL")
-            .arg(&expected)
-            .query_async::<_, ()>(&mut con)
+        con.query::<()>(redis::cmd("DEL").arg(&expected))
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
@@ -822,10 +820,7 @@ mod tests {
         {
             let mut con = pool.conn(&conn_id).unwrap();
             for key in [&upper, &lower, &star, &star_lookalike] {
-                redis::cmd("SET")
-                    .arg(key)
-                    .arg("v")
-                    .query_async::<_, ()>(&mut con)
+                con.query::<()>(redis::cmd("SET").arg(key).arg("v"))
                     .await
                     .map_err(|e| e.to_string())?;
             }
@@ -848,9 +843,7 @@ mod tests {
 
         let mut con = pool.conn(&conn_id).unwrap();
         for key in [&upper, &lower, &star, &star_lookalike] {
-            redis::cmd("DEL")
-                .arg(key)
-                .query_async::<_, ()>(&mut con)
+            con.query::<()>(redis::cmd("DEL").arg(key))
                 .await
                 .map_err(|e| e.to_string())?;
         }
@@ -883,10 +876,10 @@ pub async fn del_key(
     for k in &keys {
         cmd.arg(k);
     }
-    let n: i64 = cmd
-        .query_async(&mut con)
+    let n: i64 = con
+        .query(&cmd)
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(n)
 }
 
@@ -899,10 +892,9 @@ pub async fn get_string(
 ) -> Result<Option<String>, String> {
     let conn_cfg = pool.get(&conn_id).map_err(|e| e.to_string())?;
     let mut con = pool.conn(&conn_id).map_err(|e| e.to_string())?;
-    let val: Option<String> = redis::cmd("GET")
-        .arg(&key)
-        .query_async(&mut con)
+    let val: Option<String> = con
+        .query(redis::cmd("GET").arg(&key))
         .await
-        .map_err(|e: redis::RedisError| command_error_message(&e, Some(&conn_cfg)))?;
+        .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(val)
 }

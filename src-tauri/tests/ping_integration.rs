@@ -11,6 +11,7 @@ use maidi_cache_lib::connection_pool::Pool;
 use maidi_cache_lib::models::{ConnType, Connection};
 
 #[tokio::test]
+#[ignore]
 async fn redis_ping_returns_pong() {
     let pool = Pool::new();
     let conn = Connection {
@@ -68,6 +69,7 @@ fn connection_json_deserializes_from_frontend_payload() {
 }
 
 #[test]
+#[ignore]
 fn get_server_info_parses_real_redis() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let (raw, db_size) = rt.block_on(async {

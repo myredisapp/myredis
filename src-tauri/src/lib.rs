@@ -53,12 +53,10 @@ pub fn run() {
                 .app_config_dir()
                 .unwrap_or_else(|_| std::env::temp_dir());
             app.manage(AppState::new(config_dir));
-            // 连接池作为独立的状态，便于命令按需借用
-            app.manage(Pool::new());
+            // 连接池作为独立的状态，便于命令按需借用；超时取自全局配置（§6 第 3 条）
+            app.manage(Pool::with_timeout(AppConfig::default().conn_timeout));
             // 更新状态：后台下载的进度与已下好的安装包都放这里，供三个更新命令共享
             app.manage(commands::update::UpdateState::default());
-            // 初始化配置（目前仅保底引入，避免 dead_code 告警，后续用于默认值/迁移）
-            let _ = AppConfig::default();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
