@@ -80,13 +80,9 @@ fn get_server_info_parses_real_redis() {
     let (raw, db_size) = rt.block_on(async {
         let client = redis::Client::open("redis://127.0.0.1:6379").unwrap();
         let mut con = client.get_connection_manager().await.unwrap();
-        let info: String = redis::cmd("INFO")
-            .arg("server")
-            .arg("memory")
-            .arg("clients")
-            .query_async(&mut con)
-            .await
-            .unwrap();
+        // 不带 section 参数的裸 INFO（与 server.rs 的生产用法一致）：单 section 语法
+        // 是 Redis 7.0 才有的，6.x（如 ubuntu-22.04 apt 源）会回 syntax error
+        let info: String = redis::cmd("INFO").query_async(&mut con).await.unwrap();
         let db_size: u64 = redis::cmd("DBSIZE").query_async(&mut con).await.unwrap();
         (info, db_size)
     });
