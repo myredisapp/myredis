@@ -75,7 +75,15 @@
 
 ## 本地开发
 
-要求：Rust toolchain + Tauri 2 环境（见 [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)）。前端为单文件原生 HTML/JS，无构建步骤。
+要求：Rust toolchain + Tauri 2 环境（见 [Tauri 前置依赖](https://v2.tauri.app/start/prerequisites/)）。
+前端是原生 HTML/JS（`frontend/`，按功能拆成 `js/` 下的 ES 模块），**无构建步骤**：不用打包器、
+不装 npm 依赖，改完直接刷新。
+
+前端改动可以跑一遍冒烟回归（headless Chrome 驱动真实点击路径，17 个场景；只需 Node 22+ 与已装的 Chrome）：
+
+```bash
+node scripts/frontend-smoke.mjs
+```
 
 ```bash
 cd src-tauri
@@ -104,4 +112,4 @@ cargo fmt --check
 
 ## 技术栈
 
-Tauri 2 · Rust 2021 · [`redis` 0.25](https://crates.io/crates/redis)（tokio-comp / cluster-async）· tokio · 单文件原生 JS 前端
+Tauri 2 · Rust 2021 · [`redis` 0.25](https://crates.io/crates/redis)（tokio-comp / cluster-async）· tokio · 原生 JS 前端（ES 模块，无构建步骤）
