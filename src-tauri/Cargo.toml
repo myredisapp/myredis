@@ -24,7 +24,10 @@ thiserror = "1"
 percent-encoding = "2"
 # ===== Redis =====
 redis = { version = "0.25", features = ["tokio-comp", "connection-manager", "cluster", "cluster-async", "tokio-rustls-comp", "tls-rustls-insecure"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+# sync：MONITOR 会话的停止信号（tokio::sync::Notify）
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
+# MONITOR 的流式读取：redis-rs 的 on_message 返回 impl Stream，取下一行要 StreamExt
+futures-util = "0.3"
 # ===== 系统密钥链（密码不再明文落盘，见 DEVELOPMENT.md §2.4） =====
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent", "crypto-rust"] }
 # ===== 系统信息 =====

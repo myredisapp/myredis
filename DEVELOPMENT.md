@@ -24,7 +24,7 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-| 当前 HEAD | 开发中 | 核心链路完整；§2.2 已清空，§2 剩余为工程流程债务（§2.3） |
+| 当前 HEAD | 开发中 | 核心链路完整；**§2 待办已全部清空**（含 §2.4 的四个 P1 与五个 P2）；剩余为工程改进（前端 JS 模块化，见 §4 #4） |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
@@ -32,7 +32,7 @@
 > 最新 tag 为 `v0.0.12`。
 
 技术栈：Tauri 2 + Rust 2021 + `redis` 0.25（`tokio-comp` / `connection-manager` / `cluster` / `cluster-async`）
-+ tokio + sysinfo 0.39 + 单文件原生 JS 前端（`frontend/index.html`，无构建步骤，约 4000 行）。
++ tokio + sysinfo 0.39 + 原生 JS 前端（`frontend/index.html` 3389 行 + `frontend/styles.css` 2051 行，**无构建步骤**）。
 
 ---
 
@@ -87,6 +87,18 @@
 - [x] `set_key`：`SET key value [EX ttl]`，TTL 仅接受 `-1`（永不过期）或正整数，其余报参数错误
 - [x] `del_key`：支持批量 `DEL`，返回实际删除数量
 - [x] `get_string`：读取 String 值
+- [x] **重命名 / 复制 Key**（2026-09-22，§2.4）
+      - `rename_key(key, new_key, overwrite)`：默认走 `RENAMENX`（目标已存在则不覆盖并给出
+        「勾选覆盖后重试」的提示），勾选覆盖才走 `RENAME`；目标名去首尾空白后不得为空，
+        改成同名视为空操作；TTL 随 key 一起移动
+      - `copy_key(key, new_key, overwrite)`：`COPY [REPLACE]`（**Redis 6.2+**），同库复制，
+        源 key 不动、TTL 一起复制；返回 0 时用一次 pipeline 查 `EXISTS src/dst` 区分
+        「源不存在」与「目标已存在」，而不是丢一句「复制失败」；旧版本服务器返回的
+        `unknown command `copy`` 会转写成「需要 6.2+」的提示（本项目支持 Redis 2.8+，必须说清降级做法）
+      - 两个命令都先过 `ensure_writable`；集群跨 slot 的 `CROSSSLOT` 由 `error.rs` 统一转写成
+        「同 hash tag 或逐条执行」的可操作提示（新增 `ErrorKind::CrossSlot` 分支）
+      - 测试：命令组装 / 目标名校验 / 三类错误转写的单测 + `tests/key_ops_integration.rs`
+        两条集成用例（按服务器版本分别断言「复制成功」或「给出 6.2 提示」，6.0.16 与 8.10 双版本实测）
 - [x] 前端 Key 树、关键字搜索、文件夹折叠、TTL 输入与保存、新增 String Key、删除 Key（带确认）
       - 列表按页加载：滚到底部自动预取下一页，状态条另有「加载更多」入口
         （文件夹折叠起来时列表撑不满视口、滚不动，需要有显式入口）
@@ -137,6 +149,10 @@
       增 / 删 Key 只改本地列表，不再整表重扫
 - [x] **连接配置导入 / 导出**：侧栏连接区两个入口，导出弹确认框（可选是否包含明文密码），
       导入前确认覆盖策略，报告新增/覆盖、跳过、失败数量
+- [x] **底部面板双标签：终端 / 实时监控**（2026-09-22，§2.4）：面板标题栏可切换，
+      监控页有开始/停止、状态、过滤框、自动滚动与清空；切换连接会停掉上一个连接的监控
+- [x] **样式外置**（2026-09-22）：`frontend/styles.css`（2051 行）从 `index.html` 的 `<style>`
+      原样搬出，`index.html` 5429 → 3389 行（拆分评估见 `docs/frontend-split-evaluation.md`）
 - [x] **macOS 菜单栏**（`src-tauri/src/menu.rs`，仅 macOS 生效）：Window / Settings / Help，
       Settings 下挂「Theme」子菜单（五款主题）与「Check for Updates…」，点击后由 Rust `emit` 事件、
       前端复用标题栏同一套逻辑（不会出现两套主题状态）；菜单栏不再单列 Edit —— macOS 的编辑快捷键靠
@@ -179,7 +195,9 @@
 
 > 状态标记：✅ 已完成 / 🚧 进行中 / ⬜ 未开始 / ❌ 不做（见 §3）
 >
-> **2026-09-21：全部待办已完成清空** —— §2.1 功能缺口、§2.2 代码质量、§2.3 文档与工程流程均无遗留项。
+> **2026-09-21：§2.1 / §2.2 / §2.3 全部清空** —— 功能缺口、代码质量、文档与工程流程均无遗留项。
+> **2026-09-22：§2.4 全部清空** —— 四个 P1（TLS / Stream / 超时可配 / 密码密钥链）与五个 P2
+> （Monitor / Key 重命名复制 / Redis 版本矩阵 / 前端拆分评估 / macOS 公证接线）均已落地。
 > 新工作请先进 §4「待确认 / 风险」或本节新建条目。
 
 ### 2.1 功能缺口（P1，用户可见）
@@ -363,17 +381,61 @@
   - 降级：密钥链不可用（CI / Linux headless）时该条密码保留在 JSON（旧行为），功能不受影响；
     测试按环境探测密钥链可用性分别断言「不落盘」/「降级落盘」两条路径。
 
-#### P2（体验与工程，可穿插做）
+#### P2（体验与工程）—— **2026-09-22 全部完成**
 
-- [ ] ⬜ **Monitor 实时命令监控** —— §3 标注「保留为后续迭代」。`MONITOR` 输出是持续流，
-  与现有「一次命令一次响应」的 `PooledConn::query` 模型不同，需独立的流式出口与前端滚动面板。
-- [ ] ⬜ **macOS 代码签名 / 公证** —— §4 #6。首次安装被 Gatekeeper 拦（需右键打开），
-  需配 `APPLE_*` 凭据并接公证步骤（不影响自动更新：替换 `.app` 由 Tauri 自己完成、只认 minisign）。
-- [ ] ⬜ **前端单文件拆分评估** —— `frontend/index.html` 已 4563 行（§4 #4）。
-  复杂度继续上升时拆分为多文件 + esbuild 轻构建，后端零改动。
-- [ ] ⬜ **Redis 6.x 兼容回归** —— §4 #3。CI 门禁已可跑真实 Redis 6.x（`start-test-redis.sh`），
-  把集成测试矩阵加一个 6.x 版本，防 `CLIENT SETINFO` 之类新参数的兼容性回归。
-- [ ] ⬜ **Key 重命名 / 复制** —— 详情区加 `RENAME` / `COPY`（Redis 6.2+，需版本探测降级）。
+- [x] ✅ **Monitor 实时命令监控**（2026-09-22 完成，§3 决策已改为 ✅）
+  - 新增 `commands/monitor.rs`：`MONITOR` 的输出是**持续流**，与「一次命令一次响应」的
+    `PooledConn::query` 模型不兼容（后者有命令超时，且池里的句柄是共享复用的，被 MONITOR
+    占住就再也回不来），因此**单独开一条专用连接**（`Client::get_async_monitor`），由后台任务读取。
+  - 批量推送：攒够 500 行或距上次推送 120 ms 先到先推（忙碌实例上「一行一次 IPC」会把通道打满）；
+    缓冲上限 2000 行，超出丢最旧并如实上报条数（前端显示「已省略 N 行」）。
+  - 解析：`MonitorLine::parse` 把行拆成 `时间 / db / 客户端 / 命令 / 参数`（`raw` 原样保留供过滤），
+    按**字节**还原 `sdscatrepr` 转义（`\xHH` 逐字节 → UTF-8），实测中文 Key / 带引号换行的值都能逐字还原。
+  - 生命周期：`MonitorState` 管会话（同连接同时只允许一个），停止走 `Notify`（任务自己冲刷缓冲 + 推
+    `monitor:end`）；`disconnect` / `delete_connection` 一并收掉监控；会话序号保证「停止后立刻重启」
+    时旧任务的收尾不会摘掉新会话。
+  - 集群不支持（`MONITOR` 是节点级命令，每节点一条独立的流），前端按钮置灰并说明原因；
+    **只读连接允许监控**（MONITOR 不改数据，观察线上实例正是它的用途）。
+  - 前端：底部面板加「终端 / 实时监控」双标签，监控页含开始/停止、状态、过滤框（按原文包含匹配）、
+    自动滚动（用户上翻自动暂停、滚回底部恢复）、清空、行数计数；只保留最近 2000 行。
+  - 验证：9 条单测（解析 / 会话表 / 停止信号）+ `tests/monitor_integration.rs`（真实 Redis 上
+    执行命令后必须在流里看到、参数逐字还原、**停止后不再有新行**、监控期间池内命令照常）；
+    本地 8.10.1 与 Docker 6.0.16 双版本实测通过；界面用 headless 渲染核对了未开始 / 监控中 /
+    过滤 / 集群禁用四个状态。
+- [x] ✅ **Key 重命名 / 复制**（2026-09-22 完成）
+  - 详情区加「重命名」「复制」两个按钮 + 一个共用对话框（目标名、覆盖开关、随模式变化的说明）；
+    见 §1.3 的实现细节与测试。默认**不覆盖**已存在的目标，覆盖必须用户显式勾选
+    （`RENAMENX` / `COPY` 不加 `REPLACE`），避免「重命名顺手毁掉另一个 key」。
+  - `COPY` 需 Redis 6.2+：前端按连接时取回的 `INFO` 版本置灰按钮（悬停说明当前版本），
+    后端把服务端 `unknown command` 转写成「需要 6.2+ / 可改用重命名或导入导出」。
+- [x] ✅ **Redis 6.x 兼容回归**（2026-09-22 完成，§4 #3 关闭）
+  - `start-test-redis.sh` 加**版本门** `REDIS_VERSION_EXPECT`（前缀匹配，如 `6.0` / `7.`）：
+    版本对不上直接失败并打印实际版本，避免 runner 镜像换代后「悄悄在别的 Redis 版本上跑」；
+    顺带加端口预检（CI 里关掉镜像预装 / apt 自启的实例，本地则报错让人自己处理，绝不静默关别人的 Redis）。
+  - `ci.yml` 的 quality 改为**版本矩阵**：`ubuntu-22.04`（发行版自带 6.0.x，兼容性基线）+
+    `ubuntu-24.04`（7.0.x，现代版本）；composite action 新增 `redis-version` 输入；
+    `release.yml` 的发版门禁只跑 6.0 那一档（求「最保守环境也全绿」）。
+  - 新用例天然分版本断言：`key_ops_integration.rs` 按服务器版本分别要求「复制成功」或「给出 6.2 提示」；
+    新增的 `MYREDIS_TEST_PORT` 环境变量让这些用例能指向任意实例（本地用 Docker 起了 6.0.16 实测）。
+- [x] ✅ **前端单文件拆分评估**（2026-09-22 完成，§4 #4 状态更新）
+  - 结论与数据见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)：
+    11 天从 3307 涨到 5429 行（约 +190 行/天），「复杂度继续上升」成立 → **该拆**；
+    方案选**浏览器原生 ES 模块**（不引打包器、不加构建步骤，Tauri 资源协议对 `.js` 返回
+    `text/javascript`），按「叶子先走、核心最后」分 4 阶段，每阶段都用冒烟脚本核对。
+  - **本轮已落地第一步**：样式外置 `frontend/styles.css`（2051 行，原样搬出，渲染逐像素一致）。
+  - 未做：JS 模块化（阶段 1–4）—— 需要动 `import/export` 与共享状态边界，属「改错就白屏」的一类改动，
+    应单独一轮、先固化前端冒烟脚本（评估文档第 5 节）再做。
+- [x] ✅ **macOS 代码签名 / 公证接线**（2026-09-22 完成，§4 #6 状态更新）
+  - 新增 `.github/scripts/setup-macos-signing.sh`：把 `APPLE_*` 凭据（证书 / 密码 / 身份 / Apple ID /
+    专用密码 / 团队 ID）校验后写进 `$GITHUB_ENV`，tauri build 自己完成「导入证书 → 签名 → 公证 → staple」。
+    **成组校验**：一份都没有 → 告警放行（产物未签名）；缺一份 → 直接失败（半配的凭据会让产物悄悄没签名）；
+    只签不公证也失败（仍会被 Gatekeeper 拦，等于没解决问题）；证书 base64 里的换行自动去掉。
+  - 新增 `.github/scripts/verify-macos-signing.sh`（构建后复核，已接入 `release.yml`）：
+    `codesign --verify --deep --strict` + 必须是 `Developer ID Application` 身份且
+    `TeamIdentifier` 与配置一致 + `spctl -a -vvv -t exec`（Gatekeeper 判据，未公证会被拒）+
+    `xcrun stapler validate`（票据已 staple）；dmg 另按 disk image 形式过一遍 `spctl`。
+  - 待办（运维动作，代码侧已就绪）：把 6 个 secret 配进仓库后即生效；在此之前产物仍是未签名，
+    发版日志里会有明确告警。见 §8.10。
 
 ---
 
@@ -387,9 +449,9 @@
 | SSH 隧道 | ❌ | 不内置 |
 | 主从 / Sentinel 故障转移 | ❌ | 不实现故障转移，仅透传命令 |
 | 集群的故障转移 / 扩缩容 | ❌ | 由 Redis 集群自身负责 |
-| 跨 slot 的多 key 操作 | ❌ | `MGET` / `DEL` 跨 slot 属 Redis 集群固有限制，报错透传 |
+| 跨 slot 的多 key 操作 | ❌ | `MGET` / `DEL` / `RENAME` / `COPY` 跨 slot 属 Redis 集群固有限制，不做拆分重试；2026-09-22 起 `CROSSSLOT` 报错会**转写成可操作提示**（同 hash tag 或逐条执行，见 `error.rs`），而不是透传英文原文 |
 | 集群下 `SELECT` 切库 | ❌ | 集群只有 db0，前端隐藏选择器、后端返回明确错误 |
-| 实时命令监控（Monitor） | ❌ | 保留为后续迭代 |
+| 实时命令监控（Monitor） | ✅ | **2026-09-22 起支持**（见 §2.4）：底部面板「实时监控」标签页，独立连接、批量推送、可按原文过滤；**集群模式不支持**（MONITOR 是节点级命令，请单机直连目标节点） |
 | 引入前端框架 / 构建工具 | ❌ | 坚持原生 JS 单文件（见 `PROJECT_PLAN.md` §9.5） |
 
 ---
@@ -400,10 +462,10 @@
 |---|------|:----:|------|
 | 1 | ~~密码明文存 `connections.json`~~ | **已解决** | 2026-09-22 改存系统密钥链（keyring crate）：`save_all` 转存 keychain、文件不落密码，存量明文首次加载自动迁移；密钥链不可用（CI / headless）自动降级回明文落盘（§2.4 P1） |
 | 2 | ~~超时值是否暴露给用户配置~~ | **已解决** | 2026-09-22 起连接对话框可配「建连超时 / 命令超时」（秒，写入连接配置随连接持久化，`Connection::effective_timeout` 按连接覆盖池默认值；缓存键不变 —— `connect` 每次都用当时配置重开句柄覆盖条目）。默认仍 5s / 10s（`config.rs`）；大 key 整表读取超时可按连接调大（§2.4 P1）。Key 列表 TYPE/TTL 走 pipeline，整页共用一个命令预算（不按条数叠加） |
-| 3 | 兼容 Redis 6.0 以下 | 需持续注意 | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级 |
-| 4 | 前端 `frontend/index.html` 单文件已约 4000 行 | 观察中 | 复杂度继续上升时再评估拆分为多文件 + esbuild，与桌面客户端解耦，不影响后端 |
+| 3 | ~~兼容 Redis 6.0 以下~~ | **已加门禁** | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级。2026-09-22 起 CI 跑**版本矩阵**（6.0 + 7.0）且带版本门，新功能（如 `COPY`）按版本降级并有对应集成断言（§2.4） |
+| 4 | 前端 `frontend/index.html` 单文件 3389 行（+ `styles.css` 2051 行） | 已评估 | 2026-09-22 评估：11 天从 3307 涨到 5429 行，触发条件成立 → 该拆；方案为**浏览器原生 ES 模块**（不用打包器），分 4 阶段渐进拆分。第一步（样式外置）已落地，JS 模块化待单独一轮 + 前端冒烟脚本；见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md) |
 | 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件 |
-| 6 | macOS 构建未做代码签名 / 公证 | 已知风险 | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。后续要公证需另配 `APPLE_*` 凭据 |
+| 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名 |
 
 ---
 
@@ -411,6 +473,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-22 | — | **§2.4 五个 P2 全部完成（§2 待办清空）**：① **Monitor 实时命令监控** —— 新增 `commands/monitor.rs`：专用连接 + 后台任务读 `MONITOR` 流，成批（500 行 / 120 ms 先到先推）emit 给前端，缓冲超 2000 行丢最旧并如实上报；`MonitorLine::parse` 按字节还原 `sdscatrepr` 转义（中文 / 引号 / 换行逐字还原）；`MonitorState` 管会话（同连接唯一、`Notify` 停止、断开连接一并收掉、会话序号防「停止后立刻重启」误摘）；集群不支持（节点级命令，按钮置灰）、只读连接可用；前端底部面板加「终端 / 实时监控」双标签（开始停止 / 过滤器 / 自动滚动 / 清空 / 行数计数）。② **Key 重命名 / 复制** —— `rename_key`（默认 `RENAMENX`，勾选才覆盖）/ `copy_key`（`COPY [REPLACE]`，6.2+，返回 0 时用一次 pipeline 区分「源不存在 / 目标已存在」），`CROSSSLOT` 转写成同 hash tag 的可操作提示，前端详情区两个按钮 + 共用对话框 + 按版本置灰。③ **Redis 版本矩阵** —— `start-test-redis.sh` 加版本门与端口预检，`ci.yml` 跑 22.04（6.0）/ 24.04（7.0）两档，release 门禁固定 6.0。④ **前端拆分评估** —— 数据 + 方案 + 分阶段计划见 `docs/frontend-split-evaluation.md`；本轮先把样式外置为 `frontend/styles.css`（index.html 5429 → 3389 行）。⑤ **macOS 签名 / 公证接线** —— `setup-macos-signing.sh`（凭据成组校验，半配即失败）+ `verify-macos-signing.sh`（codesign / spctl / stapler 复核），接进 `release.yml`，`APPLE_*` secret 一配即生效。验证：`cargo fmt --check` / `clippy -D warnings` 干净，`--include-ignored --test-threads=1` 全量 127 条通过（新增 monitor 9 单测 + 1 集成、rename/copy 5 单测 + 2 集成、CROSSSLOT 1 单测）；新增用例在 Redis 8.10.1 与 Docker 6.0.16 上双版本实测；界面用 headless 渲染核对了监控（未开始 / 监控中 / 过滤 / 集群禁用）与重命名复制（弹窗 / 版本置灰）六个状态 |
 | 2026-09-22 | — | **§2.4 四个 P1 全部完成**：① **TLS（`rediss://`）** —— `Connection` 加 `tls` / `tls_insecure`，redis-rs `tokio-rustls-comp` + `tls-rustls-insecure` feature，`check_supported_scheme` 改为返回剥前缀主机（未开 TLS 给「去勾 TLS」提示，三入口统一），`AppError::TlsNotSupported` 删除，前端加两个开关；openssl 自签起 6390 实测：跳过校验连通、校验模式拒自签（新增 2 条 #[ignore] 集成用例）。② **Stream** —— `get_stream` / `stream_add_entry` / `stream_del_entry`（XRANGE 分页 200 + XADD/XDEL），导入导出补 stream（XADD 保留原始 entry id；XRANGE 嵌套应答手工解析，redis-rs `Vec<元组>` 只支持扁平键值对），前端详情区 + 翻页 + 徽章配色。③ **超时可配** —— `connect_timeout_secs` / `command_timeout_secs` 入 `Connection` 随连接持久化，`effective_timeout` 覆盖池默认（缓存键不变），前端两个可选项。④ **密码密钥链** —— `keyring` 转存（服务 `maidi-cache` / 账号 conn.id），存量明文首载自动迁移，密钥链不可用自动降级明文落盘，删连接清条目。验证：`cargo test` 76 单测 + `--ignored --test-threads=1` 全量（含集群 6 条、TLS 2 条、stream 2 条、密钥链 3 条）全绿，`clippy -D warnings` / `fmt --check` 干净；§3（TLS 改 ✅）/ §4（#1 #2 关闭）/ §1.1 / `web/docs/index.html` / `PROJECT_PLAN.md` 已同步 |
 | 2026-09-22 | — | **新增 §2.4「下一阶段开发功能」**：§2.1–§2.3 全部清空后按 §3 决策与 §4 风险排定下一阶段 —— P1：TLS（`rediss://`，需先改 §3 决策）、Stream 类型（详情区 + 导入导出）、超时可配（含大 key 读取策略）、密码密钥链；P2：Monitor、macOS 公证、前端拆分评估、Redis 6.x 兼容回归、Key 重命名/复制 |
 | 2026-09-21 | — | **§2.3 三项全部完成，待办清单清空**：① **CI 质量门禁** —— 新增 composite action `.github/actions/rust-quality`（fmt / clippy `-D warnings` / `cargo test -- --include-ignored --test-threads=1`）与 `start-test-redis.sh`（单机 6379 + 三主节点集群 7001–7003，等到 `cluster_state:ok`）；`release.yml` 加 `quality` job 与 `check-deploy-env` 并行、`build` 改为双依赖；新增 `ci.yml` 在推分支 / PR 时跑同一门禁（tag 推送不重复触发）；② **`PROJECT_PLAN.md` 回填** —— 头部改为「已落地（历史基线）」并指向本文档，M1–M5 全标完成，§4.4 命令名与 redis 命令按 `key.rs` / `key_content.rs` 实际实现修正；③ **分支清理** —— 删除 9 个已合入 `main` 的本地分支（含 PR #2 的 `fix/timeout-wiring` 与 `v0.0.14`，删除前逐一用 `merge-base --is-ancestor` 验证），本地只剩 `main`。验证：本地 `fmt --check` / `clippy -D warnings` 干净，`--include-ignored --test-threads=1` 全量 99 条用例通过（与 CI 门禁同一命令）；集群脚本在 macOS（换端口）实测建槽、进 ok 态 |
@@ -432,7 +495,6 @@
 | 2026-09（历史） | v0.2.x | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与模块拖拽调宽 |
 | 2026-09（历史） | v0.0.x | 集群支持、MOVED 报错转建议、UI 优化、应用图标、CI 三平台出包与产物改名 |
 | 2024-08-30 | v0.1.0 | 后端骨架 + 连接模型 + 持久化 + PING 命令 + 测试（原文档，本次重写前的基线） |
-
 ---
 
 ## 6. 代码质量规范（强制）
@@ -469,6 +531,11 @@ cargo test
 # 所有带 #[ignore] 的 Redis 依赖测试：
 cargo test -- --ignored
 
+# 与 CI 门禁同一条命令（含 #[ignore] 全量，必须串行）：本机需要一个单机 Redis（6379）、
+# 一个 TLS Redis（6390，自签名）与三主节点集群（7001-7003）；前两个可以用
+# `.github/scripts/start-test-redis.sh` 拉起（macOS 上也能跑，只是集群部分要用 homebrew 的 redis-server）
+cargo test -- --include-ignored --test-threads=1
+
 # 集群集成测试（需先起一个本地集群，默认连 127.0.0.1:7001）
 # ⚠️ 必须 --test-threads=1：集群用例共享 keyspace，并行跑会互相干扰出假失败
 cargo test --test cluster_integration -- --ignored --test-threads=1
@@ -488,7 +555,18 @@ cargo fmt --check
 要求收齐整批 TYPE/TTL 才回包，锁住「整页一次往返」）与 `storage::tests::*` 三条（阻塞线程池上的
 保存/加载往返、文件缺失、坏 JSON）。
 
-前端无构建步骤，改 `frontend/index.html` 后由 WebView 直接加载（`cargo tauri dev` 会热重载）。
+前端无构建步骤，改 `frontend/index.html` / `frontend/styles.css` 后由 WebView 直接加载
+（`cargo tauri dev` 会热重载）。
+
+集成用例的两个环境变量（都是可选的，默认值与 CI 一致）：
+
+| 变量 | 默认 | 用途 |
+|------|------|------|
+| `MYREDIS_CLUSTER_PORT` | `7001` | 集群用例的入口节点端口 |
+| `MYREDIS_TEST_PORT` | `6379` | 单机用例（`monitor_integration` / `key_ops_integration`）连的端口：把它指向别的实例即可做**多版本回归**，例如 `docker run -d -p 6399:6379 redis:6.0.16` 后 `MYREDIS_TEST_PORT=6399 cargo test --test key_ops_integration -- --ignored` |
+
+`.github/scripts/start-test-redis.sh` 支持 `REDIS_VERSION_EXPECT`（版本前缀，如 `6.0` / `7.`）：
+版本对不上会直接失败，CI 的版本矩阵就是靠它把「这一轮跑的是哪个 Redis」钉死的（§8.10）。
 
 ---
 
@@ -713,3 +791,44 @@ cargo tauri dev --config '{"plugins":{"updater":{"endpoints":["http://127.0.0.1:
 所以它同时验证了「私钥可用 + 公私钥配对 + 清单格式」。
 注意演练包是占位文件（内容随意、只用来验签），**不要点「立即重启」**：开发版不是 `.app` 包，
 插件会把 `current_exe` 的父目录（`target/debug`）当成安装目标。
+
+### 8.10 macOS 代码签名与公证（`APPLE_*` 凭据）
+
+不签名 / 不公证的 `.app` 首次打开会被 Gatekeeper 拦下（只能右键「打开」），而且**配错凭据不会让构建失败** ——
+产物照样出，只是悄悄没签名。所以这条链路上有两道检查，见 §2.4 的两份脚本：
+
+| 脚本 | 时机 | 作用 |
+|------|------|------|
+| `.github/scripts/setup-macos-signing.sh` | `tauri build` 之前（仅 macOS） | 校验凭据**成组**齐备并写进 `$GITHUB_ENV`；一份都没有时告警放行（接受未签名产物） |
+| `.github/scripts/verify-macos-signing.sh` | 构建之后（仅 macOS） | `codesign --verify --deep --strict` + `Developer ID Application` 身份 + `TeamIdentifier` 一致 + `spctl -a -vvv -t exec`（Gatekeeper 判据）+ `xcrun stapler validate`；dmg 另按 disk image 形式过 `spctl` |
+
+tauri build 在有这些变量时会自动完成「导入证书 → 签名 → 公证 → staple」，不需要额外的命令。
+
+**需要配的 6 个 secret**（缺一不可，两组凭据分别成组）：
+
+| 组 | secret | 说明 |
+|----|--------|------|
+| 签名 | `APPLE_CERTIFICATE` | `Developer ID Application` 证书 `.p12` 的 **base64**（macOS 上用 `base64 -i cert.p12`，应为单行） |
+| 签名 | `APPLE_CERTIFICATE_PASSWORD` | 导出 `.p12` 时设的密码 |
+| 签名 | `APPLE_SIGNING_IDENTITY` | 形如 `Developer ID Application: 麦地 (ABCDE12345)` |
+| 公证 | `APPLE_ID` | Apple 账号 |
+| 公证 | `APPLE_PASSWORD` | 该账号的 **App 专用密码**（不是登录密码） |
+| 公证 | `APPLE_TEAM_ID` | 团队 ID（10 位） |
+
+为什么「只签名不公证」也直接失败：只签不公证的产物**仍然过不了 Gatekeeper**，等于没解决问题，
+而它看起来「流水线是绿的」，属于必须前置拦下的静默失败。真要放弃公证，就别配任何 `APPLE_*`。
+
+不影响自动更新：替换 `.app` 由 tauri 自己完成，只认 minisign 验签（§8.9），与 Apple 签名无关。
+
+### 8.11 集成测试的 Redis 版本矩阵
+
+`ci.yml` 的 quality job 跑两档 Redis（`REDIS_VERSION_EXPECT` 做版本门，见 §2.4）：
+
+| runner | Redis | 定位 |
+|--------|-------|------|
+| `ubuntu-22.04` | 6.0.x（发行版自带） | 兼容性基线：本项目支持 Redis 2.8+，`COPY`（6.2+）/ `CLIENT SETINFO` 这类版本分支靠它兜住 |
+| `ubuntu-24.04` | 7.0.x（发行版自带） | 现代版本：镜像换代换版本时能立刻发现 |
+
+`release.yml` 的发版门禁只跑 6.0 那一档（求「最保守环境也全绿」），版本矩阵留给日常 CI。
+`start-test-redis.sh` 在拉环境前还会做**端口预检**：CI 里关掉镜像预装 / apt 自启的 Redis，
+本地则报错让人自己处理 —— 不会静默关掉开发者本机正在用的实例。

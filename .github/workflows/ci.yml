@@ -23,9 +23,23 @@ env:
 
 jobs:
   quality:
-    name: 质量门禁（fmt / clippy / 全量测试）
-    runs-on: ubuntu-22.04
+    name: 质量门禁（Redis ${{ matrix.redis }}）
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # 一个版本红不影响另一个的结论，便于定位「只有某个版本挂」的问题
+      fail-fast: false
+      matrix:
+        include:
+          # 兼容性基线：本项目目标支持 Redis 2.8+，发行版自带的 6.0 是最低一档真机环境，
+          # COPY / CLIENT SETINFO / MONITOR 这些版本相关的分支主要靠它兜住
+          - os: ubuntu-22.04
+            redis: '6.0'
+          # 现代版本：Ubuntu 24.04 自带 7.0，保证新版 Redis 上集成用例同样全绿
+          - os: ubuntu-24.04
+            redis: '7.'
     steps:
       - uses: actions/checkout@v7
 
       - uses: ./.github/actions/rust-quality
+        with:
+          redis-version: ${{ matrix.redis }}

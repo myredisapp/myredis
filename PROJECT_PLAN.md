@@ -263,6 +263,8 @@ Key 量大时，前端一次性渲染会导致卡顿。本方案采用**后端�
 | `set_key` | `conn_id, key, value, ttl` | `()` | `SET`（+ 可选 `EXPIRE`） |
 | `del_key` | `conn_id, key` | `u64`（影响行数） | `DEL` |
 | `set_key_ttl` | `conn_id, key, ttl` | `()` | `EXPIRE` / `PERSIST` |
+| `rename_key` | `conn_id, key, new_key, overwrite` | `()` | `RENAMENX`（默认，不覆盖）/ `RENAME`（勾选覆盖） |
+| `copy_key` | `conn_id, key, new_key, overwrite` | `()` | `COPY [REPLACE]`（同库复制，需 Redis 6.2+；低版本给出版本提示） |
 
 #### 各类型专属操作
 
@@ -272,6 +274,18 @@ Key 量大时，前端一次性渲染会导致卡顿。本方案采用**后端�
 | `get_list` / `list_push_element` / `list_set_element` / `list_del_element` | List 读取与元素级编辑 | `LRANGE`, `LPUSH` / `RPUSH`（可选方向）, `LSET`, `LREM` |
 | `get_set` / `set_add_member` / `set_del_member` | Set 读取与成员级编辑 | `SMEMBERS`, `SADD`, `SREM` |
 | `get_zset` / `zset_add_member` / `zset_del_member` | ZSet 读取与成员级编辑 | `ZRANGE WITHSCORES`, `ZADD`, `ZREM` |
+| `get_stream` / `stream_add_entry` / `stream_del_entry` | Stream 读取（按 entry 分页）与条目级新增 / 删除 | `XRANGE`（分页）, `XADD`, `XDEL` |
+
+#### 实时监控（MONITOR，2026-09-22 新增）
+
+监控的输出是**持续流**，因此不走「一次命令一次响应」的 `PooledConn::query`，而是**单独开一条专用连接**
+由后台任务读取、成批推给前端（事件 `monitor:lines` / `monitor:end`）。集群模式不支持（节点级命令）。
+
+| Command | 请求参数 | 响应 | 说明 |
+|---------|---------|------|------|
+| `start_monitor` | `conn_id` | `()` | 打开专用连接执行 `MONITOR`；同连接已监控时返回明确错误 |
+| `stop_monitor` | `conn_id` | `bool` | 置停止信号（任务冲刷缓冲后退出并推 `monitor:end`） |
+| `monitor_status` | `conn_id` | `bool` | 该连接当前是否在监控（前端切回标签页时恢复按钮状态） |
 
 > 草案中的 `get_key` / `delete_key` / `exists_key` / `expire_key` 未按原名实现：
 > 读取按类型拆为 `get_string` / `get_hash` / `get_list` / `get_set` / `get_zset`，
