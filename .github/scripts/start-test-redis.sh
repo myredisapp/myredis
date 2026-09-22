@@ -71,16 +71,17 @@ redis-server --port 0 --tls-port 6390 --daemonize yes \
   --tls-auth-clients no \
   --dir "$CERT_DIR"
 
+# 用自建 CA 校验（而非 --insecure）：ubuntu-22.04 的 redis-cli 6.0 不认识 --insecure
 for _ in $(seq 1 30); do
-  if redis-cli --tls --insecure -p 6390 ping 2>/dev/null | grep -q PONG; then
+  if redis-cli --tls --cacert "$CERT_DIR/ca.crt" -p 6390 ping 2>/dev/null | grep -q PONG; then
     break
   fi
   sleep 1
 done
-redis-cli --tls --insecure -p 6390 ping | grep -q PONG \
+redis-cli --tls --cacert "$CERT_DIR/ca.crt" -p 6390 ping | grep -q PONG \
   || { echo "::error::TLS 节点（6390）未就绪"; exit 1; }
 
-echo "单机 $(redis-cli -p 6379 ping)，TLS $(redis-cli --tls --insecure -p 6390 ping)，集群入口 $(redis-cli -p 7001 cluster info | grep ^cluster_state)"
+echo "单机 $(redis-cli -p 6379 ping)，TLS $(redis-cli --tls --cacert "$CERT_DIR/ca.crt" -p 6390 ping)，集群入口 $(redis-cli -p 7001 cluster info | grep ^cluster_state)"
 
 # create 返回不代表槽已分配完成，等集群自检进入 ok 态
 for _ in $(seq 1 30); do
