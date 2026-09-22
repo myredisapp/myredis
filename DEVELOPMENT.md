@@ -6,6 +6,8 @@
 > §2.1 的功能缺口已清空；**§2.2 全部清空**（两个 P1：超时配置接线、`rediss://` 友好提示；四个 P2：
 > 分页与虚拟滚动、`list_keys` 的 N+1、阻塞 IO、死代码 —— 本轮另修掉一个导出竞态）。
 > §2.3 剩余为工程流程债务（CI 质量门禁、`PROJECT_PLAN.md` 回填、陈旧分支清理）。
+> **2026-09-22：§2 新增 §2.4「下一阶段开发功能」** —— 基于 §3 决策与 §4 风险的梳理，排定
+> TLS、Stream、密钥链、超时可配四项 P1 与 Monitor、公证、前端拆分等 P2。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -38,20 +40,20 @@
 
 ### 1.1 连接管理（✅ 完成）
 
-- [x] 连接模型 `Connection`：`id / name / host / port / type / readonly / separator / db / username / password`
+- [x] 连接模型 `Connection`：`id / name / host / port / type / readonly / separator / db / username / password / tls / tls_insecure / connect_timeout_secs / command_timeout_secs`（后四项 2026-09-22 新增，见 §2.4 P1）
 - [x] 连接类型 `ConnType::{Single, Cluster}`
 - [x] 连接配置 JSON 持久化（`connections.json`，位于 Tauri `app_config_dir`，**临时文件 + rename 原子写入**）
-- [x] 密码 / 用户名落盘（明文，见 §4 风险），支持 Redis 6.0+ ACL（`redis://user:pass@host:port/db`）
+- [x] 密码 / 用户名持久化，支持 Redis 6.0+ ACL（`redis://user:pass@host:port/db`）；密码存系统密钥链不落盘（2026-09-22，见 §2.4 P1）
 - [x] 用户名与密码按 RFC 3986 percent-encoding，避免 `@ / ? # :` 破坏 URL 结构
 - [x] 命令：`connect` / `disconnect` / `list_connections` / `save_connection` / `delete_connection` / `test_connection`
 - [x] `test_connection` 不写连接池，仅建立连接后 `PING` 再释放（前端「先测试，再保存」）
 - [x] 只读连接：连接时发送 `READONLY`，写命令前经 `Pool::ensure_writable` 拦截
 - [x] 自定义 Key 分隔符（默认 `:`），用于前端按分隔符折叠成目录树
 - [x] **连接参数入口校验**：主机字段里带 `rediss://` / `tls://` / `ssl://` 前缀时，测试 / 保存 / 导入 / 建连
-      四处统一返回「暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接」；带 `redis://` 前缀（粘贴整条 URL）
-      则提示「只需填主机名」（§2.2 的 P1）
-- [x] **建连与命令都有超时兜底**（`config.rs` 的 `ConnectionTimeout`：**5 秒建连 / 10 秒命令**，
-      由 `AppConfig` 注入 `Pool`）：连接池句柄 `PooledConn::query` 是命令执行的**唯一出口**，
+      四处统一处理 —— 已勾选「TLS 加密」的剥掉前缀放行，未勾选的提示「请勾选 TLS 加密」；带 `redis://`
+      前缀（粘贴整条 URL）则提示「只需填主机名」（§2.2 的 P1；2026-09-22 TLS 支持后语义更新，见 §2.4 P1）
+- [x] **建连与命令都有超时兜底**（`config.rs` 的 `ConnectionTimeout`：**默认 5 秒建连 / 10 秒命令**，
+      由 `AppConfig` 注入 `Pool` 作默认值，连接可经 `connect_timeout_secs` / `command_timeout_secs` 覆盖）：连接池句柄 `PooledConn::query` 是命令执行的**唯一出口**，
       命令层与集群节点直连都走它 —— 服务器无响应或 `BLPOP` 这类阻塞命令会在超时后返回
       「操作超时: 命令 10 秒内未返回（服务器繁忙、网络异常，或命令本身会阻塞）」，
       不再让界面永久等待（§6 第 3 条）。细节见 §2.2 已完成项
@@ -317,6 +319,62 @@
     `v0.0.14`（已合入 main，不留）。
   - 现在本地只剩 `main`；`git fetch --prune` 后远端跟踪引用也已同步清理。
 
+### 2.4 下一阶段开发功能（2026-09-22 规划）
+
+> 依据：§2.1–§2.3 已全部清空，核心链路（连接 / Key / 四类复合类型 / 终端 / 导入导出 / 自动更新）已完整。
+> 本节是下一阶段候选功能的排期，来源为 §3 中标注「保留为后续迭代」的决策与 §4 的已知风险。
+> 每项落地时同步 §3 / §4 / `web/docs/index.html`「功能现状」（§6 第 7 条）。
+
+#### P1（用户可见，按优先级）
+
+- [x] ✅ **TLS / SSL（`rediss://`）支持**（2026-09-22 完成，§3 决策已改为 ✅）
+  - `Connection` 加 `tls` / `tls_insecure`（自签名证书走 redis-rs 的 `#insecure` fragment，需
+    `tls-rustls-insecure` feature）；`to_connection_url` 按开关拼 `rediss://`。
+  - 入口校验放开：`check_supported_scheme` 改返回剥掉前缀后的主机名 —— 未开 TLS 的 `rediss://`
+    提示「请勾选 TLS 加密」，已开 TLS 的剥前缀放行（带账号 / 端口 / 路径仍拦），`save` / 导入 /
+    建连三处统一；`AppError::TlsNotSupported` 删除。
+  - 前端连接对话框加「TLS 加密」「跳过证书校验（自签名）」两个开关，主机字段预检同步。
+  - 验证：openssl 自签证书起本机 TLS Redis（6390），`tls_insecure` 连通取回 PONG、
+    校验模式下自签证书被拒两条集成用例通过（`ping_integration.rs`，#[ignore]）。
+
+- [x] ✅ **Stream 类型支持**（2026-09-22 完成）
+  - 详情区：`get_stream`（`XRANGE start + COUNT`，前端每页 200 条、按「最后一条 id 序列号 +1」
+    翻页 —— XRANGE 起点闭区间）+ `stream_add_entry`（`XADD`，id 留空自动）+ `stream_del_entry`
+    （`XDEL`）；key 树 / 详情区徽章加 stream 配色。
+  - 导入 / 导出：导出 `XRANGE - +` 全量（`[{id, fields:{f:v}}]`），导入逐条 `XADD` **保留原始
+    entry id**（id 是消费组起点，重排会让下游重复 / 漏读）。
+  - 实现注意：redis-rs 的 `Vec<元组>` 转换只支持 HGETALL 式扁平键值对，XRANGE 的逐条目嵌套
+    数组必须取 `redis::Value` 手工解析（`parse_xrange_entries`）。
+  - 集群约束保持：逐 key 独立命令；大 Stream 全量导出可能撞命令超时，按连接调大（下一项）。
+
+- [x] ✅ **超时可配置 + 大 key 读取策略**（2026-09-22 完成，§4 #2 关闭）
+  - `Connection` 加 `connect_timeout_secs` / `command_timeout_secs`（Option，随连接持久化），
+    `effective_timeout` 按连接覆盖池默认值；建连 / `READONLY` 探测 / 取句柄 / `test` 全部走生效值。
+  - 缓存键确认无需改动：`Pool::connect` 每次用当时配置重开句柄并覆盖条目，`conn()` 从条目里
+    保存的 `Connection` 推导超时。
+  - 前端连接对话框加两个可选项（秒，留空用默认 5 / 10）。验证：假服务器锁「连接级 1 秒覆盖
+    池默认 60 秒」单测 + 全量回归。
+
+- [x] ✅ **密码改存系统密钥链**（2026-09-22 完成，§4 #1 关闭）
+  - `keyring` crate（apple-native / windows-native / linux-native-sync-persistent）：`save_all` 把
+    密码转存密钥链（条目 = 服务名 `maidi-cache` + 账号 conn.id）、JSON 里抹掉 `password` 字段；
+    `load` 从密钥链读回内存供编辑回显；删除连接时清理密钥链条目。
+  - 存量迁移：加载发现文件里有明文密码即写密钥链、验证一致后从文件抹除（写回失败不阻断）。
+  - 降级：密钥链不可用（CI / Linux headless）时该条密码保留在 JSON（旧行为），功能不受影响；
+    测试按环境探测密钥链可用性分别断言「不落盘」/「降级落盘」两条路径。
+
+#### P2（体验与工程，可穿插做）
+
+- [ ] ⬜ **Monitor 实时命令监控** —— §3 标注「保留为后续迭代」。`MONITOR` 输出是持续流，
+  与现有「一次命令一次响应」的 `PooledConn::query` 模型不同，需独立的流式出口与前端滚动面板。
+- [ ] ⬜ **macOS 代码签名 / 公证** —— §4 #6。首次安装被 Gatekeeper 拦（需右键打开），
+  需配 `APPLE_*` 凭据并接公证步骤（不影响自动更新：替换 `.app` 由 Tauri 自己完成、只认 minisign）。
+- [ ] ⬜ **前端单文件拆分评估** —— `frontend/index.html` 已 4563 行（§4 #4）。
+  复杂度继续上升时拆分为多文件 + esbuild 轻构建，后端零改动。
+- [ ] ⬜ **Redis 6.x 兼容回归** —— §4 #3。CI 门禁已可跑真实 Redis 6.x（`start-test-redis.sh`），
+  把集成测试矩阵加一个 6.x 版本，防 `CLIENT SETINFO` 之类新参数的兼容性回归。
+- [ ] ⬜ **Key 重命名 / 复制** —— 详情区加 `RENAME` / `COPY`（Redis 6.2+，需版本探测降级）。
+
 ---
 
 ## 3. 明确不支持的功能（非待办）
@@ -325,7 +383,7 @@
 
 | 能力 | 决策 | 说明 |
 |------|:----:|------|
-| TLS / SSL（`rediss`） | ❌ | 本期不支持，仅 `redis://` 明文；主机字段填 `rediss://` / `tls://` / `ssl://` 会返回友好提示（2026-09-21 已接线，见 §2.2 P1） |
+| TLS / SSL（`rediss`） | ✅ | **2026-09-22 起支持**（见 §2.4 P1）：连接对话框勾选「TLS 加密」即走 `rediss://`，自签名证书可勾选「跳过证书校验」（`#insecure`）；主机字段填 `rediss://host` 且未开 TLS 时提示去开开关 |
 | SSH 隧道 | ❌ | 不内置 |
 | 主从 / Sentinel 故障转移 | ❌ | 不实现故障转移，仅透传命令 |
 | 集群的故障转移 / 扩缩容 | ❌ | 由 Redis 集群自身负责 |
@@ -340,8 +398,8 @@
 
 | # | 事项 | 状态 | 备注 |
 |---|------|:----:|------|
-| 1 | 密码明文存 `connections.json` | 已知风险 | 任何有本机读权限的进程都能取到；后续可改系统密钥链（macOS Keychain / Windows Credential Manager / Secret Service） |
-| 2 | 超时值是否暴露给用户配置 | 待定 | 现为硬编码默认值（5s 连接 / 10s 命令）；2026-09-21 已接线生效（§2.2），改默认值改 `config.rs`。**注意 10 秒是单条命令的预算**：大 key 的整表读取（`LRANGE 0 -1` / `HGETALL` / `SMEMBERS`）超过 10 秒会被判超时 —— 这正是「要不要暴露给用户配置」要解决的问题。Key 列表的 TYPE/TTL 批量查走 pipeline，**整页共用一个 10 秒**（不按条数叠加），页大小上限 1000 时相当于 2000 条命令挤同一个预算 |
+| 1 | ~~密码明文存 `connections.json`~~ | **已解决** | 2026-09-22 改存系统密钥链（keyring crate）：`save_all` 转存 keychain、文件不落密码，存量明文首次加载自动迁移；密钥链不可用（CI / headless）自动降级回明文落盘（§2.4 P1） |
+| 2 | ~~超时值是否暴露给用户配置~~ | **已解决** | 2026-09-22 起连接对话框可配「建连超时 / 命令超时」（秒，写入连接配置随连接持久化，`Connection::effective_timeout` 按连接覆盖池默认值；缓存键不变 —— `connect` 每次都用当时配置重开句柄覆盖条目）。默认仍 5s / 10s（`config.rs`）；大 key 整表读取超时可按连接调大（§2.4 P1）。Key 列表 TYPE/TTL 走 pipeline，整页共用一个命令预算（不按条数叠加） |
 | 3 | 兼容 Redis 6.0 以下 | 需持续注意 | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级 |
 | 4 | 前端 `frontend/index.html` 单文件已约 4000 行 | 观察中 | 复杂度继续上升时再评估拆分为多文件 + esbuild，与桌面客户端解耦，不影响后端 |
 | 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件 |
@@ -353,6 +411,8 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-22 | — | **§2.4 四个 P1 全部完成**：① **TLS（`rediss://`）** —— `Connection` 加 `tls` / `tls_insecure`，redis-rs `tokio-rustls-comp` + `tls-rustls-insecure` feature，`check_supported_scheme` 改为返回剥前缀主机（未开 TLS 给「去勾 TLS」提示，三入口统一），`AppError::TlsNotSupported` 删除，前端加两个开关；openssl 自签起 6390 实测：跳过校验连通、校验模式拒自签（新增 2 条 #[ignore] 集成用例）。② **Stream** —— `get_stream` / `stream_add_entry` / `stream_del_entry`（XRANGE 分页 200 + XADD/XDEL），导入导出补 stream（XADD 保留原始 entry id；XRANGE 嵌套应答手工解析，redis-rs `Vec<元组>` 只支持扁平键值对），前端详情区 + 翻页 + 徽章配色。③ **超时可配** —— `connect_timeout_secs` / `command_timeout_secs` 入 `Connection` 随连接持久化，`effective_timeout` 覆盖池默认（缓存键不变），前端两个可选项。④ **密码密钥链** —— `keyring` 转存（服务 `maidi-cache` / 账号 conn.id），存量明文首载自动迁移，密钥链不可用自动降级明文落盘，删连接清条目。验证：`cargo test` 76 单测 + `--ignored --test-threads=1` 全量（含集群 6 条、TLS 2 条、stream 2 条、密钥链 3 条）全绿，`clippy -D warnings` / `fmt --check` 干净；§3（TLS 改 ✅）/ §4（#1 #2 关闭）/ §1.1 / `web/docs/index.html` / `PROJECT_PLAN.md` 已同步 |
+| 2026-09-22 | — | **新增 §2.4「下一阶段开发功能」**：§2.1–§2.3 全部清空后按 §3 决策与 §4 风险排定下一阶段 —— P1：TLS（`rediss://`，需先改 §3 决策）、Stream 类型（详情区 + 导入导出）、超时可配（含大 key 读取策略）、密码密钥链；P2：Monitor、macOS 公证、前端拆分评估、Redis 6.x 兼容回归、Key 重命名/复制 |
 | 2026-09-21 | — | **§2.3 三项全部完成，待办清单清空**：① **CI 质量门禁** —— 新增 composite action `.github/actions/rust-quality`（fmt / clippy `-D warnings` / `cargo test -- --include-ignored --test-threads=1`）与 `start-test-redis.sh`（单机 6379 + 三主节点集群 7001–7003，等到 `cluster_state:ok`）；`release.yml` 加 `quality` job 与 `check-deploy-env` 并行、`build` 改为双依赖；新增 `ci.yml` 在推分支 / PR 时跑同一门禁（tag 推送不重复触发）；② **`PROJECT_PLAN.md` 回填** —— 头部改为「已落地（历史基线）」并指向本文档，M1–M5 全标完成，§4.4 命令名与 redis 命令按 `key.rs` / `key_content.rs` 实际实现修正；③ **分支清理** —— 删除 9 个已合入 `main` 的本地分支（含 PR #2 的 `fix/timeout-wiring` 与 `v0.0.14`，删除前逐一用 `merge-base --is-ancestor` 验证），本地只剩 `main`。验证：本地 `fmt --check` / `clippy -D warnings` 干净，`--include-ignored --test-threads=1` 全量 99 条用例通过（与 CI 门禁同一命令）；集群脚本在 macOS（换端口）实测建槽、进 ok 态 |
 | 2026-09-21 | — | CI 门禁首次运行抓到一处版本差问题：CI 的 stable 工具链（Rust 1.98）比本地（1.96）新，新 `question_mark` lint 标了 `terminal.rs` 里一个可改写为 `?` 的 `match`（本地 clippy 不报）——已按建议改写，行为不变；**教训：CI stable 会随新版引入新 lint，本地报错对不上时先核对工具链版本** |
 | 2026-09-21 | — | **§2.2 剩余的三个 P2 全部完成（本节清空），另顺带修掉一个导出竞态**：① `list_keys` 的 N+1 —— 新增 `PooledConn::query_pipeline`（与 `query` 共用 `with_command_timeout`）与 `enrich_keys()`，一页 key 的 TYPE/TTL 收成一条 pipeline（单机整页 1 次往返；集群在每个主节点各自一条，避免 CROSSSLOT，并省掉按 slot 重路由）；② 阻塞 IO —— `storage.rs` 加 `load_async` / `save_all_async`（`tauri::async_runtime::spawn_blocking`），`commands/connection.rs` 的 5 读 3 写全部切过去，`ConnectionRepo::new` 不再建目录（改由 `save_all` 按需创建），`AppState::repo()` 随之变成无 IO 的纯构造；③ 死代码 —— 删除 `Pool::ensure_conn` 与 `AppError::NotConnected`；④ 导出竞态 —— `TYPE` 与 `GET` 之间 key 消失时 `GET` 回 nil 会让整次导出报 TypeError（与「静默跳过」的文档相矛盾），改为跳过该 key。测试：新增 4 条不依赖 Redis 的用例（假服务器锁「整页一次往返」1 条、storage 3 条）、真实 Redis 的混合类型/TTL 用例、集群跨节点类型用例；`cargo test` / `--ignored`（含集群 `--test-threads=1`）全绿，`clippy -D warnings` / `fmt --check` 干净。详见 §2.2 各项 |

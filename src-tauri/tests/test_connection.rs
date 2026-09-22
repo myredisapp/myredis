@@ -24,6 +24,10 @@ async fn test_connection_returns_pong() {
         db: 0,
         username: None,
         password: None,
+        tls: false,
+        tls_insecure: false,
+        connect_timeout_secs: None,
+        command_timeout_secs: None,
     };
     let pong = Pool::new()
         .test(&conn)
@@ -47,6 +51,10 @@ async fn test_connection_fails_on_wrong_port() {
         db: 0,
         username: None,
         password: None,
+        tls: false,
+        tls_insecure: false,
+        connect_timeout_secs: None,
+        command_timeout_secs: None,
     };
     // 连不上的端口必须在连接超时预算内失败，而不是永久等待
     let started = std::time::Instant::now();

@@ -42,7 +42,10 @@ const CONNECT_RETRY_FACTOR: u64 = 100;
 #[derive(Clone)]
 pub enum Conn {
     /// 单机连接管理器（自动重连）
-    Single(ConnectionManager),
+    ///
+    /// TLS feature 让这个类型变大（256 字节级），Box 住避免枚举尺寸被它撑大
+    /// （clippy large_enum_variant）。
+    Single(Box<ConnectionManager>),
     /// 集群连接（按 key 的哈希槽路由到对应节点）
     Cluster(ClusterConnection),
     /// 集群内单个节点的直连句柄：逐节点 `SCAN` 用，不入池、用完即弃
@@ -213,6 +216,7 @@ impl Pool {
     /// 按连接配置建立句柄，若为只读连接先声明 `READONLY`。
     ///
     /// 集群与单机都缓存句柄复用（单机是 [`ConnectionManager`]，集群是 [`ClusterConnection`]）。
+    /// 建连与只读探测的超时取该连接的生效配置（连接可覆盖全局默认值）。
     async fn open(&self, conn: &Connection) -> Result<Conn, AppError> {
         let handle = self.connect_handle(conn).await?;
 
@@ -220,7 +224,8 @@ impl Pool {
             // 只读连接先声明 READONLY（对主从 / 集群副本生效）。
             // 普通单机与集群主节点不认识该命令，失败忽略即可（与只读标记的语义一致：
             // 真正的写入拦截由 `ensure_writable` 与服务器 ACL 负责）。
-            let mut probe = PooledConn::new(handle.clone(), self.timeout);
+            let timeout = conn.effective_timeout(&self.timeout);
+            let mut probe = PooledConn::new(handle.clone(), timeout);
             let _ = probe.query::<()>(&redis::cmd("READONLY")).await;
         }
 
@@ -228,10 +233,13 @@ impl Pool {
     }
 
     /// 按连接配置建立连接句柄（不缓存、不发送 `READONLY`）。
+    ///
+    /// 入口协议校验：粘贴的整条 URL（`rediss://host` 之类）在这里剥掉协议前缀或给出
+    /// 明确提示，而不是拼出一条畸形 URL 交给 redis-rs 报语法错（`PROJECT_PLAN.md` §4.2.3）。
     async fn connect_handle(&self, conn: &Connection) -> Result<Conn, AppError> {
-        // 入口协议校验：`rediss://` 之类不受支持的前缀必须在这里给出明确提示，
-        // 而不是拼出一条畸形 URL 交给 redis-rs 报语法错（`PROJECT_PLAN.md` §4.2.3）。
-        conn.check_supported_scheme()?;
+        let mut conn = conn.clone();
+        conn.host = conn.check_supported_scheme()?;
+        let timeout = conn.effective_timeout(&self.timeout);
         match conn.conn_type {
             ConnType::Single => {
                 let url = conn.to_connection_url();
@@ -243,26 +251,34 @@ impl Pool {
                     CONNECT_RETRY_FACTOR,
                     CONNECT_RETRIES,
                 );
-                Ok(Conn::Single(self.with_connect_timeout(future).await?))
+                Ok(Conn::Single(Box::new(
+                    self.with_connect_timeout(timeout, future).await?,
+                )))
             }
             ConnType::Cluster => {
                 let url = conn.to_connection_url();
                 let client =
                     redis::cluster::ClusterClient::new(vec![url]).map_err(AppError::from)?;
                 let future = client.get_async_connection();
-                Ok(Conn::Cluster(self.with_connect_timeout(future).await?))
+                Ok(Conn::Cluster(
+                    self.with_connect_timeout(timeout, future).await?,
+                ))
             }
         }
     }
 
-    /// 把建连 future 包进 [`ConnectionTimeout::connect`]，超时转成统一文案。
-    async fn with_connect_timeout<T, F>(&self, future: F) -> Result<T, AppError>
+    /// 把建连 future 包进给定超时的 [`ConnectionTimeout::connect`]，超时转成统一文案。
+    async fn with_connect_timeout<T, F>(
+        &self,
+        timeout: ConnectionTimeout,
+        future: F,
+    ) -> Result<T, AppError>
     where
         F: Future<Output = Result<T, redis::RedisError>>,
     {
-        tokio::time::timeout(self.timeout.connect, future)
+        tokio::time::timeout(timeout.connect, future)
             .await
-            .map_err(|_| self.timeout.connect_timeout_error())?
+            .map_err(|_| timeout.connect_timeout_error())?
             .map_err(AppError::from)
     }
 
@@ -275,7 +291,12 @@ impl Pool {
         let entry = guard
             .get(id)
             .ok_or_else(|| AppError::ConnectionNotFound(id.to_string()))?;
-        Ok(PooledConn::new(entry.handle.clone(), self.timeout))
+        // 句柄的超时跟着条目里保存的连接配置走：连接可覆盖全局默认值
+        //（DEVELOPMENT.md §2.4「超时可配置」）
+        Ok(PooledConn::new(
+            entry.handle.clone(),
+            entry.conn.effective_timeout(&self.timeout),
+        ))
     }
 
     /// 校验连接是否存在，且（若 `writable` 为 true）连接不是只读。
@@ -320,10 +341,12 @@ impl Pool {
     /// 临时测试连接参数是否可用。
     ///
     /// 按 `conn` 建立连接，执行一次 `PING` 后立即释放，不写入连接池内部 map。
-    /// 建连与 `PING` 分别受 [`ConnectionTimeout::connect`] / [`ConnectionTimeout::command`] 约束。
+    /// 建连与 `PING` 分别受该连接生效的 [`ConnectionTimeout::connect`] /
+    /// [`ConnectionTimeout::command`] 约束（连接可覆盖全局默认值）。
     pub async fn test(&self, conn: &Connection) -> Result<String, AppError> {
         let handle = self.connect_handle(conn).await?;
-        let mut con = PooledConn::new(handle, self.timeout);
+        let timeout = conn.effective_timeout(&self.timeout);
+        let mut con = PooledConn::new(handle, timeout);
         con.query(&redis::cmd("PING")).await
     }
 }
@@ -430,6 +453,10 @@ mod tests {
             db: 0,
             username: None,
             password: None,
+            tls: false,
+            tls_insecure: false,
+            connect_timeout_secs: None,
+            command_timeout_secs: None,
         }
     }
 
@@ -507,23 +534,23 @@ mod tests {
         assert!(matches!(err, AppError::ConnectionNotFound(_)), "{err:?}");
     }
 
-    /// 不受支持的协议前缀在**建连之前**就被拦下：`connect` 与 `test` 都要返回 TLS 提示，
+    /// 粘贴了 `rediss://` 前缀但**未勾选 TLS**：在**建连之前**就被拦下并提示打开 TLS 开关，
     /// 且立刻返回（不能先去试连一个畸形地址），失败后池里也不留下条目。
     ///
-    /// 这是需求 `PROJECT_PLAN.md` §4.2.3 / §9.4.1 的落点：用户把 `rediss://x` 填进主机字段时，
-    /// 看到的必须是「暂不支持 TLS 加密连接 (rediss)」，而不是 URL 解析错误。
+    /// 勾选 TLS 后同一地址进入正常建连流程（本测试用假端口验证「开始建连」而非「被拦下」）。
     #[tokio::test]
-    async fn unsupported_tls_host_is_rejected_before_any_connection_attempt() {
+    async fn rediss_host_without_tls_flag_is_rejected_before_any_connection_attempt() {
         let pool = Pool::with_timeout(fast_timeout());
         let mut cfg = conn_config("tls", 6379);
         cfg.host = "rediss://redis.example.com".into();
 
         let started = Instant::now();
-        let err = pool.connect(&cfg).await.expect_err("TLS 连接应当被拦下");
-        assert!(matches!(err, AppError::TlsNotSupported), "实际: {err:?}");
+        let err = pool.connect(&cfg).await.expect_err("未开 TLS 应被拦下");
+        let text = err.to_string();
+        assert!(text.contains("TLS 加密"), "实际: {text}");
 
-        let err = pool.test(&cfg).await.expect_err("测试连接同样应当被拦下");
-        assert!(matches!(err, AppError::TlsNotSupported), "实际: {err:?}");
+        let err = pool.test(&cfg).await.expect_err("测试连接同样应被拦下");
+        assert!(err.to_string().contains("TLS 加密"), "实际: {err}");
 
         assert!(
             started.elapsed() < Duration::from_secs(1),
@@ -531,6 +558,16 @@ mod tests {
             started.elapsed()
         );
         assert!(pool.conn("tls").is_err(), "被拦下的连接不应写进连接池");
+
+        // 勾选 TLS：前缀被剥掉，进入建连流程（地址不可达，应得到超时 / 连接错误，
+        // 而不再是「请勾选 TLS」的拦截提示）
+        cfg.tls = true;
+        cfg.port = 1; // 保留极短超时下的快速失败
+        let err = pool.connect(&cfg).await.expect_err("不可达地址应报错");
+        assert!(
+            !err.to_string().contains("TLS 加密"),
+            "勾选 TLS 后不应再被拦截: {err}"
+        );
     }
 
     /// 句柄沿用池的超时配置（集群逐节点扫描时，节点直连句柄也照此配置）。
@@ -546,6 +583,40 @@ mod tests {
         let con = pool.conn("inherit").expect("句柄应当可取");
         assert_eq!(con.timeout().command, timeout.command);
         assert_eq!(con.timeout().connect, timeout.connect);
+    }
+
+    /// 连接上自定义的命令超时会覆盖池默认值：池默认给 60 秒（足够掩盖卡死），
+    /// 连接配 1 秒 —— 卡死的命令必须在 1 秒量级返回，而不是等满池默认。
+    #[tokio::test]
+    async fn per_connection_command_timeout_overrides_pool_default() {
+        let (port, _server) = spawn_resp_stub("GET");
+        let pool = Pool::with_timeout(ConnectionTimeout {
+            connect: Duration::from_millis(300),
+            command: Duration::from_secs(60),
+        });
+        let mut cfg = conn_config("override", port);
+        cfg.command_timeout_secs = Some(1);
+        pool.connect(&cfg)
+            .await
+            .expect("握手命令有回包，建连应当成功");
+
+        let mut con = pool.conn("override").expect("句柄应当可取");
+        assert_eq!(con.timeout().command, Duration::from_secs(1));
+
+        let started = Instant::now();
+        let err = con
+            .query::<redis::Value>(redis::cmd("GET").arg("k"))
+            .await
+            .expect_err("卡死的命令应按连接级超时返回");
+        assert!(
+            matches!(err, AppError::Timeout(_)),
+            "应当是超时错误，实际: {err:?}"
+        );
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "应按连接级 1 秒超时返回，而不是池默认 60 秒，实际耗时 {:?}",
+            started.elapsed()
+        );
     }
 
     /// 真实 Redis 上验证：阻塞命令必须被命令超时打断（需本地 Redis）。

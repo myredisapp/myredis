@@ -1030,6 +1030,7 @@
         .tree-node .node-label .key-type.list { color: var(--blue); }
         .tree-node .node-label .key-type.set { color: var(--purple); }
         .tree-node .node-label .key-type.zset { color: #e8a94a; }
+        .tree-node .node-label .key-type.stream { color: #4ec9b0; }
         .tree-node .node-label .key-size {
             font-size: 10px;
             color: var(--text-muted);
@@ -1093,6 +1094,7 @@
         .detail-header .key-title .type-badge.list { color: var(--blue); background: rgba(106, 159, 216, 0.15); }
         .detail-header .key-title .type-badge.set { color: var(--purple); background: rgba(179, 146, 208, 0.15); }
         .detail-header .key-title .type-badge.zset { color: #e8a94a; background: rgba(232, 169, 74, 0.15); }
+        .detail-header .key-title .type-badge.stream { color: #4ec9b0; background: rgba(78, 201, 176, 0.15); }
         .detail-header .ttl {
             font-size: 13px;
             color: var(--text-secondary);
@@ -1270,6 +1272,15 @@
             flex: 1;
             min-width: 0;
         }
+        .detail-body .value-editor .coll-stream-fields {
+            display: block;
+            overflow-x: auto;
+            white-space: nowrap;
+            font-family: monospace;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .detail-body .value-editor .coll-stream-fields b { color: var(--accent); }
         .detail-body .value-editor .coll-input.coll-score {
             width: 90px;
             flex-shrink: 0;
@@ -2039,6 +2050,24 @@
                     <label class="checkbox-label"><input type="checkbox" id="connCluster" /><span>集群模式</span></label>
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="checkbox-label"><input type="checkbox" id="connTls" /><span>TLS 加密 (rediss://)</span></label>
+                </div>
+                <div class="form-group" id="connTlsInsecureWrap" style="visibility:hidden;">
+                    <label class="checkbox-label"><input type="checkbox" id="connTlsInsecure" /><span>跳过证书校验（自签名）</span></label>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>建连超时 (秒，可选)</label>
+                    <input type="number" id="connConnectTimeout" placeholder="默认 5" min="1" />
+                </div>
+                <div class="form-group">
+                    <label>命令超时 (秒，可选)</label>
+                    <input type="number" id="connCommandTimeout" placeholder="默认 10" min="1" title="大 Key 整表读取慢时可调大" />
+                </div>
+            </div>
             <div class="form-group">
                 <label for="connSeparator">Key 分隔符</label>
                 <input type="text" id="connSeparator" placeholder=":" maxlength="4" />
@@ -2202,7 +2231,9 @@
             // 集合类型最近一次加载的内容缓存（key|type → 数据），用于复制与大小统计
             const contentCache = {};
             // 各集合类型对应的内容读取命令
-            const COLL_READ_CMD = { hash: 'get_hash', list: 'get_list', set: 'get_set', zset: 'get_zset' };
+            const COLL_READ_CMD = { hash: 'get_hash', list: 'get_list', set: 'get_set', zset: 'get_zset', stream: 'get_stream' };
+            // Stream 详情区分页大小（XRANGE COUNT）
+            const STREAM_PAGE = 200;
 
             // ---------- 状态 ----------
             let currentConn = CONNECTIONS[0];
@@ -2656,6 +2687,10 @@
                         db: (conn.db !== undefined && conn.db !== null) ? conn.db : 0,
                         username: conn.username || null,
                         password: conn.password || null,
+                        tls: !!conn.tls,
+                        tls_insecure: !!conn.tlsInsecure,
+                        connect_timeout_secs: conn.connectTimeoutSecs || null,
+                        command_timeout_secs: conn.commandTimeoutSecs || null,
                     }
                 }).then(() => {
                     if (conn && conn.id) onlineConns.add(conn.id);
@@ -3142,7 +3177,7 @@
                             })
                             .catch(() => { /* 忽略 */ });
                     }
-                } else if (typeClass === 'hash' || typeClass === 'list' || typeClass === 'set' || typeClass === 'zset') {
+                } else if (typeClass === 'hash' || typeClass === 'list' || typeClass === 'set' || typeClass === 'zset' || typeClass === 'stream') {
                     // 集合类型：先占位，随后由 wireCollView 从后端拉取内容渲染
                     valueHtml = `
                         <div id="collView" class="coll-view" data-type="${typeClass}"><div class="coll-empty">加载中…</div></div>
@@ -3327,7 +3362,7 @@
                 }
 
                 // 集合类型：加载并渲染字段级编辑表格
-                if (typeClass === 'hash' || typeClass === 'list' || typeClass === 'set' || typeClass === 'zset') {
+                if (typeClass === 'hash' || typeClass === 'list' || typeClass === 'set' || typeClass === 'zset' || typeClass === 'stream') {
                     wireCollView(typeClass);
                 }
             }
@@ -3338,11 +3373,15 @@
                 const view = document.getElementById('collView');
                 if (!view || !currentConn || !currentConn.id) return;
                 const key = selectedKey;
-                invoke(COLL_READ_CMD[type], { connId: currentConn.id, key })
+                // Stream 走 XRANGE 分页（start 闭区间，翻页从下一 id 开始），其余类型一次全量
+                const args = type === 'stream'
+                    ? { connId: currentConn.id, key, start: '-', count: STREAM_PAGE }
+                    : { connId: currentConn.id, key };
+                invoke(COLL_READ_CMD[type], args)
                     .then((data) => {
                         if (selectedKey !== key) return;
                         contentCache[key + '|' + type] = data;
-                        renderCollRows(view, type, key, data);
+                        renderCollRows(view, type, key, data, type === 'stream' && data.length >= STREAM_PAGE ? 'more' : '');
                     })
                     .catch((err) => {
                         if (selectedKey !== key) return;
@@ -3350,7 +3389,30 @@
                     });
             }
 
-            function renderCollRows(view, type, key, data) {
+            /// XRANGE 起点是闭区间：翻页起点 = 最后一条 id 的序列号 + 1
+            function nextStreamId(id) {
+                const i = id.lastIndexOf('-');
+                if (i < 0) return id + '-1';
+                const seq = parseInt(id.slice(i + 1), 10);
+                return id.slice(0, i + 1) + (Number.isFinite(seq) ? seq + 1 : 1);
+            }
+
+            /// Stream「加载更多」：追加下一页到缓存并重渲染
+            function loadMoreStream(key) {
+                const cached = contentCache[key + '|stream'] || [];
+                if (!cached.length) return;
+                invoke('get_stream', { connId: currentConn.id, key, start: nextStreamId(cached[cached.length - 1].id), count: STREAM_PAGE })
+                    .then((more) => {
+                        if (selectedKey !== key) return;
+                        const all = cached.concat(more);
+                        contentCache[key + '|stream'] = all;
+                        const view = document.getElementById('collView');
+                        if (view) renderCollRows(view, 'stream', key, all, more.length >= STREAM_PAGE ? 'more' : '');
+                    })
+                    .catch((err) => showToast('加载失败: ' + err, 'error'));
+            }
+
+            function renderCollRows(view, type, key, data, hasMore) {
                 const readonly = !!(currentConn && currentConn.online && currentConn.readonly);
                 const dis = readonly ? ' disabled' : '';
                 const btn = (act, attrs, icon, title) =>
@@ -3404,6 +3466,28 @@
                             ${btn('sadd', '', 'plus', '添加成员')}
                         </div>`;
                     if (!arr.length) emptyTip = '<div class="coll-empty">空 Set</div>';
+                } else if (type === 'stream') {
+                    const arr = data || [];
+                    rows = arr.map((it) => `
+                        <div class="coll-row coll-stream-row">
+                            <span class="idx" title="条目 id">${escapeHtml(it.id)}</span>
+                            <span class="coll-input grow coll-stream-fields">${it.fields.map(f => `<div><b>${escapeHtml(f.field)}</b>=${escapeHtml(f.value)}</div>`).join('')}</span>
+                            ${btn('xdel', `data-id="${escapeHtml(it.id)}"`, 'trash-alt', '删除条目')}
+                        </div>`).join('');
+                    if (hasMore === 'more') {
+                        rows += `
+                        <div class="coll-row coll-add">
+                            <button class="coll-btn" data-act="xmore" title="加载更多条目"><i class="fas fa-angle-down"></i> 加载更多</button>
+                        </div>`;
+                    }
+                    rows += `
+                        <div class="coll-row coll-add">
+                            <input class="coll-input" id="collAddStreamId" placeholder="条目 id（留空自动）"${dis} />
+                            <input class="coll-input" id="collAddKey" placeholder="字段名"${dis} />
+                            <input class="coll-input grow" id="collAddVal" placeholder="字段值"${dis} />
+                            ${btn('xadd', '', 'plus', '添加条目')}
+                        </div>`;
+                    if (!arr.length) emptyTip = '<div class="coll-empty">空 Stream</div>';
                 } else if (type === 'zset') {
                     const arr = data || [];
                     rows = arr.map((it, i) => `
@@ -3578,6 +3662,26 @@
                         `ZREM ${key} "${member}" → OK`,
                         `ZREM ${key} "${member}"`
                     );
+                } else if (act === 'xadd') {
+                    const entryId = valOf('collAddStreamId').trim();
+                    const field = valOf('collAddKey');
+                    const value = valOf('collAddVal');
+                    if (!require(field, '请输入字段名', 'collAddKey')) return;
+                    if (!require(value, '请输入字段值', 'collAddVal')) return;
+                    finish(
+                        invoke('stream_add_entry', { connId, key, entryId: entryId || null, fields: [{ field, value }] }),
+                        `XADD ${key} ${entryId || '*'} ${field} "${value}" → OK`,
+                        `XADD ${key}`
+                    );
+                } else if (act === 'xdel') {
+                    const entryId = el.dataset.id;
+                    finish(
+                        invoke('stream_del_entry', { connId, key, entryIds: [entryId] }),
+                        `XDEL ${key} ${entryId} → OK`,
+                        `XDEL ${key} ${entryId}`
+                    );
+                } else if (act === 'xmore') {
+                    loadMoreStream(key);
                 }
             }
 
@@ -3635,6 +3739,11 @@
                     document.getElementById('connReadonly').checked = !!conn.readonly;
                     document.getElementById('connCluster').checked = conn.type === 'cluster';
                     document.getElementById('connSeparator').value = conn.separator || '';
+                    document.getElementById('connTls').checked = !!conn.tls;
+                    document.getElementById('connTlsInsecure').checked = !!conn.tlsInsecure;
+                    document.getElementById('connConnectTimeout').value = conn.connectTimeoutSecs || '';
+                    document.getElementById('connCommandTimeout').value = conn.commandTimeoutSecs || '';
+                    syncTlsInsecureVisibility();
                 } else {
                     editingConnId = null;
                     modalTitle.textContent = '新建连接';
@@ -3646,6 +3755,11 @@
                     document.getElementById('connReadonly').checked = false;
                     document.getElementById('connCluster').checked = false;
                     document.getElementById('connSeparator').value = '';
+                    document.getElementById('connTls').checked = false;
+                    document.getElementById('connTlsInsecure').checked = false;
+                    document.getElementById('connConnectTimeout').value = '';
+                    document.getElementById('connCommandTimeout').value = '';
+                    syncTlsInsecureVisibility();
                 }
                 showTestStatus('', '');
                 modal.classList.add('open');
@@ -3711,6 +3825,26 @@
                 if (e.target.id === 'confirmModal') closeConfirm(false);
             });
 
+            // 连接对话框里 TLS / 超时两个可选项的收集：空或非法一律回落默认（传 null）
+            function collectConnExtra() {
+                const num = (id) => {
+                    const v = parseInt(document.getElementById(id).value, 10);
+                    return Number.isFinite(v) && v > 0 ? v : null;
+                };
+                return {
+                    tls: document.getElementById('connTls').checked,
+                    tls_insecure: document.getElementById('connTlsInsecure').checked,
+                    connect_timeout_secs: num('connConnectTimeout'),
+                    command_timeout_secs: num('connCommandTimeout'),
+                };
+            }
+
+            // 只有勾选 TLS 才显示「跳过证书校验」
+            function syncTlsInsecureVisibility() {
+                document.getElementById('connTlsInsecureWrap').style.visibility =
+                    document.getElementById('connTls').checked ? 'visible' : 'hidden';
+            }
+
             // 主机字段里填了带协议的地址（如 rediss://host）时给出提示。
             // 后端在保存 / 导入 / 建连三处也会拦（校验在 models/connection.rs），
             // 这里先拦一次只是省一趟往返、并把提示显示在用户正看着的位置。
@@ -3719,7 +3853,12 @@
                 if (!m) return '';
                 const scheme = m[1].toLowerCase();
                 if (scheme === 'rediss' || scheme === 'tls' || scheme === 'ssl') {
-                    return '暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接';
+                    // 勾选 TLS 后由后端剥掉前缀；带账号 / 端口 / 路径的仍要拦（后端也会拦）
+                    if (document.getElementById('connTls').checked) {
+                        const rest = m.input.slice(m[0].length);
+                        if (!rest.includes('@') && !rest.includes('/') && !rest.includes(':')) return '';
+                    }
+                    return '主机字段检测到 rediss:// 前缀：如需 TLS 加密连接，请勾选「TLS 加密」，主机字段只需填主机名';
                 }
                 return `主机字段只需填主机名（如 127.0.0.1），不要带 ${scheme}:// 前缀`;
             }
@@ -3749,6 +3888,7 @@
                     separator: separator || ':',
                     username: document.getElementById('connUser').value || null,
                     password: document.getElementById('connPass').value || null,
+                    ...collectConnExtra(),
                 };
                 invoke('save_connection', { conn }).then(() => {
                     closeModal();
@@ -3799,6 +3939,7 @@
                     separator: document.getElementById('connSeparator').value || ':',
                     username: document.getElementById('connUser').value || null,
                     password: document.getElementById('connPass').value || null,
+                    ...collectConnExtra(),
                 };
 
                 invoke('test_connection', { conn })
@@ -3933,6 +4074,13 @@
             });
             document.getElementById('connReadonly').addEventListener('change', () => showTestStatus('', ''));
             document.getElementById('connCluster').addEventListener('change', () => showTestStatus('', ''));
+            document.getElementById('connTls').addEventListener('change', () => {
+                syncTlsInsecureVisibility();
+                if (!document.getElementById('connTls').checked) {
+                    document.getElementById('connTlsInsecure').checked = false;
+                }
+                showTestStatus('', '');
+            });
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') closeModal();
                 if (e.key === 'Enter' && modal.classList.contains('open')) saveConnection();
@@ -4128,6 +4276,10 @@
                         separator: c.separator || ':',
                         username: c.username || '',
                         password: c.password || '',
+                        tls: !!c.tls,
+                        tlsInsecure: !!c.tls_insecure,
+                        connectTimeoutSecs: c.connect_timeout_secs || null,
+                        commandTimeoutSecs: c.command_timeout_secs || null,
                     }));
                     if (currentConn) {
                         const still = CONNECTIONS.find(c => c.id === currentConn.id);

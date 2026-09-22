@@ -45,6 +45,10 @@ fn cluster_conn(id: &str) -> Connection {
         db: 0,
         username: None,
         password: None,
+        tls: false,
+        tls_insecure: false,
+        connect_timeout_secs: None,
+        command_timeout_secs: None,
     }
 }
 

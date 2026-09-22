@@ -15,7 +15,8 @@
 //!     { "key": "h", "type": "hash",   "ttl": -1, "value": { "f": "v" } },
 //!     { "key": "l", "type": "list",   "ttl": -1, "value": ["a", "b"] },
 //!     { "key": "t", "type": "set",    "ttl": -1, "value": ["m"] },
-//!     { "key": "z", "type": "zset",   "ttl": -1, "value": [{ "member": "m", "score": 1.0 }] }
+//!     { "key": "z", "type": "zset",   "ttl": -1, "value": [{ "member": "m", "score": 1.0 }] },
+//!     { "key": "x", "type": "stream", "ttl": -1, "value": [{ "id": "1-1", "fields": { "f": "v" } }] }
 //!   ]
 //! }
 //! ```
@@ -28,6 +29,7 @@ use serde::Serialize;
 use crate::connection_pool::Pool;
 use crate::connection_pool::PooledConn;
 use crate::error::command_error_text;
+use crate::error::AppError;
 
 /// 导入单条失败的原因。
 #[derive(Debug, Clone, Serialize)]
@@ -173,7 +175,32 @@ pub async fn export_keys_inner(
                         .collect(),
                 )
             }
-            // stream 等暂不支持的类型整体跳过，并在结果里可见（导出为 null 会让导入产生歧义）
+            "stream" => {
+                // 全量导出（无 COUNT 限制）。超大 Stream 可能超过命令超时，
+                // 需要更长的读取时间请在连接设置里调大命令超时（DEVELOPMENT.md §2.4）。
+                // XRANGE 的嵌套条目结构用共享辅助函数解析（见 key_content）
+                let raw: Vec<redis::Value> = con
+                    .query(redis::cmd("XRANGE").arg(key).arg("-").arg("+"))
+                    .await
+                    .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
+                let items = crate::commands::key_content::parse_xrange_entries(raw)
+                    .map_err(|e| command_error_text(&AppError::msg(e), Some(&conn_cfg)))?;
+                serde_json::Value::Array(
+                    items
+                        .into_iter()
+                        .map(|(id, flat)| {
+                            let obj: serde_json::Map<String, serde_json::Value> = flat
+                                .chunks_exact(2)
+                                .map(|pair| {
+                                    (pair[0].clone(), serde_json::Value::String(pair[1].clone()))
+                                })
+                                .collect();
+                            serde_json::json!({ "id": id, "fields": serde_json::Value::Object(obj) })
+                        })
+                        .collect(),
+                )
+            }
+            // 未知类型整体跳过，并在结果里可见（导出为 null 会让导入产生歧义）
             _ => continue,
         };
 
@@ -401,6 +428,40 @@ async fn write_value(
             }
             con.query::<()>(&cmd).await
         }
+        "stream" => {
+            let arr = item
+                .value
+                .as_array()
+                .ok_or("stream 类型的 value 必须是数组")?;
+            if arr.is_empty() {
+                return Err("空 Stream 无法导入（Redis 不支持空 key）".into());
+            }
+            // 逐条 XADD 并保留原始 entry id（覆盖模式已先 DEL，id 单调递增不会被拒）。
+            // 条目 id 是导入后消费组的起点，静默重排会让下游消费者重复/漏读。
+            for entry in arr {
+                let id = entry
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .ok_or("stream 条目缺少 id 字段")?;
+                let fields = entry
+                    .get("fields")
+                    .and_then(|v| v.as_object())
+                    .ok_or("stream 条目的 fields 必须是对象")?;
+                if fields.is_empty() {
+                    return Err("stream 条目至少需要一个字段".into());
+                }
+                let mut cmd = redis::cmd("XADD");
+                cmd.arg(key).arg(id);
+                for (f, v) in fields {
+                    let s = v.as_str().ok_or("stream 字段值必须是字符串")?;
+                    cmd.arg(f).arg(s);
+                }
+                con.query::<()>(&cmd)
+                    .await
+                    .map_err(|e| command_error_text(&e, Some(conn_cfg)))?;
+            }
+            return Ok(());
+        }
         other => return Err(format!("不支持的类型: {other}")),
     }
     .map_err(|e| command_error_text(&e, Some(conn_cfg)))?;
@@ -438,6 +499,10 @@ mod tests {
             db: 0,
             username: None,
             password: None,
+            tls: false,
+            tls_insecure: false,
+            connect_timeout_secs: None,
+            command_timeout_secs: None,
         };
         pool.connect(&conn)
             .await
@@ -523,6 +588,59 @@ mod tests {
         assert_eq!(score, 1.5);
 
         con.query::<()>(redis::cmd("DEL").arg(&keys)).await.unwrap();
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn stream_export_import_roundtrip() -> Result<(), String> {
+        let conn_id = format!("impexp_stream:{}", unique_id());
+        let pool = test_pool(&conn_id).await?;
+        let key = format!("maidi:ie:x:{}", unique_id());
+        let mut con = pool.conn(&conn_id).unwrap();
+
+        // 造数据：两个条目，各自带不同数量的字段
+        con.query::<()>(
+            redis::cmd("XADD")
+                .arg(&key)
+                .arg("1000-1")
+                .arg("f1")
+                .arg("v1")
+                .arg("f2")
+                .arg("v2"),
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+        con.query::<()>(redis::cmd("XADD").arg(&key).arg("1000-2").arg("g").arg("w"))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let doc = export_keys_inner(&pool, &conn_id, Some(vec![key.clone()])).await?;
+        assert_eq!(doc.count, 1, "Stream 应被导出: {doc:?}");
+        assert!(
+            doc.content.contains("stream") && doc.content.contains("1000-1"),
+            "导出文档应含 stream 类型与原始 entry id: {doc:?}"
+        );
+
+        con.query::<()>(redis::cmd("DEL").arg(&key)).await.unwrap();
+        let result = import_keys_inner(&pool, &conn_id, &doc.content, true).await?;
+        assert_eq!(result.imported, 1, "Stream 应能导入: {result:?}");
+        assert!(result.failed.is_empty(), "不应有失败: {result:?}");
+
+        // entry id 必须原样保留（导入后 id 递增才不会被拒，消费组也不受影响）
+        let raw: Vec<redis::Value> = con
+            .query(redis::cmd("XRANGE").arg(&key).arg("-").arg("+"))
+            .await
+            .map_err(|e| e.to_string())?;
+        let entries = crate::commands::key_content::parse_xrange_entries(raw)?;
+        let ids: Vec<String> = entries.into_iter().map(|(id, _)| id).collect();
+        assert_eq!(
+            ids,
+            vec!["1000-1", "1000-2"],
+            "entry id 应原样还原: {ids:?}"
+        );
+
+        con.query::<()>(redis::cmd("DEL").arg(&key)).await.unwrap();
         Ok(())
     }
 

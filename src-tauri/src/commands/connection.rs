@@ -32,10 +32,14 @@ pub async fn list_connections(state: State<'_, AppState>) -> Result<Vec<Connecti
 
 /// 保存（新增或更新）一个连接配置，持久化到本地。
 ///
-/// 不受支持的协议前缀（如 `rediss://`）在这里就拦下，避免存下一条永远连不上的配置。
+/// 不受支持的协议前缀（如未开 TLS 的 `rediss://`）在这里就拦下；已开 TLS 的
+/// `rediss://host` 剥掉前缀后保存，避免存下一条带重复协议的 host。
 #[tauri::command]
-pub async fn save_connection(state: State<'_, AppState>, conn: Connection) -> Result<(), String> {
-    conn.check_supported_scheme().map_err(|e| e.to_string())?;
+pub async fn save_connection(
+    state: State<'_, AppState>,
+    mut conn: Connection,
+) -> Result<(), String> {
+    conn.host = conn.check_supported_scheme().map_err(|e| e.to_string())?;
     let repo = state.repo();
     let mut all = repo.load_async().await.map_err(|e| e.to_string())?;
     if let Some(existing) = all.iter_mut().find(|c| c.id == conn.id) {
@@ -47,6 +51,8 @@ pub async fn save_connection(state: State<'_, AppState>, conn: Connection) -> Re
 }
 
 /// 删除一个连接配置，返回是否删除成功。
+///
+/// 密钥链里对应的密码条目一并删除（尽力而为：密钥链不可用时无条目可删）。
 #[tauri::command]
 pub async fn delete_connection(
     state: State<'_, AppState>,
@@ -57,6 +63,9 @@ pub async fn delete_connection(
     let before = all.len();
     all.retain(|c| c.id != conn_id);
     repo.save_all_async(&all).await.map_err(|e| e.to_string())?;
+    if all.len() != before {
+        repo.delete_password(&conn_id);
+    }
     Ok(all.len() != before)
 }
 
@@ -200,8 +209,11 @@ fn parse_import_doc(
             .map(|s| s.to_string())
             .unwrap_or_else(|| format!("#{idx}"));
         match serde_json::from_value::<Connection>(item) {
-            Ok(conn) => match validate_connection(&conn) {
-                Ok(()) => conns.push(conn),
+            Ok(mut conn) => match validate_connection(&conn) {
+                Ok(host) => {
+                    conn.host = host;
+                    conns.push(conn);
+                }
                 Err(msg) => failed.push(ConnectionImportFailure {
                     name: label,
                     error: msg,
@@ -216,11 +228,11 @@ fn parse_import_doc(
     Ok((conns, failed))
 }
 
-/// 校验一条导入的连接配置是否可用。
+/// 校验一条导入的连接配置是否可用，返回剥掉协议前缀后的主机名。
 ///
-/// 协议前缀同样要校验：导入文件里可能带着 `rediss://` 之类本版本连不上的地址，
-/// 记入失败列表比存下来、连接时再报错更早也更清楚。
-fn validate_connection(conn: &Connection) -> Result<(), String> {
+/// 协议前缀同样要校验：导入文件里可能带着 `rediss://` 之类地址 —— 未开 TLS 的
+/// 记入失败列表比存下来、连接时再报错更早也更清楚；已开 TLS 的剥掉前缀入库。
+fn validate_connection(conn: &Connection) -> Result<String, String> {
     if conn.id.trim().is_empty() {
         return Err("缺少 id".into());
     }
@@ -233,8 +245,7 @@ fn validate_connection(conn: &Connection) -> Result<(), String> {
     if conn.port == 0 {
         return Err("端口不合法".into());
     }
-    conn.check_supported_scheme().map_err(|e| e.to_string())?;
-    Ok(())
+    conn.check_supported_scheme().map_err(|e| e.to_string())
 }
 
 /// 把导入的连接合并进现有列表。
@@ -285,6 +296,10 @@ mod tests {
             db: 0,
             username: Some("default".into()),
             password: password.map(|p| p.to_string()),
+            tls: false,
+            tls_insecure: false,
+            connect_timeout_secs: None,
+            command_timeout_secs: None,
         }
     }
 
@@ -354,35 +369,42 @@ mod tests {
         assert!(failed.iter().any(|f| f.name == "空 id"));
     }
 
-    /// 导入文件里的 TLS 地址（`rediss://`）记入失败列表并给出友好提示 ——
-    /// 而不是存下来、等用户连接时才报一条看不懂的错误。
+    /// 导入文件里的 TLS 地址（`rediss://`）在未勾选 TLS 时记入失败列表并给出友好提示 ——
+    /// 而不是存下来、等用户连接时才报一条看不懂的错误；勾选 TLS 的条目正常导入。
     #[test]
-    fn parse_rejects_tls_hosts_with_friendly_message() {
+    fn parse_rejects_tls_hosts_without_tls_flag() {
         let content = r#"{"connections":[
             {"id":"tls","name":"加密连接","host":"rediss://redis.example.com","port":6379,"type":"single"},
+            {"id":"tls-on","name":"加密连接2","host":"rediss://redis.example.com","port":6379,"type":"single","tls":true},
             {"id":"plain","name":"明文连接","host":"redis.example.com","port":6379,"type":"single"}
         ]}"#;
         let (conns, failed) = parse_import_doc(content).expect("文档整体可解析");
-        assert_eq!(conns.len(), 1, "只有明文那条可以导入: {conns:?}");
-        assert_eq!(conns[0].id, "plain");
-        assert_eq!(failed.len(), 1, "TLS 条目应记入失败列表: {failed:?}");
+        assert_eq!(conns.len(), 2, "勾选 TLS 与明文两条可以导入: {conns:?}");
+        assert_eq!(conns[0].id, "tls-on");
+        assert_eq!(conns[0].host, "redis.example.com", "前缀应在导入时被剥掉");
+        assert_eq!(conns[1].id, "plain");
+        assert_eq!(failed.len(), 1, "未开 TLS 的条目应记入失败列表: {failed:?}");
         assert_eq!(failed[0].name, "加密连接");
         assert!(
-            failed[0].error.contains("暂不支持 TLS 加密连接"),
-            "提示应说明不支持 TLS: {}",
+            failed[0].error.contains("TLS 加密"),
+            "提示应引导打开 TLS 开关: {}",
             failed[0].error
         );
     }
 
-    /// 校验函数对协议前缀的判定：TLS 拦下，粘贴的 `redis://` 给出填法提示，普通主机名放行。
+    /// 校验函数对协议前缀的判定：未开 TLS 拦下并提示，粘贴的 `redis://` 给出填法提示，
+    /// 勾选 TLS 的 `rediss://` 放行并剥掉前缀，普通主机名放行。
     #[test]
     fn validate_connection_checks_scheme() {
         assert!(super::validate_connection(&sample("c1", "本地", None)).is_ok());
 
         let mut tls = sample("c2", "加密", None);
         tls.host = "rediss://redis.example.com".into();
-        let err = super::validate_connection(&tls).expect_err("TLS 地址不应通过校验");
-        assert!(err.contains("暂不支持 TLS 加密连接"), "{err}");
+        let err = super::validate_connection(&tls).expect_err("未开 TLS 不应通过校验");
+        assert!(err.contains("TLS 加密"), "{err}");
+
+        tls.tls = true;
+        assert!(super::validate_connection(&tls).is_ok());
 
         let mut pasted = sample("c3", "粘贴的 URL", None);
         pasted.host = "redis://127.0.0.1".into();

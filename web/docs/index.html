@@ -622,12 +622,14 @@
                         </thead>
                         <tbody>
                             <tr><td><strong>连接名称</strong></td><td>只用于显示，随便起个能认出来的名字，例如「本地开发」「生产环境」。</td></tr>
-                            <tr><td><strong>主机</strong></td><td>Redis 服务器地址，例如 <code>127.0.0.1</code> 或 <code>redis.example.com</code>。<strong>只填主机名</strong>，不要带 <code>redis://</code> / <code>rediss://</code> 这类协议前缀 —— 带上会被直接拦下并提示，见<a class="link" href="#faq">常见问题</a>。</td></tr>
+                            <tr><td><strong>主机</strong></td><td>Redis 服务器地址，例如 <code>127.0.0.1</code> 或 <code>redis.example.com</code>。<strong>只填主机名</strong>：带 <code>redis://</code> 前缀会被拦下提示；带 <code>rediss://</code> 前缀且勾选了「TLS 加密」则自动剥掉前缀，未勾选会提示去开开关，见<a class="link" href="#faq">常见问题</a>。</td></tr>
                             <tr><td><strong>端口</strong></td><td>默认 <code>6379</code>。</td></tr>
                             <tr><td>用户名（可选）</td><td>Redis 6.0 及以上支持 ACL 用户名；留空则按传统单密码方式认证。</td></tr>
                             <tr><td>密码（可选）</td><td>服务器设置了 <code>requirepass</code> 时填写；没有密码就留空。</td></tr>
                             <tr><td>只读连接</td><td>勾选后禁止一切写操作，连接生产环境时建议打开。详见<a class="link" href="#readonly">只读模式</a>。</td></tr>
                             <tr><td>集群模式</td><td>连接 Redis Cluster 时勾选，填任意一个节点地址即可。详见<a class="link" href="#cluster">集群模式</a>。</td></tr>
+                            <tr><td>TLS 加密</td><td>勾选后走 <code>rediss://</code> 加密连接；自签名证书校验不过时，再勾选「跳过证书校验（自签名）」。</td></tr>
+                            <tr><td>建连 / 命令超时</td><td>可选，秒。默认建连 5 秒、命令 10 秒；大 Key 整表读取慢（如大 Hash / Stream）可把命令超时调大。</td></tr>
                             <tr><td>Key 分隔符</td><td>默认 <code>:</code>，决定 Key 列表如何折叠成文件夹。详见<a class="link" href="#keys">浏览与查找 Key</a>。</td></tr>
                         </tbody>
                     </table>
@@ -669,8 +671,9 @@
                 </p>
                 <div class="note warn">
                     <div class="nt"><svg class="icon" aria-hidden="true"><use href="#i-alert" /></svg>请注意</div>
-                    密码与用户名以<strong>明文</strong>保存在这个文件里。不要把该文件提交到仓库或分享给别人；在共用电脑上使用时请留意。
-                    导出时可以选择<strong>不带密码</strong>（默认带），带密码的导出文件同样要当成敏感文件保管。
+                    密码<strong>不保存在这个文件里</strong> —— 应用把密码存进系统密钥链（macOS Keychain /
+                    Windows 凭据管理器 / Linux Secret Service），文件里只有主机、端口等连接参数。
+                    导出时可以选择<strong>不带密码</strong>（默认带），带密码的导出文件要当成敏感文件保管。
                 </div>
             </section>
 
@@ -769,7 +772,12 @@
                 </ul>
                 <p>
                     这些类型的修改是<strong>即时保存</strong>的（点行内的 <i class="fas fa-check"></i> 即写入服务器），
-                    顶部的「保存」按钮只负责 TTL。Stream 等其余类型仍提示「暂不支持此类型」。
+                    顶部的「保存」按钮只负责 TTL。
+                </p>
+                <p>
+                    <strong>Stream</strong> 按条目展示（entry id + 字段列表，每页 200 条、底部「加载更多」翻页），
+                    可追加条目（id 留空由服务器自动生成）、按 id 删除条目；导出 / 导入同样覆盖 Stream 类型
+                    （导入保留原始 entry id）。
                 </p>
             </section>
 
@@ -948,21 +956,22 @@
                     <li>Key 列表浏览、关键字搜索（服务器端扫描，未加载的 Key 也能搜到）、按自定义分隔符折叠文件夹</li>
                     <li>Key 列表分批加载与虚拟滚动，Key 很多时也不会卡</li>
                     <li>String 类型值的查看、编辑、保存、复制、JSON 格式化</li>
-                    <li>Hash / List / Set / ZSet 内容的加载与字段级新增、修改、删除</li>
+                    <li>Hash / List / Set / ZSet / Stream 内容的加载与字段级新增、修改、删除（Stream 按 entry 分页）</li>
                     <li>TTL 查看与修改（<code>-1</code> 表示永不过期，任意类型均可改）</li>
                     <li>新增 String Key、删除 Key（带确认）</li>
                     <li>内置终端：命令真实转发到服务器执行，结果按 redis-cli 风格展示</li>
                     <li>Key 导入 / 导出（JSON 格式，导入前确认覆盖策略）</li>
                     <li>服务器指标：内存、连接数、Key 总数、磁盘占用</li>
-                    <li>超时保护：建连 5 秒、单条命令 10 秒，服务器无响应时明确提示原因，界面不会一直等待</li>
-                    <li>连接参数校验：主机字段里的 <code>rediss://</code> 等协议前缀会在测试 / 保存 / 导入时直接提示，而不是给一条地址解析错误</li>
+                    <li>超时保护：默认建连 5 秒、单条命令 10 秒（每个连接可自定义），服务器无响应时明确提示原因，界面不会一直等待</li>
+                    <li>TLS 加密连接（<code>rediss://</code>）：连接对话框勾选「TLS 加密」即可，自签名证书可跳过校验</li>
+                    <li>密码存系统密钥链：<code>connections.json</code> 不落密码，密钥链不可用时自动降级为文件存储</li>
+                    <li>连接参数校验：主机字段里的 <code>redis://</code> 等协议前缀会在测试 / 保存 / 导入时直接提示，而不是给一条地址解析错误</li>
                     <li>自动更新：后台下载新版本（下载期间可继续使用），下好后重启应用即完成升级</li>
                     <li>五款四季主题、面板拖拽与布局记忆</li>
                     <li>macOS 菜单栏：<strong>Window</strong> / <strong>Settings</strong>（主题、检查更新）/ <strong>Help</strong>，其中 Window、Help 与系统一致，Settings 是应用自己的设置入口</li>
                 </ul>
                 <h3>明确不支持</h3>
                 <ul>
-                    <li>TLS / SSL 加密连接（<code>rediss://</code> / <code>tls://</code>）：只支持明文 <code>redis://</code>，不加载 CA 证书。填了这类前缀会提示「暂不支持 TLS 加密连接 (rediss)」，详见<a class="link" href="#faq">常见问题</a></li>
                     <li>SSH 隧道：请自行在本地建好隧道后连接本机端口</li>
                     <li>主从 / Sentinel 故障转移：只透传命令，不做故障转移（集群模式的自动路由不受影响）</li>
                 </ul>
@@ -999,18 +1008,16 @@
                     <summary>支持 TLS / SSL（<code>rediss://</code>）加密连接吗？</summary>
                     <div class="faq-body">
                         <p>
-                            不支持。当前版本只支持明文的 <code>redis://</code> 连接，不提供 <code>rediss://</code> /
-                            <code>tls://</code> 协议，也不加载任何 CA 证书。
+                            <strong>支持。</strong>新建 / 编辑连接时勾选「<strong>TLS 加密</strong>」，连接即走
+                            <code>rediss://</code>；证书使用系统根证书校验。
                         </p>
                         <p>
-                            在「主机」里填了带 <code>rediss://</code> 前缀的地址时，<strong>测试连接、保存连接</strong>
-                            都会直接提示「暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接」——
-                            不会静默去掉前缀去连一个明文端口，也不会只给一条看不懂的地址解析错误。
+                            服务器用的是<strong>自签名证书</strong>（校验不过）时，再勾选「跳过证书校验（自签名）」即可连通
+                            —— 数据仍是加密的，只是不验证服务器身份，请确认你信任该服务器。
                         </p>
                         <p>
-                            服务器强制加密（配了 <code>tls-port</code>）时，需要加密连接请先用
-                            <code>redis-cli --tls</code> 等支持 TLS 的工具；若只是本机管理，可以在服务器上另开一个
-                            仅监听 <code>127.0.0.1</code> 的明文端口专供本应用使用。
+                            「主机」字段仍<strong>只填主机名</strong>：带 <code>rediss://</code> 前缀且已勾选 TLS 时会自动剥掉前缀，
+                            未勾选则提示你去开开关，不会静默连明文端口。
                         </p>
                     </div>
                 </details>
@@ -1051,7 +1058,7 @@
                         <p>
                             导出会把<strong>当前数据库的全部 Key</strong>（String / Hash / List / Set / ZSet，含 TTL）
                             下载为一个 JSON 文件；导入选择该文件后，会提示「已存在的同名 Key 将被覆盖」，
-                            确认后开始导入并报告成功 / 跳过 / 失败的数量。Stream 等类型暂不参与导出。
+                            确认后开始导入并报告成功 / 跳过 / 失败的数量。Stream 类型保留原始 entry id，消费组不受导入影响。
                         </p>
                     </div>
                 </details>
@@ -1080,8 +1087,10 @@
                     <summary>连接配置和密码保存在哪里？安全吗？</summary>
                     <div class="faq-body">
                         <p>
-                            保存在应用配置目录的 <code>connections.json</code> 里（路径见<a class="link" href="#connect">连接 Redis</a>），
-                            用户名与密码是<strong>明文</strong>存储的。请不要把该文件提交到代码仓库或分享给他人；共用电脑上使用时要留意这一点。
+                            连接参数（主机、端口等）保存在应用配置目录的 <code>connections.json</code> 里（路径见<a class="link" href="#connect">连接 Redis</a>）；
+                            <strong>密码不落盘</strong> —— 应用把它存进系统密钥链（macOS Keychain / Windows 凭据管理器 /
+                            Linux Secret Service）。密钥链不可用的环境下会自动降级为文件存储（旧行为）。
+                            导出连接时可选是否带密码，带密码的导出文件请妥善保管。
                         </p>
                     </div>
                 </details>
