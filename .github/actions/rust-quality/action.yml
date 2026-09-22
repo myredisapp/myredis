@@ -1,8 +1,8 @@
 name: Rust 质量门禁
 description: |
   cargo fmt --check / cargo clippy -D warnings / 全量测试（含 #[ignore] 集成用例）。
-  集成用例需要本机 Redis（6379）与三节点集群（7001 起），动作内部负责拉起
-  （见 .github/scripts/start-test-redis.sh）。只支持 Linux runner。
+  集成用例需要本机 Redis（6379）、TLS Redis（6390，自签名）与三节点集群
+  （7001 起），动作内部负责拉起（见 .github/scripts/start-test-redis.sh）。只支持 Linux runner。
 runs:
   using: composite
   steps:
