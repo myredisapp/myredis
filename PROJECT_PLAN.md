@@ -203,15 +203,15 @@ pub struct ConnectionPool {
 启动 / 连接时若检测到以下情况，**统一返回语义化错误**，不静默降级：
 
 ```rust
-// TLS / rediss 统一入口校验
-if url.scheme() == "rediss" {
-    return Err("当前版本不支持 TLS/SSL 加密连接 (rediss)，请在连接配置中关闭 SSL 或使用明文连接".into());
+// TLS / rediss 统一入口校验（2026-09-22 更新：TLS 已支持，未开开关才拦）
+if url.scheme() == "rediss" && !conn.tls {
+    return Err("主机字段检测到 rediss:// 前缀：如需 TLS 加密连接，请在连接设置中勾选「TLS 加密」".into());
 }
 ```
 
 | 场景 | 错误提示 |
 |------|----------|
-| `rediss://` 协议 | `暂不支持 TLS 加密连接 (rediss)` |
+| `rediss://` 协议（未勾选 TLS） | `请勾选「TLS 加密」…`（勾选后剥掉前缀放行，见 9.4.1） |
 | 输入了 ACL 用户名 | 界面无用户名输入框，忽略该值 |
 | 集群模式下未开启 `cluster-enabled` | 返回 Redis 自身错误，透传展示 |
 
@@ -500,11 +500,17 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 
 ### 9.2 密码存储
 
-**决策：需要保存密码**，保存于上述 JSON 配置文件中。
+**决策：需要保存密码**。**2026-09-22 起改存系统密钥链**（keyring crate：macOS Keychain /
+Windows Credential Manager / Linux Secret Service），`connections.json` 中不再出现密码字段。
 
-> ⚠️ **安全说明（务必知晓）**：本方案采用本地明文（或可逆 base64）存储密码，任何有本机文件读取权限的进程 / 用户均可获取。请在 UI 中向用户明确提示风险。若后续对安全有更高要求，可改为系统密钥链（如 macOS Keychain / Windows Credential Manager / Secret Service）存储。
+- 保存时密码转存密钥链（条目 = 服务名 `maidi-cache` + 账号 = 连接 id），加载时从密钥链读回内存供编辑回显。
+- 存量明文密码首次加载自动迁移（写入密钥链并验证一致后从文件抹除）。
+- **降级**：密钥链不可用的环境（CI / Linux headless 无 D-Bus）该条密码保留在 JSON 里（即旧版明文行为），功能不受影响。
 
-具体字段：`Connection` 结构体新增 `password: Option<String>` 字段，仅当输入非空时才更新该字段（编辑连接时留空表示不修改密码）。为后续支持密钥链 / 加密做扩展。
+> 历史决策记录：原方案为本地明文（或可逆 base64）存储，⚠️ 任何有本机文件读取权限的进程均可获取。
+> 该风险已通过密钥链方案解决（见 `DEVELOPMENT.md` §2.4 P1 / §4 #1）。
+
+具体字段：`Connection` 结构体 `password: Option<String>` 字段，仅当输入非空时才更新该字段（编辑连接时留空表示不修改密码）。
 
 ### 9.3 目标 Redis 版本
 
@@ -523,14 +529,17 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 | 主从 / Sentinel | ⚠️ 部分 | 本期仅透传命令，不实现故障转移 |
 | 密码认证（`AUTH password`） | ✅ | 明文密码，见 9.2 |
 | ACL 用户名 + 密码认证（`AUTH username password`） | ✅ | Redis 6.0+ ACL，用户名留空时使用默认用户 |
-| **TLS / SSL（rediss）** | ❌ | **本期不支持**，详见下方说明 |
+| **TLS / SSL（rediss）** | ✅ | **2026-09-22 起支持**：连接对话框勾选「TLS 加密」走 `rediss://`，自签名证书可勾选「跳过证书校验」 |
 | SSH 隧道 | ❌ | 本期不支持 |
 
-#### 9.4.1 TLS / rediss 不支持说明
+#### 9.4.1 TLS / rediss 支持说明（2026-09-22 更新，原「不支持」决策作废）
 
-- 连接 URL 固定为 `redis://`，**不提供** `rediss://` 或 `tls://` 协议，也不加载任何 CA 证书。
-- 若用户输入 `rediss://` 开头的地址，程序将返回错误提示「暂不支持 TLS 加密连接 (rediss)」。
-- 依赖 `redis` crate 时关闭其 `tls` / `tokio-native-tls` 等 feature，避免误启用。
+- `Connection` 新增 `tls: bool` 开关：勾选后连接 URL 使用 `rediss://`（redis-rs `tokio-rustls-comp` feature）。
+- 自签名证书等校验不过的场景：勾选 `tls_insecure`（连接对话框「跳过证书校验」），URL 追加 `#insecure`
+  （redis-rs `tls-rustls-insecure` feature，不校验证书链）。
+- 主机字段填 `rediss://host` 且未开 TLS 时，测试 / 保存 / 导入 / 建连统一提示「请勾选 TLS 加密」；
+  已开 TLS 的剥掉前缀放行（带账号 / 端口 / 路径仍提示拆到专门字段）。
+- 自定义 CA 证书 / SNI 暂未支持，使用系统根证书（`rustls-native-certs`）。
 
 #### 9.4.2 ACL 用户名认证说明
 
@@ -550,7 +559,7 @@ const data = await invoke('list_keys', { connId: 'conn1', pattern: '*', cursor: 
 | 序号 | 结论 | 涉及章节 |
 |:----:|------|:--------:|
 | 1 | 连接配置存本地独立 JSON | 4.1 |
-| 2 | 存储密码（明文/可逆加密） | 4.1 / 9.2 |
+| 2 | 存储密码（~~明文/可逆加密~~ → 2026-09-22 起系统密钥链） | 4.1 / 9.2 |
 | 3 | 兼容 Redis < 6.0 | 9.3 |
-| 4 | 支持集群；不支持 TLS/ACL 用户名并写明 | 9.4 |
+| 4 | 支持集群；~~不支持 TLS~~ TLS 已支持（2026-09-22）；ACL 用户名已支持 | 9.4 |
 | 5 | 前端用原生 JS | 2 |

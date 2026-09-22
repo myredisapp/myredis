@@ -23,10 +23,6 @@ pub enum AppError {
     #[error("操作超时: {0}")]
     Timeout(String),
 
-    /// TLS 加密连接尚未支持。
-    #[error("暂不支持 TLS 加密连接 (rediss)，请使用明文 redis:// 连接")]
-    TlsNotSupported,
-
     /// IO 错误。
     #[error("IO 错误: {0}")]
     Io(#[from] std::io::Error),
@@ -141,6 +137,10 @@ mod tests {
             db: 0,
             username: None,
             password: None,
+            tls: false,
+            tls_insecure: false,
+            connect_timeout_secs: None,
+            command_timeout_secs: None,
         }
     }
 

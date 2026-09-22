@@ -34,6 +34,10 @@ fn conn(id: &str, conn_type: ConnType) -> Connection {
         db: 0,
         username: None,
         password: None,
+        tls: false,
+        tls_insecure: false,
+        connect_timeout_secs: None,
+        command_timeout_secs: None,
     }
 }
 
