@@ -32,7 +32,7 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C–F 待运维执行，残余风险 G–I 待做）。前端 JS 模块化在 `feat/2.4-frontend-split` 分支（PR #6）已完成、**尚未合入 main**，见 §4 #4 |
+| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C–F 待运维执行，残余风险 G–I 待做）。前端 JS 模块化已完成并随 PR #6 合入 main（19 个原生 ES 模块），见 §4 #4 |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
@@ -40,7 +40,9 @@
 > 最新 tag 为 `v0.0.16`（v0.0.13 起带自动更新清单与签名）。
 
 技术栈：Tauri 2 + Rust 2021 + `redis` 0.25（`tokio-comp` / `connection-manager` / `cluster` / `cluster-async`）
-+ tokio + sysinfo 0.39 + 原生 JS 前端（`frontend/index.html` 3389 行 + `frontend/styles.css` 2051 行，**无构建步骤**）。
++ tokio + sysinfo 0.39 + 原生 JS 前端（`frontend/index.html` 345 行结构骨架 + `frontend/js/*.js`
+19 个 ES 模块 3510 行 + `frontend/styles.css` 2051 行，**无构建步骤**：浏览器原生 `import`，
+不引打包器、不加 npm 依赖）。
 
 ---
 
@@ -159,8 +161,12 @@
       导入前确认覆盖策略，报告新增/覆盖、跳过、失败数量
 - [x] **底部面板双标签：终端 / 实时监控**（2026-09-22，§2.4）：面板标题栏可切换，
       监控页有开始/停止、状态、过滤框、自动滚动与清空；切换连接会停掉上一个连接的监控
-- [x] **样式外置**（2026-09-22）：`frontend/styles.css`（2051 行）从 `index.html` 的 `<style>`
-      原样搬出，`index.html` 5429 → 3389 行（拆分评估见 `docs/frontend-split-evaluation.md`）
+- [x] **前端模块化**（2026-09-22，两轮）：第一轮样式外置 `frontend/styles.css`（2051 行）；
+      第二轮把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个 ES 模块（每个 ≤400 行），
+      `index.html` 3389 → 345 行、只留结构 + `<script type="module" src="./js/main.js">`；
+      跨模块状态收进 `js/state.js`（只暴露读写函数），反向依赖走 `onKeysChanged` 订阅。
+      评估、模块清单与验证见 `docs/frontend-split-evaluation.md`，回归网是
+      `scripts/frontend-smoke.mjs`（17 个场景，已接进 CI）
 - [x] **macOS 菜单栏**（`src-tauri/src/menu.rs`，仅 macOS 生效）：Window / Settings / Help，
       Settings 下挂「Theme」子菜单（五款主题）与「Check for Updates…」，点击后由 Rust `emit` 事件、
       前端复用标题栏同一套逻辑（不会出现两套主题状态）；菜单栏不再单列 Edit —— macOS 的编辑快捷键靠
@@ -428,14 +434,27 @@
     `release.yml` 的发版门禁只跑 6.0 那一档（求「最保守环境也全绿」）。
   - 新用例天然分版本断言：`key_ops_integration.rs` 按服务器版本分别要求「复制成功」或「给出 6.2 提示」；
     新增的 `MYREDIS_TEST_PORT` 环境变量让这些用例能指向任意实例（本地用 Docker 起了 6.0.16 实测）。
-- [x] ✅ **前端单文件拆分评估**（2026-09-22 完成，§4 #4 状态更新）
+- [x] ✅ **前端单文件拆分评估 + 落地**（2026-09-22 完成两轮，§4 #4 关闭）
   - 结论与数据见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)：
     11 天从 3307 涨到 5429 行（约 +190 行/天），「复杂度继续上升」成立 → **该拆**；
     方案选**浏览器原生 ES 模块**（不引打包器、不加构建步骤，Tauri 资源协议对 `.js` 返回
     `text/javascript`），按「叶子先走、核心最后」分 4 阶段，每阶段都用冒烟脚本核对。
-  - **本轮已落地第一步**：样式外置 `frontend/styles.css`（2051 行，原样搬出，渲染逐像素一致）。
-  - 未做：JS 模块化（阶段 1–4）—— 需要动 `import/export` 与共享状态边界，属「改错就白屏」的一类改动，
-    应单独一轮、先固化前端冒烟脚本（评估文档第 5 节）再做。
+  - **第一轮**：样式外置 `frontend/styles.css`（2051 行，原样搬出，渲染逐像素一致）；
+    同时把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`
+    （不引 node_modules：Node 22 内置 `fetch` / `WebSocket` 说 CDP，Chrome 用系统已装的）。
+  - **第二轮（本轮）**：四阶段全部落地 —— 3042 行内联 JS → 19 个 ES 模块（每个 ≤400 行），
+    `index.html` 3389 → 345 行。共享状态收进 `js/state.js`（`selectedKey` / `KEY_DATA` /
+    `currentConn` / `onlineConns` 等只提供读写函数），Key 树分页游标、监控会话、更新进度等
+    单功能状态刻意留在各自模块；详情区改完数据要重绘 Key 树这类反向依赖走
+    `state.js` 的 `onKeysChanged` 订阅（由 `main.js` 装配），没有互相 `import` 成环。
+    顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$`，以及 `renderServerInfo` 里取来没用的 `diskEl`。
+  - 验证：冒烟脚本 17/17 场景通过（零未捕获异常、零 `console.error`）；
+    **真实 WKWebView + 自定义协议**下 19 个模块全部以 `text/javascript` 加载、页面零错误
+    （用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议响应头），并重建 debug 包
+    实际启动应用确认模块图执行（WebKit LocalStorage 在启动时被写入 `myredis.layout`）；
+    拆分前后对内联 JS 做逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 /
+    走通知重绘 / 删死代码），无功能逻辑改写。冒烟网在过程中抓出一个同名遮蔽 bug
+    （`const isOnline = isOnline(conn.id)`，界面会白屏）。
 - [x] ✅ **macOS 代码签名 / 公证接线**（2026-09-22 完成，§4 #6 状态更新）
   - 新增 `.github/scripts/setup-macos-signing.sh`：把 `APPLE_*` 凭据（证书 / 密码 / 身份 / Apple ID /
     专用密码 / 团队 ID）校验后写进 `$GITHUB_ENV`，tauri build 自己完成「导入证书 → 签名 → 公证 → staple」。
@@ -588,7 +607,7 @@
 | 集群下 `SELECT` 切库 | ❌ | 集群只有 db0，前端隐藏选择器、后端返回明确错误 |
 | 实时命令监控（Monitor） | ✅ | **2026-09-22 起支持**（见 §2.4）：底部面板「实时监控」标签页，独立连接、批量推送、可按原文过滤；**集群模式不支持**（MONITOR 是节点级命令，请单机直连目标节点） |
 | 更新签名密钥轮换 | ❌ | **v0.0.13 起冻结**（v0.0.12 及更早没有更新模块）：公钥编译进安装包，v0.0.13–v0.0.16 已带着当前公钥（key id `0F42026F5094334C`）发布，换私钥 = 这些用户永远收不到自动更新，只能手动重装一次。除非明确接受这个代价，否则不轮换；`rotate-signing-key.sh` 加了冻结闸门（打印已发布的 tag + 要求 `ROTATE` 确认或 `ALLOW_ROTATE=1`），私钥只做备份 / 恢复。见 §8.9 |
-| 引入前端框架 / 构建工具 | ❌ | 坚持原生 JS 单文件（见 `PROJECT_PLAN.md` §9.5） |
+| 引入前端框架 / 构建工具 | ❌ | 不引框架、不引打包器（见 `PROJECT_PLAN.md` §9.5）。2026-09-22 起前端按功能拆成 `frontend/js/` 下 19 个**浏览器原生 ES 模块**（`import`/`export`，无构建步骤、无 npm 依赖）：仍然「原生 JS」，只是不再是单文件 |
 
 ---
 
@@ -599,14 +618,14 @@
 | 1 | ~~密码明文存 `connections.json`~~ | **已解决** | 2026-09-22 改存系统密钥链（keyring crate）：`save_all` 转存 keychain、文件不落密码，存量明文首次加载自动迁移；密钥链不可用（CI / headless）自动降级回明文落盘（§2.4 P1） |
 | 2 | ~~超时值是否暴露给用户配置~~ | **已解决** | 2026-09-22 起连接对话框可配「建连超时 / 命令超时」（秒，写入连接配置随连接持久化，`Connection::effective_timeout` 按连接覆盖池默认值；缓存键不变 —— `connect` 每次都用当时配置重开句柄覆盖条目）。默认仍 5s / 10s（`config.rs`）；大 key 整表读取超时可按连接调大（§2.4 P1）。Key 列表 TYPE/TTL 走 pipeline，整页共用一个命令预算（不按条数叠加） |
 | 3 | ~~兼容 Redis 6.0 以下~~ | **已加门禁** | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级。2026-09-22 起 CI 跑**版本矩阵**（6.0 + 7.0）且带版本门，新功能（如 `COPY`）按版本降级并有对应集成断言（§2.4） |
-| 4 | ~~前端单文件过大~~ | **已完成，待合入** | 2026-09-22 评估确认该拆（11 天从 3307 涨到 5429 行），方案为**浏览器原生 ES 模块**（不用打包器，见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)）：样式外置为 `frontend/styles.css`（已合入 main）→ 3042 行内联 JS 拆成 19 个模块（每个 ≤400 行，`index.html` 只留 345 行骨架，共享状态收进 `js/state.js`）+ 回归网 `scripts/frontend-smoke.mjs` / `frontend-smoke-mock.js`（17 场景）接进 CI。**模块化部分在 `feat/2.4-frontend-split` 分支（PR #6，待合入）**；合入后即可按 §2.5 I 给三条模块约定加脚本校验 |
+| 4 | ~~前端单文件过大~~ | **已解决** | 2026-09-22 两轮落地：评估确认该拆（11 天从 3307 涨到 5429 行），方案为**浏览器原生 ES 模块**（不用打包器，见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)）：样式外置为 `frontend/styles.css`（已合入 main）→ 3042 行内联 JS 拆成 19 个模块（每个 ≤400 行，`index.html` 只留 345 行骨架，共享状态收进 `js/state.js`）+ 回归网 `scripts/frontend-smoke.mjs` / `frontend-smoke-mock.js`（17 场景）接进 CI，并在真实 WKWebView 里验证过模块加载。**模块化部分随 PR #6 合入 main**；§2.5 I 给三条模块约定加脚本校验随之具备落地条件 |
 | 5 | 更新签名私钥丢失 | **已缓解（离线副本待人工执行）** | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。2026-09-22：备份 / 恢复 / 自检流程见 §8.9，轮换自 v0.0.13 起冻结（§3）；**私钥与密码的离线副本仍须人工放好** |
 | 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名。待办见 §2.5 C–F |
 
 > **上表开放项已拆成待办**（2026-09-22）：#5 → §2.5 A（离线备份 + 恢复自检）/ B（轮换冻结 + 交互确认），两项已完成；
 > #6 → §2.5 C（备 Apple 凭据）/ D（配 6 个 secret）/ E（预发布 tag 端到端核验）/ F（安装说明口径）。
 > 已关闭的 #1 / #3 各留了一处残余风险，对应 §2.5 G（密钥链降级提示）/ H（版本下限口径）；
-> #4 的残余风险 I（前端模块纪律校验）校验的是模块化产物，随 PR #6 合入才落地。
+> #4 的残余风险 I（前端模块纪律校验）校验的是模块化产物，随 PR #6 合入已具备落地条件。
 > 本节因此不再新增行动项 —— 有新风险先加一行，再拆到 §2.5。
 
 ---
@@ -617,7 +636,7 @@
 |------|------|------|
 | 2026-09-22 | — | **§2.5 P1 的 A / B 完成（发布链路：私钥可恢复、轮换已冻结）**：① **A 私钥备份与恢复** —— §8.9 新增「私钥的备份与恢复」小节：要备份的四样东西（私钥文件 `~/.tauri/myredis-updater.key` 单行 base64 / 密码 / `.pub` / key id 标签，当前 key id `0F42026F5094334C`）、离线存放与「密码不与私钥同放」、换机换人的恢复四步（复制到临时路径 → `TAURI_SIGNING_PRIVATE_KEY_PATH=<备份> node .github/scripts/check-signing-key.mjs` 自检 → 按三种输出处置 → 装回本地与 CI）、以发一次版作端到端验收；自检判据**三个方向实测**（给不出密码 → `Wrong password for that key`；换上另一把私钥 → 打印两边 key id 判定不配对；三者匹配 → 通过）。② **B 轮换冻结** —— `rotate-signing-key.sh` 在任何改动之前打印当前公钥 key id 与「哪些 tag 已带公钥发布」（扫本地 tag 各版本 `tauri.conf.json`，gh 可用时再合并线上 Release 兜底），要求交互输入 `ROTATE` 或非交互传 `ALLOW_ROTATE=1`，否则退出且**不生成密钥 / 不改配置 / 不碰 secret**；§3 加「更新签名密钥轮换 ❌（v0.0.13 起冻结）」并与 §8.9 互链，§8.9 警告块改冻结口径。**冻结已真实成立**：v0.0.13–v0.0.16 四个正式版都带当前公钥发布、线上 `latest.json` 与 `.sig` 俱全（实测该地址 200 / `version 0.0.16`），故一并改正三处陈旧文案 —— 脚本头部「现在轮换是安全的」、§8.9「v0.0.12 发布之后不要再换」、以及「发版之前检查更新一定是失败的」（改为：v0.0.13+ 用户能正常收到更新，只有 v0.0.12 及更早需手动装一次）。验收：闸门四条路径实测（非交互拦下 exit 1 / 交互答非 `ROTATE` 中止 exit 1 / 输入 `ROTATE` 走完 exit 0 / `ALLOW_ROTATE=1` 走完 exit 0），全部用临时 `KEY_PATH` + `CONFIG_PATH` + `SKIP_GH=1`，真实配置与 secret 全程未被触碰。另：上一提交误提交进本文档的**三处 stash 冲突标记**已按 main 的真实状态解决 —— 前端模块化那部分明确标注为 `feat/2.4-frontend-split` 分支（PR #6）待合入，而非「已落地」；`main` 上 `frontend/index.html` 仍是单文件 |
 | 2026-09-22 | — | **新增 §2.5「风险收敛与发布运维」**：把 §4 的两个开放项拆成 6 项发布链路待办 —— A 私钥离线备份 + 从备份真签自检（`TAURI_SIGNING_PRIVATE_KEY_PATH=... node .github/scripts/check-signing-key.mjs`，验「密码能解开 + 与配置里公钥配对」）、B 轮换冻结（加交互放行开关 + §3 决策表加一行）、C 备 6 个 Apple 凭据、D 配进仓库、E 用预发布 tag 端到端核验（`--prerelease` 不占 `latest`，`verify-macos-signing.sh` 全绿 + 干净 macOS 首装不再右键打开）、F 安装说明口径同步；另补已关闭项的三处残余风险 —— G 密钥链降级时给用户可见提示、H Redis 版本下限口径与实测对齐（文档写 2.8+ 但只跑过 6.0 / 7.0）、I 前端模块纪律加脚本校验（行数上限 / `__TAURI_INTERNALS__` 白名单 / 循环 import）。规划前逐条核对过现状：`rotate-signing-key.sh` 的轮换约束目前只是脚本头部注释、无拦截；`storage.rs::save_all` 丢掉 `store_password` 的返回值，降级落盘对前端不可见；前端三条约定无脚本把关（`__TAURI_INTERNALS__` 现仅出现在 `js/api.js` 与冒烟替身中，符合约定）。同轮刷新头部「最近更新」、状态总览的「§2 待办已清空」表述，并在 §4 表下加拆解指引 |
-| 2026-09-22 | — | **§2.4 遗留的「前端单文件拆分」完成（在 `feat/2.4-frontend-split` 分支，PR #6 待合入）**：先把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`（17 个场景、真实点击路径、Tauri 后端替身的返回结构与 `commands/*` 的 serde 输出逐字段对齐、事件按 `__TAURI_INTERNALS__.runCallback` 的生产路径投递；不引 node_modules，只用 Node 22 内置 `fetch`/`WebSocket` 说 CDP + 系统已装的 Chrome），再把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个浏览器原生 ES 模块（每模块 ≤400 行；`index.html` 3389 → 345 行，只留结构骨架 + `<script type="module" src="./js/main.js">`）：api / util / ui / state / theme / layout / terminal / monitor / collections / keyops / detail / keys / addkey / conn-form / server-status / connections / import-export / updater / main。跨模块状态收进 `js/state.js`（`currentConn` / `onlineConns` / `selectedKey` / `KEY_DATA` / `allKeys` 只暴露读写函数，分页游标、监控会话、更新进度等单功能状态留在各自模块）；详情区改数据要重绘 Key 树这类反向依赖走 `state.js` 的 `onKeysChanged` 订阅（`main.js` 装配），依赖整体单向、无循环 import；顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$` 与 `renderServerInfo` 里未使用的 `diskEl`。验证：冒烟 17/17 场景通过（零未捕获异常、零 `console.error`），CI 新增 `frontend-smoke` job（失败上传截图 + summary.json）；**真实 WKWebView** 用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议（同样的 `Content-Type` / `Access-Control-Allow-Origin`）加载页面，19 个模块全部以 `text/javascript` 正常加载、页面零错误，并重建 debug 包启动应用确认模块图执行（WebKit LocalStorage 启动即被写入 `myredis.layout`）；拆分前后对内联 JS 逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 / 走通知重绘 / 删死代码），无功能逻辑改写；冒烟网在过程中抓出一个同名遮蔽 bug（`const isOnline = isOnline(conn.id)` 引发 TDZ，界面会白屏）。评估与模块清单见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)。顺带修复本地构建环境：`.cargo-home` 里 tauri 2.11.5 的 `src/manager/webview.rs` 曾被改成引用不存在的 `frontendview/`（该目录在本版本叫 `webview/`），从 crates.io 原包还原后本地 `cargo build` 才能过（该缓存目录已在 .gitignore 里，不影响 CI）。**注意：以上拆分与冒烟 job 目前只在分支上，main 尚未合入** |
+| 2026-09-22 | — | **§2.4 遗留的「前端单文件拆分」完成（PR #6：在 `feat/2.4-frontend-split` 分支完成，2026-09-22 合并进 main）**：先把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`（17 个场景、真实点击路径、Tauri 后端替身的返回结构与 `commands/*` 的 serde 输出逐字段对齐、事件按 `__TAURI_INTERNALS__.runCallback` 的生产路径投递；不引 node_modules，只用 Node 22 内置 `fetch`/`WebSocket` 说 CDP + 系统已装的 Chrome），再把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个浏览器原生 ES 模块（每模块 ≤400 行；`index.html` 3389 → 345 行，只留结构骨架 + `<script type="module" src="./js/main.js">`）：api / util / ui / state / theme / layout / terminal / monitor / collections / keyops / detail / keys / addkey / conn-form / server-status / connections / import-export / updater / main。跨模块状态收进 `js/state.js`（`currentConn` / `onlineConns` / `selectedKey` / `KEY_DATA` / `allKeys` 只暴露读写函数，分页游标、监控会话、更新进度等单功能状态留在各自模块）；详情区改数据要重绘 Key 树这类反向依赖走 `state.js` 的 `onKeysChanged` 订阅（`main.js` 装配），依赖整体单向、无循环 import；顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$` 与 `renderServerInfo` 里未使用的 `diskEl`。验证：冒烟 17/17 场景通过（零未捕获异常、零 `console.error`），CI 新增 `frontend-smoke` job（失败上传截图 + summary.json）；**真实 WKWebView** 用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议（同样的 `Content-Type` / `Access-Control-Allow-Origin`）加载页面，19 个模块全部以 `text/javascript` 正常加载、页面零错误，并重建 debug 包启动应用确认模块图执行（WebKit LocalStorage 启动即被写入 `myredis.layout`）；拆分前后对内联 JS 逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 / 走通知重绘 / 删死代码），无功能逻辑改写；冒烟网在过程中抓出一个同名遮蔽 bug（`const isOnline = isOnline(conn.id)` 引发 TDZ，界面会白屏）。评估与模块清单见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)。顺带修复本地构建环境：`.cargo-home` 里 tauri 2.11.5 的 `src/manager/webview.rs` 曾被改成引用不存在的 `frontendview/`（该目录在本版本叫 `webview/`），从 crates.io 原包还原后本地 `cargo build` 才能过（该缓存目录已在 .gitignore 里，不影响 CI）。**2026-09-22 合并进 main**（合并时解决与 §2.5 A / B 文档改动在状态总览 / §3 / §4 / §5 四处的内容冲突）|
 | 2026-09-22 | — | **§2.4 五个 P2 全部完成（§2 待办清空）**：① **Monitor 实时命令监控** —— 新增 `commands/monitor.rs`：专用连接 + 后台任务读 `MONITOR` 流，成批（500 行 / 120 ms 先到先推）emit 给前端，缓冲超 2000 行丢最旧并如实上报；`MonitorLine::parse` 按字节还原 `sdscatrepr` 转义（中文 / 引号 / 换行逐字还原）；`MonitorState` 管会话（同连接唯一、`Notify` 停止、断开连接一并收掉、会话序号防「停止后立刻重启」误摘）；集群不支持（节点级命令，按钮置灰）、只读连接可用；前端底部面板加「终端 / 实时监控」双标签（开始停止 / 过滤器 / 自动滚动 / 清空 / 行数计数）。② **Key 重命名 / 复制** —— `rename_key`（默认 `RENAMENX`，勾选才覆盖）/ `copy_key`（`COPY [REPLACE]`，6.2+，返回 0 时用一次 pipeline 区分「源不存在 / 目标已存在」），`CROSSSLOT` 转写成同 hash tag 的可操作提示，前端详情区两个按钮 + 共用对话框 + 按版本置灰。③ **Redis 版本矩阵** —— `start-test-redis.sh` 加版本门与端口预检，`ci.yml` 跑 22.04（6.0）/ 24.04（7.0）两档，release 门禁固定 6.0。④ **前端拆分评估** —— 数据 + 方案 + 分阶段计划见 `docs/frontend-split-evaluation.md`；本轮先把样式外置为 `frontend/styles.css`（index.html 5429 → 3389 行）。⑤ **macOS 签名 / 公证接线** —— `setup-macos-signing.sh`（凭据成组校验，半配即失败）+ `verify-macos-signing.sh`（codesign / spctl / stapler 复核），接进 `release.yml`，`APPLE_*` secret 一配即生效。验证：`cargo fmt --check` / `clippy -D warnings` 干净，`--include-ignored --test-threads=1` 全量 127 条通过（新增 monitor 9 单测 + 1 集成、rename/copy 5 单测 + 2 集成、CROSSSLOT 1 单测）；新增用例在 Redis 8.10.1 与 Docker 6.0.16 上双版本实测；界面用 headless 渲染核对了监控（未开始 / 监控中 / 过滤 / 集群禁用）与重命名复制（弹窗 / 版本置灰）六个状态 |
 | 2026-09-22 | — | **§2.4 四个 P1 全部完成**：① **TLS（`rediss://`）** —— `Connection` 加 `tls` / `tls_insecure`，redis-rs `tokio-rustls-comp` + `tls-rustls-insecure` feature，`check_supported_scheme` 改为返回剥前缀主机（未开 TLS 给「去勾 TLS」提示，三入口统一），`AppError::TlsNotSupported` 删除，前端加两个开关；openssl 自签起 6390 实测：跳过校验连通、校验模式拒自签（新增 2 条 #[ignore] 集成用例）。② **Stream** —— `get_stream` / `stream_add_entry` / `stream_del_entry`（XRANGE 分页 200 + XADD/XDEL），导入导出补 stream（XADD 保留原始 entry id；XRANGE 嵌套应答手工解析，redis-rs `Vec<元组>` 只支持扁平键值对），前端详情区 + 翻页 + 徽章配色。③ **超时可配** —— `connect_timeout_secs` / `command_timeout_secs` 入 `Connection` 随连接持久化，`effective_timeout` 覆盖池默认（缓存键不变），前端两个可选项。④ **密码密钥链** —— `keyring` 转存（服务 `maidi-cache` / 账号 conn.id），存量明文首载自动迁移，密钥链不可用自动降级明文落盘，删连接清条目。验证：`cargo test` 76 单测 + `--ignored --test-threads=1` 全量（含集群 6 条、TLS 2 条、stream 2 条、密钥链 3 条）全绿，`clippy -D warnings` / `fmt --check` 干净；§3（TLS 改 ✅）/ §4（#1 #2 关闭）/ §1.1 / `web/docs/index.html` / `PROJECT_PLAN.md` 已同步 |
 | 2026-09-22 | — | **新增 §2.4「下一阶段开发功能」**：§2.1–§2.3 全部清空后按 §3 决策与 §4 风险排定下一阶段 —— P1：TLS（`rediss://`，需先改 §3 决策）、Stream 类型（详情区 + 导入导出）、超时可配（含大 key 读取策略）、密码密钥链；P2：Monitor、macOS 公证、前端拆分评估、Redis 6.x 兼容回归、Key 重命名/复制 |
@@ -654,10 +673,17 @@
    > `redis::Cmd::query_async` / `redis::Pipeline::query_async` —— 那是无超时保护的路径。
    > 注意 pipeline 的预算是**整批一次**，不按命令条数叠加（1000 个 key 的页 = 2000 条命令共用一个 10 秒）。
 4. **提交**：遵循 Conventional Commits。
-5. **检查**：提交前运行 `cargo clippy` 和 `cargo fmt --check`，保证无警告。
-   > ⚠️ CI 未强制这两步，见 §2.3，需靠人工执行。
-6. **测试**：核心逻辑（URL、解析）写单元测试；网络相关写带 `#[ignore]` 的集成测试。
-7. **文档同步**：改动用户可见的能力边界时，同步更新 `web/docs/index.html` 的「功能现状」与本文档 §2。
+5. **检查**：提交前运行 `cargo clippy` 和 `cargo fmt --check`，保证无警告（CI 的 `quality` job 也会跑，
+   见 §2.3）。
+6. **前端改动**：改 `frontend/` 后跑一次 `node scripts/frontend-smoke.mjs`（17 个场景，
+   headless Chrome + 后端替身，CI 的 `frontend-smoke` job 同样会跑）。前端约定：
+   - 每个模块 ≤400 行，只 `export` 别人要用的东西；
+   - 跨模块状态只能通过 `js/state.js` 的读写函数访问，别把变量直接暴露出去；
+   - 发请求一律走 `js/api.js` 的 `invoke`（`frontend/js/` 之外不得出现 `__TAURI_INTERNALS__`）；
+   - 反向依赖（详情区改完数据要重绘 Key 树这类）用 `state.js` 的 `onKeysChanged` 订阅，
+     不要互相 `import` 成环。
+7. **测试**：核心逻辑（URL、解析）写单元测试；网络相关写带 `#[ignore]` 的集成测试。
+8. **文档同步**：改动用户可见的能力边界时，同步更新 `web/docs/index.html` 的「功能现状」与本文档 §2。
 
 ---
 
@@ -690,6 +716,18 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
 
+前端（无构建步骤，改完直接刷新页面；`frontend/` 改动跑这条当回归网）：
+
+```bash
+# 17 个场景：真实点击路径 + DOM 断言 + 截图（target/frontend-smoke/）
+# 只用 Node 22+ 内置能力与系统已装的 Chrome，不需要 node_modules / Rust / Redis
+node scripts/frontend-smoke.mjs
+
+node scripts/frontend-smoke.mjs --only monitor   # 只跑某个场景
+node scripts/frontend-smoke.mjs --no-shots       # 只断言，不落盘截图
+CHROME_PATH=/path/to/chrome node scripts/frontend-smoke.mjs   # 指定 Chrome
+```
+
 超时相关的用例分布：`connection_pool.rs` 里两条**不需要 Redis**（用本地假服务器模拟
 「只接受连接不回包」与「某条命令不回包」，断言 300ms 内返回超时错误），
 `blocking_command_is_interrupted_by_command_timeout` 需要真实 Redis（用 `BLPOP` 验证
@@ -700,8 +738,10 @@ cargo fmt --check
 要求收齐整批 TYPE/TTL 才回包，锁住「整页一次往返」）与 `storage::tests::*` 三条（阻塞线程池上的
 保存/加载往返、文件缺失、坏 JSON）。
 
-前端无构建步骤，改 `frontend/index.html` / `frontend/styles.css` 后由 WebView 直接加载
-（`cargo tauri dev` 会热重载）。
+前端无构建步骤：改 `frontend/index.html` / `frontend/js/*.js` / `frontend/styles.css` 后
+由 WebView 直接加载（`cargo tauri dev` 会热重载）。文件之间用浏览器原生 `import`/`export`
+（Tauri 的资源协议对 `.js` 返回 `text/javascript`，无需打包器）；模块划分与依赖方向见
+`docs/frontend-split-evaluation.md`。
 
 集成用例的两个环境变量（都是可选的，默认值与 CI 一致）：
 

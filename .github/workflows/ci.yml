@@ -43,3 +43,28 @@ jobs:
       - uses: ./.github/actions/rust-quality
         with:
           redis-version: ${{ matrix.redis }}
+
+  frontend-smoke:
+    # 前端是「无构建步骤」的原生 ES 模块，没有编译器兜底，所以用 headless Chrome 跑一遍
+    # 真实点击路径（连接 / 分页 / 搜索 / 集合编辑 / 重命名复制 / 终端 / 监控 / 导入导出 /
+    # 更新），断言 DOM 结果并检查没有 JS 报错。
+    # 需要 Node 22+（内置 WebSocket 说 CDP）与镜像自带的 Chrome；不需要 Rust 与 Redis。
+    name: 前端冒烟（headless Chrome）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: 前端冒烟脚本（scripts/frontend-smoke.mjs）
+        run: node scripts/frontend-smoke.mjs
+
+      - name: 失败时留档截图与断言结果
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-smoke
+          path: target/frontend-smoke/
+          retention-days: 7

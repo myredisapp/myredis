@@ -565,8 +565,13 @@ Windows Credential Manager / Linux Secret Service），`connections.json` 中不
 
 **决策：坚持原生 JS**，不引入 React / Vue / 构建工具。
 
-- 现状前端文件保持单文件 `frontend/index.html`，通过 `@tauri-apps/api` 调后端命令。
-- 若后续复杂度上升，再在 `frontend/` 内引入 vitest 测试 / esbuild 打包，但与桌面客户端解耦,不影响本轮。
+- 前端直接调 Tauri 注入的 `window.__TAURI_INTERNALS__.invoke`（封装在 `frontend/js/api.js`），
+  不引 `@tauri-apps/api`。
+- 2026-09-22 更新：**已按功能拆成 `frontend/js/` 下的浏览器原生 ES 模块**（`index.html`
+  只留结构骨架，19 个模块、每个 ≤400 行，无构建步骤、无 npm 依赖）。触发条件是复杂度上升
+  （11 天从 3307 涨到 5429 行），评估与落地记录见 `docs/frontend-split-evaluation.md`；
+  回归网是 `scripts/frontend-smoke.mjs`（已接进 CI）。
+- 打包器 / npm 依赖仍不引入：等确有第三方依赖需求（或需要压缩体积）时再评估 esbuild。
 
 ### 9.6 已确认的需求核对
 
