@@ -21,6 +21,13 @@
 > `scripts/configure-apple-secrets.sh` 默认演练（`--no-store` 加密不上传）· 放行才写入 · 写完自动验收，
 > 把「配错凭据」的判据从 CI 构建后半程前移到本地；**真凭据仍需人工申领**（付费会员 + Apple 账号），
 > 见 §8.10 与 §2.5 C / D。
+> **2026-09-22 续（§2.5 P1 的 E 落地工具）**：`scripts/verify-prerelease-release.sh` 把 E 串成一条命令
+> （前置检查 → `ALLOW_PUSH=1` 打预发布 tag → 等 CI → 把产物**下载回来**验收 → 核验清单与 `latest` 别名；
+> 默认演练不动远端，另有 `VERIFY_ONLY=1` 只验收与 `CLEANUP=1` 只清理预发布），产物判据由新增的
+> `scripts/verify-macos-download.sh` 承担（补 quarantine 后判 dmg 与里面的 `.app`）。同轮堵住两个「假绿」：
+> 预发布不再部署网站（否则 `web/index.html` 的版本号与下载直链会被改成 beta）、`spctl` 在本机
+> Gatekeeper 被关掉时会变成空判据（两个核验脚本都先看 `spctl --status`）。剩下仍是人工动作 ——
+> 申领 6 个凭据 + 一台干净 macOS 上双击首装，见 §8.10 与 §2.5 E。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -37,7 +44,7 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C / D 的工具已就绪、**真凭据待人工申领**，E / F 待做，残余风险 G–I 待做）。前端 JS 模块化已完成并随 PR #6 合入 main（19 个原生 ES 模块），见 §4 #4 |
+| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C / D / E 的工具均已就绪、**真凭据待人工申领**，F 待做，残余风险 G–I 待做）。前端 JS 模块化已完成并随 PR #6 合入 main（19 个原生 ES 模块），见 §4 #4 |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
@@ -574,6 +581,29 @@
     ② 下载 dmg 在**一台没装过本应用**的 macOS 上双击首装，不再出现「无法验证开发者」，**不需要右键打开**。
   - 收尾：验证完把该预发布删除或标注「内部验证用」，别让下载页 / 搜索把它当可用版本；
     顺带确认 `releases/latest/download/latest.json` 仍指向上一个正式版。
+  - 🔧 **核验动作已脚本化（2026-09-22）**：`scripts/verify-prerelease-release.sh` 把 E 的四段动作串起来，
+    **默认不动任何远端状态**（与 C / D 同款：先演练、显式放行才真做）—— 前置检查（tag 形状 / 重名 /
+    目标提交是否已推 / 6 个 `APPLE_*` 是否齐 / 目标提交上的 `release.yml` 有没有预发布守卫）→
+    `ALLOW_PUSH=1` 才打并推送 tag → 等流水线并逐 job 报状态 → 把产物**真下载回来**验收 →
+    核验清单与 `latest` 别名。下载回来的那份 dmg 交给
+    `scripts/verify-macos-download.sh`（新）：补 `com.apple.quarantine` 后判 dmg 与 dmg 里那个
+    `.app`（`codesign` / 身份 / `TeamIdentifier` / `spctl` / `stapler` / 包内版本号）——
+    与 CI 里的 `verify-macos-signing.sh` 判据同源，但判的是**用户下载到的那个文件**。
+  - **顺带堵住一个会污染用户侧的坑**：`release.yml` 的 `deploy-web` 会把当前 tag 注入
+    `web/index.html`（版本号 + 下载直链）再推到线上 —— 预发布 tag 走到那一步，下载页就会把 beta
+    当可用版本。现在 `deploy-web` 加了 `if: ${{ !contains(github.ref_name, '-') }}`：预发布不部署网站，
+    线上保持上一个正式版；Release 正文开头也会自动带上「内部验证用」提示（`--notes` 前置到
+    `--generate-notes` 的结果之前）。E 脚本的前置检查会按**被 tag 的那个提交**复查这条守卫是否生效
+    （工作流文件取自该提交，不是本地工作区）。
+  - **另一处「假绿」也一并堵上**：`sudo spctl --master-disable` 之后（开发机常这么干）`spctl -a` 对
+    **任何**产物都返回 accepted，连完全没签名的也照收（输出里带 `override=security disabled`）——
+    于是「能不能过 Gatekeeper」这条判据在两个脚本里都会变成空判据。现在 CI 的
+    `verify-macos-signing.sh` 与本地核验脚本都先看 `spctl --status`：CI 侧直接失败（判据为空时不该给绿），
+    本地侧把这条按「未验到」记并以退出码 2 结束（给不了假的通过）。
+  - ⏳ **剩下的人工动作**（脚本替代不了）：① C 的 6 个凭据（付费会员 + Apple 账号申领，见 §2.5 C）；
+    ② 在**一台没装过本应用的 macOS** 上双击首装确认（脚本已把 Gatekeeper 自己的判据在带 quarantine
+    的产物上判过，但「真机首装的体验」只能人工看一眼）；③ 验完决定「留着并标注」还是
+    `CLEANUP=1` 删掉（删除只对预发布动手，正式 Release 一律拒绝）。跑法见 §8.10。
 
 - [ ] ⬜ **F｜安装说明与签名口径同步**（§4 #6 的用户侧文案）
   - E 通过后，[`README.md`](README.md) 里那句「应用未做 Apple 代码签名 / 公证……请右键 →「打开」」
@@ -647,11 +677,12 @@
 | 3 | ~~兼容 Redis 6.0 以下~~ | **已加门禁** | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级。2026-09-22 起 CI 跑**版本矩阵**（6.0 + 7.0）且带版本门，新功能（如 `COPY`）按版本降级并有对应集成断言（§2.4） |
 | 4 | ~~前端单文件过大~~ | **已解决** | 2026-09-22 两轮落地：评估确认该拆（11 天从 3307 涨到 5429 行），方案为**浏览器原生 ES 模块**（不用打包器，见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)）：样式外置为 `frontend/styles.css`（已合入 main）→ 3042 行内联 JS 拆成 19 个模块（每个 ≤400 行，`index.html` 只留 345 行骨架，共享状态收进 `js/state.js`）+ 回归网 `scripts/frontend-smoke.mjs` / `frontend-smoke-mock.js`（17 场景）接进 CI，并在真实 WKWebView 里验证过模块加载。**模块化部分随 PR #6 合入 main**；§2.5 I 给三条模块约定加脚本校验随之具备落地条件 |
 | 5 | 更新签名私钥丢失 | **已缓解（离线副本待人工执行）** | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。2026-09-22：备份 / 恢复 / 自检流程见 §8.9，轮换自 v0.0.13 起冻结（§3）；**私钥与密码的离线副本仍须人工放好** |
-| 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名。同日起 C / D 的准备与配置也各有一条本地脚本（`prepare-apple-signing.sh` 解 `.p12` 自检并产出凭据文件、`configure-apple-secrets.sh` 演练 / 写入 / 验收），**但真凭据仍缺**（实测 `gh secret list` 里一条 `APPLE_*` 都没有）；凭据本身要付费会员 + Apple 账号申领，是纯人工动作。待办见 §2.5 C–F |
+| 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名。同日起 C / D / E 三个动作也各有本地脚本（`prepare-apple-signing.sh` 解 `.p12` 自检并产出凭据文件、`configure-apple-secrets.sh` 演练 / 写入 / 验收、`verify-prerelease-release.sh` + `verify-macos-download.sh` 打预发布 tag 走完整流水线并把下载回来的 dmg 判一遍），**但真凭据仍缺**（实测 `gh secret list` 里一条 `APPLE_*` 都没有）；凭据本身要付费会员 + Apple 账号申领，是纯人工动作。同轮另堵住两个「假绿」：预发布不再部署网站（否则线上下载页会被改成 beta），`spctl` 在 Gatekeeper 被关掉的机器上不再被当作有效判据。待办见 §2.5 C–F |
 
 > **上表开放项已拆成待办**（2026-09-22）：#5 → §2.5 A（离线备份 + 恢复自检）/ B（轮换冻结 + 交互确认），两项已完成；
 > #6 → §2.5 C（备 Apple 凭据）/ D（配 6 个 secret）/ E（预发布 tag 端到端核验）/ F（安装说明口径），
-> 其中 C / D 的可执行部分（本地自检 + 演练式配置）同日落地为脚本，**真凭据本身仍待人工申领**。
+> 其中 C / D / E 的可执行部分（`.p12` 自检 + 演练式配置 + 预发布核验）已同日落地为脚本，
+> **真凭据本身仍待人工申领**（F 是用户侧文案，等 E 通过再改）。
 > 已关闭的 #1 / #3 各留了一处残余风险，对应 §2.5 G（密钥链降级提示）/ H（版本下限口径）；
 > #4 的残余风险 I（前端模块纪律校验）校验的是模块化产物，随 PR #6 合入已具备落地条件。
 > 本节因此不再新增行动项 —— 有新风险先加一行，再拆到 §2.5。
@@ -663,6 +694,7 @@
 | 日期 | 版本 | 说明 |
 |------|------|------|
 | 2026-09-22 | — | **§2.5 P1 的 C / D 落地工具（发布链路：Apple 凭据可自检、secret 可演练式配置）**：C / D 本身是「备 6 个 Apple 凭据」「把 6 个 secret 配进仓库」两个运维动作，**真凭据仍待人工申领**（本机实测：钥匙串里没有任何 Developer ID 证书；`gh secret list` 里 `APPLE_*` 一条都没有），但两个动作的可执行部分全部脚本化，并把原本只能等 CI 构建跑完才暴露的判据前移到本地。① **C —— 新增 `scripts/prepare-apple-signing.sh`**：用 openssl 把 `.p12` 真解开（`-info -noout` 看 bag 结构判「带没带私钥」），从证书里读出 CN / OU / issuer / 到期日，与要填的值逐个对照，拦下「导出没勾私钥」「拿成 `Apple Development` / `Mac Developer` / `Developer ID Installer` 证书」「身份或团队 ID 与证书不一致」「`APPLE_PASSWORD` 填成登录密码或邮箱」「证书已过期」这些错误（后四类在 CI 里的暴露时机都是构建后半程，而 `setup-macos-signing.sh` 只查有没有配、不查配得对不对），另做 `APPLE_CERTIFICATE` 的 base64 往返自检与 48KB 上限预检；产出 D 要用的凭据文件（`~/.tauri/myredis-apple-signing.env`，0600，注释里只含身份 / 团队 ID / 指纹 / 到期日等非机密信息）。② **D —— 新增 `scripts/configure-apple-secrets.sh`**：默认演练（逐个走 `gh secret set --no-store`，取仓库公钥 + 本地加密 + **不上传**，跑完比对 secret 列表证明仓库状态未变），真正写入要 `ALLOW_CONFIGURE=1` 或交互答 `yes`；值一律经 **stdin** 而非 `--body`（argv 会在 ps 里露值，与 `rotate-signing-key.sh` 同款考量），写入前拦「6 个不齐」的半配、写入后自动验收，验收判据另有 `VERIFY_ONLY=1` 可独立复查。**验收实测**：C 侧 17 条路径（正常 / `NO_WRITE` / 密码错 / 无私钥 / 两类错证书 / 过期 / 身份与团队 ID 不一致 / 登录密码 / 邮箱填错格 / 放行开关 / 缺值）+ D 侧 12 条路径（演练 / 非交互拦下 / 缺值 / 证书非 base64 / 身份与团队 ID 形状 / 空白兜底 / `VERIFY_ONLY` 三态 / 仓库不可达）全部符合预期，另用真 pty 验了 D 的「答 `no` 即取消且不写入」与 C 的两个密码交互输入；两次真跑 `gh secret list` 确认仓库 secret 列表（6 条 `SSH_*` / `TAURI_SIGNING_*`）全程未被改动。③ 文档：§8.10 新增「凭据的准备与配置」小节（四道检查的脚本表 + 两条命令 +「6 类错误会在哪暴露」对照表 +「不买会员也可行」的出口），§4 #6 与本文档头部同步。**顺带修掉一类脚本坑**：`$VAR` 紧跟全角字符在 macOS 的 `LANG=C.UTF-8` 下会被并进变量名（`bash: OUT（: unbound variable`），两个新脚本的插值一律写成 `${VAR}`；并确认 `scripts/` 保持 bash 3.2 兼容写法（macOS 自带 3.2，没有 `declare -A`）。④ **2026-09-22 合入 main 前与 PR #6（前端模块化）的文档冲突**：冲突只在「项目状态总览」的「当前 HEAD」一行 —— 合并后该行同时保留本提交的 C / D 口径（工具已就绪、真凭据待人工申领）与 main 的「模块化已随 PR #6 合入 main」；§4 #4 / 表下注解 / §5 等其余处 main 的表述更新已自动合并，本文档不再有「PR #6 待合入」这类陈旧说法 |
+| 2026-09-22 | — | **§2.5 P1 的 E 落地工具（发布链路：预发布 tag 的端到端核验可脚本化 + 堵住两个「假绿」）**：E 本身是「打一个预发布 tag，让签名 / 公证 / staple 在真实流水线上跑一遍，再确认用户下载到的那个 dmg 双击能装」这个运维动作，**6 个真凭据仍缺**（C 待申领、D 待配置），但整条核验链路已可一键执行、且默认不动任何远端状态。① **新增 `scripts/verify-prerelease-release.sh`**：前置检查（tag 形状 `vX.Y.Z-<后缀>` / 本地与远端重名 / 目标提交是否已推 / 6 个 `APPLE_*` 是否齐 / **目标提交上**的 `release.yml` 有没有预发布守卫）→ 默认演练只打印计划（非交互环境什么都不做）；`ALLOW_PUSH=1`（或交互输入 `PUSH`）才打并推送 tag → 轮询 `gh run list` 等流水线（上限 90 分钟，可 `NO_WAIT=1` 先走）→ 逐 job 报状态并断言 macOS 的「校验 macOS 签名与公证」步骤为 success → 把 dmg **真下载回来**交给新脚本判 → 核验本 tag 的 `latest.json`（可取 / version 与 tag 一致 / 4 个平台键齐 / 指向的产物都在 Release 里）与 **`latest` 别名没被顶掉**（核验前记基准、核验后比对）→ 打印剩下的人工动作与收尾方式；`VERIFY_ONLY=1` 只验收已有预发布（不打 tag、不等 CI），`CLEANUP=1` 删除该预发布与 tag（**只对预发布动手**，正式 Release 一律拒绝，要 `ALLOW_DELETE=1` 或交互输入 `DELETE`）。② **新增 `scripts/verify-macos-download.sh`**：判的是**用户下载到的那个文件**（与构建机上的 `verify-macos-signing.sh` 判据同源、对象不同）—— 先补 `com.apple.quarantine` 属性（浏览器下载的产物带它，Gatekeeper 对带 quarantine 的才做完整评估），再判 dmg 本身（`codesign --verify`、`spctl -t open --context context:primary-signature`），然后挂载 dmg、`ditto` 把里面的 `.app` 拷出来（等价「拖进应用程序」）再判一遍（`codesign --verify --deep --strict` / 身份必须是 `Developer ID Application` / `TeamIdentifier` 与配置一致 / `spctl -a -vvv -t exec` / `stapler validate` / 包内版本号与 tag 一致），逐条打印并汇总，任一条不过即非零退出。③ **堵住两个「假绿」（都是这轮实测出来的）**：（a）**预发布会污染下载页** —— `deploy-web` 会把当前 tag 注入 `web/index.html` 的版本号与下载直链再 scp 到线上，预发布走到那一步等于把 beta 当可用版本；现在该 job 加 `if: ${{ !contains(github.ref_name, '-') }}`，Release 正文对预发布自动前置「内部验证用」提示（`--notes` 前置到 `--generate-notes` 结果之前），E 脚本按被 tag 的提交复查这条守卫；（b）**`spctl` 可能是空判据** —— 本机实测 `spctl --status` 为 `assessments disabled`（`sudo spctl --master-disable` 之后），此时 `spctl -a` 对任何产物都返回 accepted（连完全没签名的也照收，输出带 `override=security disabled`），**CI 的 `verify-macos-signing.sh` 原来的「Gatekeeper 判据」在这种机器上等于没有**；现在两个脚本都先看 `spctl --status`：CI 侧直接失败，本地侧按「未验到」记并以退出码 2 结束（同时确认 `codesign` / 身份 / `TeamIdentifier` / `stapler` 四条与全局开关无关、仍然有效）。**验收实测**：用「本地 bare 仓库当 origin + gh 替身 + 本地清单服务」搭了沙箱，23 条路径全部符合预期（演练不动远端 / 自动推导 tag `v0.0.17-beta.1` / 缺 `-` 与非法字符的形状拦截 / 缺守卫拦截与 `ALLOW_WEB_OVERWRITE=1` 放行 / 6 个 secret 不齐拦截与 `ALLOW_UNSIGNED=1` 放行 / 未推送提交拦截 / 不认识的参数拦截 / 非交互不给 `ALLOW_PUSH` 不推 / **全流程：推 tag 到本地 bare origin → 等 CI（替身）→ 下载产物 → 验收 → 别名核对** / `NO_WAIT=1` / `VERIFY_ONLY` 三种（含自动挑最近一个预发布、非预发布拒绝验收、清单不可取）/ `latest` 被顶掉与清单缺平台键的报警 / 清理只对预发布动手与 `ALLOW_DELETE` 闸门）；再用**真实产物**验了核验脚本本身：下载线上 `v0.0.16` 的 dmg（9.8 MB，未签名）跑一遍，5 条判据如实报「未签名 / 无 TeamIdentifier / 无公证票据」，挂载与 `ditto` 拷贝在真实 tauri 产物上走通；真实仓库上跑了默认路径（**如实报「APPLE_* secret 只有 0/6」并拒绝推 tag**）与 `ALLOW_UNSIGNED=1`（打印计划、不动远端）；两次 `gh secret list` / `gh release list` 确认仓库状态全程未变。**顺带修掉一个 set -e 陷阱**：`git branch -r --contains | grep -v ... | head` 在提交不属于任何远端分支时 grep 一行都没选中、退出码 1，pipefail 下命令替换被判失败 → 脚本**静默退出**（连「还没推到远端」的理由都打不出来），已在管道末尾显式 `|| true`，并把这条记在脚本注释里。④ 文档：§8.10 新增「预发布 tag 的端到端核验」小节（两条命令 + 判据表 + 两个必知的坑 +「人工那一步不省」），§8.9「更新源」补上别名核验的互链，§4 #6 与本文档头部同步 |
 | 2026-09-22 | — | **§2.5 P1 的 A / B 完成（发布链路：私钥可恢复、轮换已冻结）**：① **A 私钥备份与恢复** —— §8.9 新增「私钥的备份与恢复」小节：要备份的四样东西（私钥文件 `~/.tauri/myredis-updater.key` 单行 base64 / 密码 / `.pub` / key id 标签，当前 key id `0F42026F5094334C`）、离线存放与「密码不与私钥同放」、换机换人的恢复四步（复制到临时路径 → `TAURI_SIGNING_PRIVATE_KEY_PATH=<备份> node .github/scripts/check-signing-key.mjs` 自检 → 按三种输出处置 → 装回本地与 CI）、以发一次版作端到端验收；自检判据**三个方向实测**（给不出密码 → `Wrong password for that key`；换上另一把私钥 → 打印两边 key id 判定不配对；三者匹配 → 通过）。② **B 轮换冻结** —— `rotate-signing-key.sh` 在任何改动之前打印当前公钥 key id 与「哪些 tag 已带公钥发布」（扫本地 tag 各版本 `tauri.conf.json`，gh 可用时再合并线上 Release 兜底），要求交互输入 `ROTATE` 或非交互传 `ALLOW_ROTATE=1`，否则退出且**不生成密钥 / 不改配置 / 不碰 secret**；§3 加「更新签名密钥轮换 ❌（v0.0.13 起冻结）」并与 §8.9 互链，§8.9 警告块改冻结口径。**冻结已真实成立**：v0.0.13–v0.0.16 四个正式版都带当前公钥发布、线上 `latest.json` 与 `.sig` 俱全（实测该地址 200 / `version 0.0.16`），故一并改正三处陈旧文案 —— 脚本头部「现在轮换是安全的」、§8.9「v0.0.12 发布之后不要再换」、以及「发版之前检查更新一定是失败的」（改为：v0.0.13+ 用户能正常收到更新，只有 v0.0.12 及更早需手动装一次）。验收：闸门四条路径实测（非交互拦下 exit 1 / 交互答非 `ROTATE` 中止 exit 1 / 输入 `ROTATE` 走完 exit 0 / `ALLOW_ROTATE=1` 走完 exit 0），全部用临时 `KEY_PATH` + `CONFIG_PATH` + `SKIP_GH=1`，真实配置与 secret 全程未被触碰。另：上一提交误提交进本文档的**三处 stash 冲突标记**已按 main 的真实状态解决 —— 前端模块化那部分明确标注为 `feat/2.4-frontend-split` 分支（PR #6）待合入，而非「已落地」；`main` 上 `frontend/index.html` 仍是单文件 |
 | 2026-09-22 | — | **新增 §2.5「风险收敛与发布运维」**：把 §4 的两个开放项拆成 6 项发布链路待办 —— A 私钥离线备份 + 从备份真签自检（`TAURI_SIGNING_PRIVATE_KEY_PATH=... node .github/scripts/check-signing-key.mjs`，验「密码能解开 + 与配置里公钥配对」）、B 轮换冻结（加交互放行开关 + §3 决策表加一行）、C 备 6 个 Apple 凭据、D 配进仓库、E 用预发布 tag 端到端核验（`--prerelease` 不占 `latest`，`verify-macos-signing.sh` 全绿 + 干净 macOS 首装不再右键打开）、F 安装说明口径同步；另补已关闭项的三处残余风险 —— G 密钥链降级时给用户可见提示、H Redis 版本下限口径与实测对齐（文档写 2.8+ 但只跑过 6.0 / 7.0）、I 前端模块纪律加脚本校验（行数上限 / `__TAURI_INTERNALS__` 白名单 / 循环 import）。规划前逐条核对过现状：`rotate-signing-key.sh` 的轮换约束目前只是脚本头部注释、无拦截；`storage.rs::save_all` 丢掉 `store_password` 的返回值，降级落盘对前端不可见；前端三条约定无脚本把关（`__TAURI_INTERNALS__` 现仅出现在 `js/api.js` 与冒烟替身中，符合约定）。同轮刷新头部「最近更新」、状态总览的「§2 待办已清空」表述，并在 §4 表下加拆解指引 |
 | 2026-09-22 | — | **§2.4 遗留的「前端单文件拆分」完成（PR #6：在 `feat/2.4-frontend-split` 分支完成，2026-09-22 合并进 main）**：先把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`（17 个场景、真实点击路径、Tauri 后端替身的返回结构与 `commands/*` 的 serde 输出逐字段对齐、事件按 `__TAURI_INTERNALS__.runCallback` 的生产路径投递；不引 node_modules，只用 Node 22 内置 `fetch`/`WebSocket` 说 CDP + 系统已装的 Chrome），再把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个浏览器原生 ES 模块（每模块 ≤400 行；`index.html` 3389 → 345 行，只留结构骨架 + `<script type="module" src="./js/main.js">`）：api / util / ui / state / theme / layout / terminal / monitor / collections / keyops / detail / keys / addkey / conn-form / server-status / connections / import-export / updater / main。跨模块状态收进 `js/state.js`（`currentConn` / `onlineConns` / `selectedKey` / `KEY_DATA` / `allKeys` 只暴露读写函数，分页游标、监控会话、更新进度等单功能状态留在各自模块）；详情区改数据要重绘 Key 树这类反向依赖走 `state.js` 的 `onKeysChanged` 订阅（`main.js` 装配），依赖整体单向、无循环 import；顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$` 与 `renderServerInfo` 里未使用的 `diskEl`。验证：冒烟 17/17 场景通过（零未捕获异常、零 `console.error`），CI 新增 `frontend-smoke` job（失败上传截图 + summary.json）；**真实 WKWebView** 用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议（同样的 `Content-Type` / `Access-Control-Allow-Origin`）加载页面，19 个模块全部以 `text/javascript` 正常加载、页面零错误，并重建 debug 包启动应用确认模块图执行（WebKit LocalStorage 启动即被写入 `myredis.layout`）；拆分前后对内联 JS 逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 / 走通知重绘 / 删死代码），无功能逻辑改写；冒烟网在过程中抓出一个同名遮蔽 bug（`const isOnline = isOnline(conn.id)` 引发 TDZ，界面会白屏）。评估与模块清单见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)。顺带修复本地构建环境：`.cargo-home` 里 tauri 2.11.5 的 `src/manager/webview.rs` 曾被改成引用不存在的 `frontendview/`（该目录在本版本叫 `webview/`），从 crates.io 原包还原后本地 `cargo build` 才能过（该缓存目录已在 .gitignore 里，不影响 CI）。**2026-09-22 合并进 main**（合并时解决与 §2.5 A / B 文档改动在状态总览 / §3 / §4 / §5 四处的内容冲突）|
@@ -1022,6 +1054,8 @@ npm 版 `@tauri-apps/cli`（CI 装的就是它）自带 `signer` 子命令，所
 `https://github.com/myredisapp/myredis/releases/latest/download/latest.json`，
 也就是「最新一个正式 Release 的附件」。预发布（tag 带 `-`，如 `v0.2.0-beta.1`）不会顶掉 `latest`，
 所以预发布用户收不到自动更新、也不会拿到半成品，这符合预期。
+**这条口径有脚本核验**：`scripts/verify-prerelease-release.sh`（§2.5 E）在打预发布 tag 之前先记下
+`latest` 别名当前指向的版本，核验完再比对一次 —— 被顶掉就报警（见 §8.10「预发布 tag 的端到端核验」）。
 
 **产物与清单**：
 
@@ -1084,6 +1118,8 @@ cargo tauri dev --config '{"plugins":{"updater":{"endpoints":["http://127.0.0.1:
 | `.github/scripts/verify-macos-signing.sh` | 构建之后（仅 macOS） | `codesign --verify --deep --strict` + `Developer ID Application` 身份 + `TeamIdentifier` 一致 + `spctl -a -vvv -t exec`（Gatekeeper 判据）+ `xcrun stapler validate`；dmg 另按 disk image 形式过 `spctl` |
 | `scripts/prepare-apple-signing.sh` | 本地、备凭据时（§2.5 C） | 解开 `.p12` 自检：带没带私钥、证书类型对不对、身份 / 团队 ID 与证书是否一致、密码格式、证书有没有过期；产出 D 要用的凭据文件 |
 | `scripts/configure-apple-secrets.sh` | 本地、配 secret 时（§2.5 D） | 演练（`gh --no-store` 逐个加密但不写入）→ 显式放行后写入 → 自动跑验收；顺带拦「6 个不齐」的半配 |
+| `scripts/verify-prerelease-release.sh` | 本地、端到端核验时（§2.5 E） | 打预发布 tag → 等流水线 → 下载产物 → 核验清单与 `latest` 别名；默认演练，`ALLOW_PUSH=1` 才动远端 |
+| `scripts/verify-macos-download.sh` | 本地、核验下载回来的产物时（§2.5 E） | 补 quarantine 后判 dmg 与里面的 `.app`：`codesign` / 身份 / `TeamIdentifier` / `spctl` / `stapler` / 包内版本号 |
 
 tauri build 在有这些变量时会自动完成「导入证书 → 签名 → 公证 → staple」，不需要额外的命令。
 
@@ -1139,8 +1175,60 @@ bash scripts/configure-apple-secrets.sh VERIFY_ONLY=1      # 随时复查 D 的�
 产物未签名，README 里也写着首次打开需右键「打开」。这是一条**有明确提示**的已知状态，
 不是静默失败，所以 C–F 是**可选项**而非发版阻塞项（自动更新只依赖 minisign 验签）。
 
+#### 预发布 tag 的端到端核验（§2.5 E）
+
+凭据配好之后，E 要回答的问题是「**这条链路在真实流水线上真的跑得通吗**」——
+`setup-macos-signing.sh` 只查有没有配、`verify-macos-signing.sh` 判的是构建机上的中间产物，
+都回答不了「用户下载到的那个 dmg 双击能不能装」。核验就是打一个预发布 tag 走完整流水线，
+再把产物**下载回来**自己判一遍：
+
+```bash
+bash scripts/verify-prerelease-release.sh                    # 演练（默认）：只做前置检查 + 打印计划，不动远端
+ALLOW_PUSH=1 bash scripts/verify-prerelease-release.sh       # 真跑：打 tag → 等 CI → 下载 → 验收
+VERIFY_ONLY=1 bash scripts/verify-prerelease-release.sh      # 已跑过一遍，只说验收（不打 tag、不等 CI）
+CLEANUP=1 bash scripts/verify-prerelease-release.sh          # 收尾：删除该预发布与 tag（只对预发布动手）
+
+# 只想单独判一份产物（比如人工下载下来的 dmg）：
+bash scripts/verify-macos-download.sh ~/Downloads/myredis-v0.0.17-macos-universal.dmg \
+  EXPECT_TEAM_ID=ABCDE12345 EXPECT_VERSION=0.0.17
+```
+
+**为什么必须用预发布 tag**：打正式 tag 会立刻占用 `latest` 别名
+（`releases/latest/download/latest.json` 是客户端的更新源），一旦验不过，用户点「检查更新」
+就会拿到半成品，而**发出去的版本收不回**。tag 里带 `-`（如 `v0.0.17-beta.1`）会被
+`release.yml` 当预发布：产物照样出、CI 照样全跑，但不占 `latest`，已装正式版的用户什么都收不到。
+
+脚本的判据（全部会打印逐条结果，任一不过就非零退出）：
+
+| 判据 | 说明 |
+|------|------|
+| tag 形状 / 重名 / 目标提交已推 | 预发布必须是 `vX.Y.Z-<后缀>`；发现重名就停（tag 指向的提交不可改） |
+| 6 个 `APPLE_*` 齐 | 不齐就跑不出签名产物，这一趟等于白跑（要明知故犯得显式传 `ALLOW_UNSIGNED=1`） |
+| 目标提交上的 `release.yml` 有预发布守卫 | 没有守卫时预发布会把线上下载页改成 beta 版本（见下） |
+| macOS 的「校验 macOS 签名与公证」步骤 = success | 逐 job / 逐步骤从 Actions API 读结论 |
+| dmg 与 dmg 里的 `.app` 过 Gatekeeper | `scripts/verify-macos-download.sh`：补 quarantine → `codesign --verify --deep --strict` → 身份是 `Developer ID Application` → `TeamIdentifier` 与配置一致 → `spctl` → `stapler validate`，另断言包内版本号与 tag 一致 |
+| 本 tag 的 `latest.json` 可取且自洽 | `releases/download/<tag>/latest.json` 可匿名读到、`version` 与 tag 一致、4 个平台键齐、指向的产物都在 Release 里（链接不会 404） |
+| `latest` 别名没被顶掉 | 核验前后 `releases/latest/download/latest.json` 的 `version` 必须一致（核验前记基准，核验后比对） |
+
+**两个必知的坑**（都是这一轮实测出来的，脚本已经把判据补上）：
+
+1. **预发布会污染下载页** —— `deploy-web` 会把当前 tag 注入 `web/index.html` 的版本号与下载直链
+   再 scp 到线上；预发布走到那一步，下载页就把 beta 当可用版本了。现在 `deploy-web` 加了
+   `if: ${{ !contains(github.ref_name, '-') }}`（预发布不部署网站，线上保持上一个正式版），
+   Release 正文也会自动带「内部验证用」提示；E 脚本的前置检查按**被 tag 的那个提交**复查这条守卫。
+   已经发布出去的旧版本不受影响。
+2. **`spctl` 可能是空判据** —— `sudo spctl --master-disable` 之后 `spctl -a` 对任何产物都返回
+   accepted（连完全没签名的也照收，输出里带 `override=security disabled`）。CI 侧的
+   `verify-macos-signing.sh` 现在遇到这种情况**直接失败**（判据为空时不给绿），本地核验脚本把它按
+   「未验到」记并以退出码 2 结束。反过来也成立：`codesign` / 身份 / `TeamIdentifier` / `stapler`
+   这几条与 Gatekeeper 的全局开关无关，所以即使 `spctl` 被关掉，前四条仍然有牙齿。
+
+**人工那一步不省**：脚本判的是 Gatekeeper 自己的判据，但「在一台没装过本应用的 macOS 上双击首装」
+是体验层面的确认，只能人工看一眼（验收 ②）。验完二选一：留着（正文已标「内部验证用」、
+列表里有 Pre-release 徽标，run 记录可回溯）或 `CLEANUP=1` 删掉。
+
 **待办**：① 6 个凭据本身的**申领**（付费会员 + Apple 账号登录，脚本替代不了）与配置；
-② 预发布 tag 的端到端核验；③ 安装说明的口径同步 —— 见 §2.5 C–F
+② 用预发布 tag 真跑一遍（工具已就绪，缺的只是凭据）；③ 安装说明的口径同步 —— 见 §2.5 C–F
 （配置完成前，流水线仍会告警产物未签名）。
 
 ### 8.11 集成测试的 Redis 版本矩阵

@@ -26,6 +26,17 @@ fi
 
 fail() { echo "::error::$*" >&2; exit 1; }
 
+# spctl 只有在本机 Gatekeeper 评估开着的时候才是个判据：`sudo spctl --master-disable` 之后
+# 它对任何产物都返回 accepted（连完全没签名的也照收，输出里带 override=security disabled），
+# 下面那两条 spctl 判据就成了空判据 —— 而这一步的结论是「产物能不能被用户装上」，
+# 空判据下的绿灯是最危险的那种假绿，所以在这里直接失败而不是跳过。
+SPCTL_STATUS="$(spctl --status 2>&1 || true)"
+case "$SPCTL_STATUS" in
+  *enabled*) ;;
+  *) fail "本机 Gatekeeper 评估是关闭的（spctl --status：${SPCTL_STATUS:-读不出}）—— spctl 判据为空，
+   这一步的结论会失真。在 runner 上执行 sudo spctl --master-enable 后重跑" ;;
+esac
+
 echo "• 校验签名：$APP"
 codesign --verify --deep --strict --verbose=2 "$APP" \
   || fail "codesign 校验失败：产物没有有效签名（凭据配了却没签上）"
