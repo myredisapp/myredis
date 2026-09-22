@@ -16,6 +16,11 @@
 > 轮换加冻结闸门（交互输入 `ROTATE` 或 `ALLOW_ROTATE=1`）并写进 §3；**冻结已真实成立**
 > （v0.0.13–v0.0.16 已带着当前公钥发布，自动更新已在线），旧文案「现在轮换是安全的」等已改正。
 > 顺带解决上一提交误提交进本文档的三处 stash 冲突标记（见 §5 与 §4 #4）。
+> **2026-09-22 续（§2.5 P1 的 C / D 落地工具）**：C（备 Apple 凭据）/ D（配 6 个 secret）两个运维动作的
+> 可执行部分脚本化 —— `scripts/prepare-apple-signing.sh` 解开 `.p12` 自检并产出凭据文件、
+> `scripts/configure-apple-secrets.sh` 默认演练（`--no-store` 加密不上传）· 放行才写入 · 写完自动验收，
+> 把「配错凭据」的判据从 CI 构建后半程前移到本地；**真凭据仍需人工申领**（付费会员 + Apple 账号），
+> 见 §8.10 与 §2.5 C / D。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -32,7 +37,7 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C–F 待运维执行，残余风险 G–I 待做）。前端 JS 模块化在 `feat/2.4-frontend-split` 分支（PR #6）已完成、**尚未合入 main**，见 §4 #4 |
+| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C / D 的工具已就绪、**真凭据待人工申领**，E / F 待做，残余风险 G–I 待做）。前端 JS 模块化在 `feat/2.4-frontend-split` 分支（PR #6）已完成、**尚未合入 main**，见 §4 #4 |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
@@ -509,6 +514,17 @@
   - 细节：证书导出成 `.p12`（不要只导 `.cer`，那样没有私钥签不了名）；`base64 -i cert.p12` 产出的
     单行文本才是 `APPLE_CERTIFICATE` 要的值（脚本会去掉换行，但别把 `-----BEGIN` 这类文本一起塞进去）。
   - 产出：6 个值就位（不入仓库、不进聊天记录 / 日志），交给下一项配置。
+  - 🔧 **准备动作已脚本化（2026-09-22）**：`scripts/prepare-apple-signing.sh` —— 用 openssl 把 `.p12`
+    真解开，从证书本身读出签名身份（CN）与团队 ID（OU），与要填的值逐个对照，最后产出 D 直接可用的
+    凭据文件（`~/.tauri/myredis-apple-signing.env`，0600，注释里只有非机密的身份 / 团队 ID / 指纹）。
+    拦下的是几类「要等 CI 构建跑完才暴露」的错误：导出时没勾私钥、拿成 `Apple Development` 或
+    `Developer ID Installer` 证书、身份 / 团队 ID 与证书对不上、`APPLE_PASSWORD` 填成登录密码；
+    另含证书过期检查与 `APPLE_CERTIFICATE` 的 base64 往返自检（CI 那边只拿到这串 base64，
+    编码坏了同样是构建完才发现）。跑法见 §8.10。
+  - ⏳ **剩下的人工动作**（脚本替代不了）：**申领 / 导出证书本身** —— 需要**付费**会员与 Apple 账号登录，
+    没法在本地脚本里完成（本机实测：钥匙串里没有任何 Developer ID 证书）。脚本头部写了从
+    developer.apple.com 到导出 `.p12` 的完整步骤；不打算买会员的话见 §8.10 末尾的说明
+    （保持不签名也是一条有明确告警的已知状态，不是阻塞项）。
 
 - [ ] ⬜ **D｜把 6 个 `APPLE_*` secret 配进仓库**（§4 #6 第 2 步）
   - 动作：`gh secret set <名字> --repo myredisapp/myredis`（或仓库 Settings → Secrets and variables → Actions），
@@ -516,6 +532,17 @@
     缺一份 = 直接失败；只签名不配公证 = 直接失败（只签不公证仍过不了 Gatekeeper）。
   - 验收：`gh secret list --repo myredisapp/myredis` 能看到 6 条；下一次 macOS 构建日志里
     `setup-macos-signing.sh` 不再打「未配凭据、产物未签名」的告警。
+  - 🔧 **配置动作已脚本化（2026-09-22）**：`scripts/configure-apple-secrets.sh`，默认**演练** ——
+    逐个走一遍 gh 的本地加密（`--no-store`，取仓库公钥、本地加密、**不上传**），跑完再比对一次
+    secret 列表证明仓库状态没被动过；真正写入要 `ALLOW_CONFIGURE=1` 或交互答 `yes`。
+    值一律经 **stdin** 传给 gh、不用 `--body`（argv 会出现在本机 ps 里，与 `rotate-signing-key.sh`
+    对私钥密码同款考量），脚本自身也只打印名字 / 长度 / 时间戳。写入前先拦「半配」（6 个不齐直接退出）
+    并核对值的形状，写入后自动跑一遍验收；验收判据本身也能独立跑：
+    `bash scripts/configure-apple-secrets.sh VERIFY_ONLY=1`。跑法见 §8.10。
+  - ⏳ **剩下的人工动作**：C 的 6 个值 —— 没有真凭据就跑不了（`gh secret list` 目前只有 `SSH_*` 与
+    `TAURI_SIGNING_*` 共 6 条，`APPLE_*` 一条都没有，见 §4 #6）。gh 侧权限已确认够用
+    （当前 token 在该仓库是 admin，且能读 secret 列表 —— 与写入所需权限同级）；写入这条 PUT
+    本身留给 E 的第一步真实验证。
 
 - [ ] ⬜ **E｜端到端核验：预发布 tag 出包 + Gatekeeper 实测**（§4 #6 的关闭条件）
   - 动作：打一个**预发布 tag**（带 `-`，如 `v0.0.13-beta.1`）触发 `release.yml`，让
@@ -601,10 +628,11 @@
 | 3 | ~~兼容 Redis 6.0 以下~~ | **已加门禁** | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级。2026-09-22 起 CI 跑**版本矩阵**（6.0 + 7.0）且带版本门，新功能（如 `COPY`）按版本降级并有对应集成断言（§2.4） |
 | 4 | ~~前端单文件过大~~ | **已完成，待合入** | 2026-09-22 评估确认该拆（11 天从 3307 涨到 5429 行），方案为**浏览器原生 ES 模块**（不用打包器，见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)）：样式外置为 `frontend/styles.css`（已合入 main）→ 3042 行内联 JS 拆成 19 个模块（每个 ≤400 行，`index.html` 只留 345 行骨架，共享状态收进 `js/state.js`）+ 回归网 `scripts/frontend-smoke.mjs` / `frontend-smoke-mock.js`（17 场景）接进 CI。**模块化部分在 `feat/2.4-frontend-split` 分支（PR #6，待合入）**；合入后即可按 §2.5 I 给三条模块约定加脚本校验 |
 | 5 | 更新签名私钥丢失 | **已缓解（离线副本待人工执行）** | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。2026-09-22：备份 / 恢复 / 自检流程见 §8.9，轮换自 v0.0.13 起冻结（§3）；**私钥与密码的离线副本仍须人工放好** |
-| 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名。待办见 §2.5 C–F |
+| 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名。同日起 C / D 的准备与配置也各有一条本地脚本（`prepare-apple-signing.sh` 解 `.p12` 自检并产出凭据文件、`configure-apple-secrets.sh` 演练 / 写入 / 验收），**但真凭据仍缺**（实测 `gh secret list` 里一条 `APPLE_*` 都没有）；凭据本身要付费会员 + Apple 账号申领，是纯人工动作。待办见 §2.5 C–F |
 
 > **上表开放项已拆成待办**（2026-09-22）：#5 → §2.5 A（离线备份 + 恢复自检）/ B（轮换冻结 + 交互确认），两项已完成；
-> #6 → §2.5 C（备 Apple 凭据）/ D（配 6 个 secret）/ E（预发布 tag 端到端核验）/ F（安装说明口径）。
+> #6 → §2.5 C（备 Apple 凭据）/ D（配 6 个 secret）/ E（预发布 tag 端到端核验）/ F（安装说明口径），
+> 其中 C / D 的可执行部分（本地自检 + 演练式配置）同日落地为脚本，**真凭据本身仍待人工申领**。
 > 已关闭的 #1 / #3 各留了一处残余风险，对应 §2.5 G（密钥链降级提示）/ H（版本下限口径）；
 > #4 的残余风险 I（前端模块纪律校验）校验的是模块化产物，随 PR #6 合入才落地。
 > 本节因此不再新增行动项 —— 有新风险先加一行，再拆到 §2.5。
@@ -615,6 +643,7 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
+| 2026-09-22 | — | **§2.5 P1 的 C / D 落地工具（发布链路：Apple 凭据可自检、secret 可演练式配置）**：C / D 本身是「备 6 个 Apple 凭据」「把 6 个 secret 配进仓库」两个运维动作，**真凭据仍待人工申领**（本机实测：钥匙串里没有任何 Developer ID 证书；`gh secret list` 里 `APPLE_*` 一条都没有），但两个动作的可执行部分全部脚本化，并把原本只能等 CI 构建跑完才暴露的判据前移到本地。① **C —— 新增 `scripts/prepare-apple-signing.sh`**：用 openssl 把 `.p12` 真解开（`-info -noout` 看 bag 结构判「带没带私钥」），从证书里读出 CN / OU / issuer / 到期日，与要填的值逐个对照，拦下「导出没勾私钥」「拿成 `Apple Development` / `Mac Developer` / `Developer ID Installer` 证书」「身份或团队 ID 与证书不一致」「`APPLE_PASSWORD` 填成登录密码或邮箱」「证书已过期」这些错误（后四类在 CI 里的暴露时机都是构建后半程，而 `setup-macos-signing.sh` 只查有没有配、不查配得对不对），另做 `APPLE_CERTIFICATE` 的 base64 往返自检与 48KB 上限预检；产出 D 要用的凭据文件（`~/.tauri/myredis-apple-signing.env`，0600，注释里只含身份 / 团队 ID / 指纹 / 到期日等非机密信息）。② **D —— 新增 `scripts/configure-apple-secrets.sh`**：默认演练（逐个走 `gh secret set --no-store`，取仓库公钥 + 本地加密 + **不上传**，跑完比对 secret 列表证明仓库状态未变），真正写入要 `ALLOW_CONFIGURE=1` 或交互答 `yes`；值一律经 **stdin** 而非 `--body`（argv 会在 ps 里露值，与 `rotate-signing-key.sh` 同款考量），写入前拦「6 个不齐」的半配、写入后自动验收，验收判据另有 `VERIFY_ONLY=1` 可独立复查。**验收实测**：C 侧 17 条路径（正常 / `NO_WRITE` / 密码错 / 无私钥 / 两类错证书 / 过期 / 身份与团队 ID 不一致 / 登录密码 / 邮箱填错格 / 放行开关 / 缺值）+ D 侧 12 条路径（演练 / 非交互拦下 / 缺值 / 证书非 base64 / 身份与团队 ID 形状 / 空白兜底 / `VERIFY_ONLY` 三态 / 仓库不可达）全部符合预期，另用真 pty 验了 D 的「答 `no` 即取消且不写入」与 C 的两个密码交互输入；两次真跑 `gh secret list` 确认仓库 secret 列表（6 条 `SSH_*` / `TAURI_SIGNING_*`）全程未被改动。③ 文档：§8.10 新增「凭据的准备与配置」小节（四道检查的脚本表 + 两条命令 +「6 类错误会在哪暴露」对照表 +「不买会员也可行」的出口），§4 #6 与本文档头部同步。**顺带修掉一类脚本坑**：`$VAR` 紧跟全角字符在 macOS 的 `LANG=C.UTF-8` 下会被并进变量名（`bash: OUT（: unbound variable`），两个新脚本的插值一律写成 `${VAR}`；并确认 `scripts/` 保持 bash 3.2 兼容写法（macOS 自带 3.2，没有 `declare -A`） |
 | 2026-09-22 | — | **§2.5 P1 的 A / B 完成（发布链路：私钥可恢复、轮换已冻结）**：① **A 私钥备份与恢复** —— §8.9 新增「私钥的备份与恢复」小节：要备份的四样东西（私钥文件 `~/.tauri/myredis-updater.key` 单行 base64 / 密码 / `.pub` / key id 标签，当前 key id `0F42026F5094334C`）、离线存放与「密码不与私钥同放」、换机换人的恢复四步（复制到临时路径 → `TAURI_SIGNING_PRIVATE_KEY_PATH=<备份> node .github/scripts/check-signing-key.mjs` 自检 → 按三种输出处置 → 装回本地与 CI）、以发一次版作端到端验收；自检判据**三个方向实测**（给不出密码 → `Wrong password for that key`；换上另一把私钥 → 打印两边 key id 判定不配对；三者匹配 → 通过）。② **B 轮换冻结** —— `rotate-signing-key.sh` 在任何改动之前打印当前公钥 key id 与「哪些 tag 已带公钥发布」（扫本地 tag 各版本 `tauri.conf.json`，gh 可用时再合并线上 Release 兜底），要求交互输入 `ROTATE` 或非交互传 `ALLOW_ROTATE=1`，否则退出且**不生成密钥 / 不改配置 / 不碰 secret**；§3 加「更新签名密钥轮换 ❌（v0.0.13 起冻结）」并与 §8.9 互链，§8.9 警告块改冻结口径。**冻结已真实成立**：v0.0.13–v0.0.16 四个正式版都带当前公钥发布、线上 `latest.json` 与 `.sig` 俱全（实测该地址 200 / `version 0.0.16`），故一并改正三处陈旧文案 —— 脚本头部「现在轮换是安全的」、§8.9「v0.0.12 发布之后不要再换」、以及「发版之前检查更新一定是失败的」（改为：v0.0.13+ 用户能正常收到更新，只有 v0.0.12 及更早需手动装一次）。验收：闸门四条路径实测（非交互拦下 exit 1 / 交互答非 `ROTATE` 中止 exit 1 / 输入 `ROTATE` 走完 exit 0 / `ALLOW_ROTATE=1` 走完 exit 0），全部用临时 `KEY_PATH` + `CONFIG_PATH` + `SKIP_GH=1`，真实配置与 secret 全程未被触碰。另：上一提交误提交进本文档的**三处 stash 冲突标记**已按 main 的真实状态解决 —— 前端模块化那部分明确标注为 `feat/2.4-frontend-split` 分支（PR #6）待合入，而非「已落地」；`main` 上 `frontend/index.html` 仍是单文件 |
 | 2026-09-22 | — | **新增 §2.5「风险收敛与发布运维」**：把 §4 的两个开放项拆成 6 项发布链路待办 —— A 私钥离线备份 + 从备份真签自检（`TAURI_SIGNING_PRIVATE_KEY_PATH=... node .github/scripts/check-signing-key.mjs`，验「密码能解开 + 与配置里公钥配对」）、B 轮换冻结（加交互放行开关 + §3 决策表加一行）、C 备 6 个 Apple 凭据、D 配进仓库、E 用预发布 tag 端到端核验（`--prerelease` 不占 `latest`，`verify-macos-signing.sh` 全绿 + 干净 macOS 首装不再右键打开）、F 安装说明口径同步；另补已关闭项的三处残余风险 —— G 密钥链降级时给用户可见提示、H Redis 版本下限口径与实测对齐（文档写 2.8+ 但只跑过 6.0 / 7.0）、I 前端模块纪律加脚本校验（行数上限 / `__TAURI_INTERNALS__` 白名单 / 循环 import）。规划前逐条核对过现状：`rotate-signing-key.sh` 的轮换约束目前只是脚本头部注释、无拦截；`storage.rs::save_all` 丢掉 `store_password` 的返回值，降级落盘对前端不可见；前端三条约定无脚本把关（`__TAURI_INTERNALS__` 现仅出现在 `js/api.js` 与冒烟替身中，符合约定）。同轮刷新头部「最近更新」、状态总览的「§2 待办已清空」表述，并在 §4 表下加拆解指引 |
 | 2026-09-22 | — | **§2.4 遗留的「前端单文件拆分」完成（在 `feat/2.4-frontend-split` 分支，PR #6 待合入）**：先把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`（17 个场景、真实点击路径、Tauri 后端替身的返回结构与 `commands/*` 的 serde 输出逐字段对齐、事件按 `__TAURI_INTERNALS__.runCallback` 的生产路径投递；不引 node_modules，只用 Node 22 内置 `fetch`/`WebSocket` 说 CDP + 系统已装的 Chrome），再把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个浏览器原生 ES 模块（每模块 ≤400 行；`index.html` 3389 → 345 行，只留结构骨架 + `<script type="module" src="./js/main.js">`）：api / util / ui / state / theme / layout / terminal / monitor / collections / keyops / detail / keys / addkey / conn-form / server-status / connections / import-export / updater / main。跨模块状态收进 `js/state.js`（`currentConn` / `onlineConns` / `selectedKey` / `KEY_DATA` / `allKeys` 只暴露读写函数，分页游标、监控会话、更新进度等单功能状态留在各自模块）；详情区改数据要重绘 Key 树这类反向依赖走 `state.js` 的 `onKeysChanged` 订阅（`main.js` 装配），依赖整体单向、无循环 import；顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$` 与 `renderServerInfo` 里未使用的 `diskEl`。验证：冒烟 17/17 场景通过（零未捕获异常、零 `console.error`），CI 新增 `frontend-smoke` job（失败上传截图 + summary.json）；**真实 WKWebView** 用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议（同样的 `Content-Type` / `Access-Control-Allow-Origin`）加载页面，19 个模块全部以 `text/javascript` 正常加载、页面零错误，并重建 debug 包启动应用确认模块图执行（WebKit LocalStorage 启动即被写入 `myredis.layout`）；拆分前后对内联 JS 逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 / 走通知重绘 / 删死代码），无功能逻辑改写；冒烟网在过程中抓出一个同名遮蔽 bug（`const isOnline = isOnline(conn.id)` 引发 TDZ，界面会白屏）。评估与模块清单见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)。顺带修复本地构建环境：`.cargo-home` 里 tauri 2.11.5 的 `src/manager/webview.rs` 曾被改成引用不存在的 `frontendview/`（该目录在本版本叫 `webview/`），从 crates.io 原包还原后本地 `cargo build` 才能过（该缓存目录已在 .gitignore 里，不影响 CI）。**注意：以上拆分与冒烟 job 目前只在分支上，main 尚未合入** |
@@ -1007,12 +1036,14 @@ cargo tauri dev --config '{"plugins":{"updater":{"endpoints":["http://127.0.0.1:
 ### 8.10 macOS 代码签名与公证（`APPLE_*` 凭据）
 
 不签名 / 不公证的 `.app` 首次打开会被 Gatekeeper 拦下（只能右键「打开」），而且**配错凭据不会让构建失败** ——
-产物照样出，只是悄悄没签名。所以这条链路上有两道检查，见 §2.4 的两份脚本：
+产物照样出，只是悄悄没签名。所以这条链路上有四道检查，见 §2.4 的两份 CI 脚本与 §2.5 C / D 的两份本地脚本：
 
 | 脚本 | 时机 | 作用 |
 |------|------|------|
 | `.github/scripts/setup-macos-signing.sh` | `tauri build` 之前（仅 macOS） | 校验凭据**成组**齐备并写进 `$GITHUB_ENV`；一份都没有时告警放行（接受未签名产物） |
 | `.github/scripts/verify-macos-signing.sh` | 构建之后（仅 macOS） | `codesign --verify --deep --strict` + `Developer ID Application` 身份 + `TeamIdentifier` 一致 + `spctl -a -vvv -t exec`（Gatekeeper 判据）+ `xcrun stapler validate`；dmg 另按 disk image 形式过 `spctl` |
+| `scripts/prepare-apple-signing.sh` | 本地、备凭据时（§2.5 C） | 解开 `.p12` 自检：带没带私钥、证书类型对不对、身份 / 团队 ID 与证书是否一致、密码格式、证书有没有过期；产出 D 要用的凭据文件 |
+| `scripts/configure-apple-secrets.sh` | 本地、配 secret 时（§2.5 D） | 演练（`gh --no-store` 逐个加密但不写入）→ 显式放行后写入 → 自动跑验收；顺带拦「6 个不齐」的半配 |
 
 tauri build 在有这些变量时会自动完成「导入证书 → 签名 → 公证 → staple」，不需要额外的命令。
 
@@ -1032,7 +1063,44 @@ tauri build 在有这些变量时会自动完成「导入证书 → 签名 → �
 
 不影响自动更新：替换 `.app` 由 tauri 自己完成，只认 minisign 验签（§8.9），与 Apple 签名无关。
 
-**待办**：6 个凭据的准备与配置、预发布 tag 的端到端核验、安装说明的口径同步见 §2.5 C–F
+#### 凭据的准备与配置（§2.5 C / D）
+
+6 个值的「备齐」与「配进仓库」各有一条**本地**命令（都不依赖 CI，也不打 tag）：
+
+```bash
+# C：备齐 6 个值 —— 解开 .p12 与证书里的身份 / 团队 ID 对照，产出凭据文件（0600）
+P12_PATH=~/Desktop/developerID.p12 APPLE_ID=you@example.com \
+  bash scripts/prepare-apple-signing.sh            # 两个密码交互输入（不回显）
+
+# D：配进仓库 —— 默认演练（gh --no-store 逐个加密但不写入），确认后再放行写入
+bash scripts/configure-apple-secrets.sh                    # 演练：只加密，不写入
+ALLOW_CONFIGURE=1 bash scripts/configure-apple-secrets.sh  # 真正写入 + 自动验收
+bash scripts/configure-apple-secrets.sh VERIFY_ONLY=1      # 随时复查 D 的验收判据
+```
+
+为什么要把判据放在本地：下面这些错误在 CI 里的暴露时机都在**构建后半程**，而
+`setup-macos-signing.sh` 只查「有没有配」、不查「配得对不对」：
+
+| 错误 | 不本地拦下的话会在哪暴露 |
+|------|--------------------------|
+| 导出证书时没勾私钥（只有 `.cer` / 没有私钥的 `.p12`） | signing 阶段失败，或产物悄悄没签名 |
+| 拿成 `Apple Development` / `Mac Developer` 证书 | 同上 —— 这些开发证书不能给分发的 `.app` 签名 |
+| 拿成 `Developer ID Installer` 证书 | 同上 —— 那是签 `.pkg` 用的 |
+| `APPLE_SIGNING_IDENTITY` / `APPLE_TEAM_ID` 与证书对不上 | 构建成功但挑不中签名身份 → 构建后 `verify-macos-signing.sh` 才失败 |
+| `APPLE_PASSWORD` 填成账号登录密码 | 公证失败（Apple 只接受 App 专用密码） |
+| 证书已过期 | 签出来的包过不了 Gatekeeper |
+
+凭据文件落在 `~/.tauri/myredis-apple-signing.env`（与更新签名私钥同目录，**刻意不放仓库里**）：
+权限 0600，注释里只放身份 / 团队 ID / 证书指纹 / 到期日这些**非机密**信息，用来回答
+「这份文件对应哪张证书」。它内含私钥与密码，等同凭据本身 —— 不要提交、不要贴进聊天记录 / 日志；
+离线副本与 §8.9 的私钥一样「密码不与私钥同放」。E 通过后就该把它从工作机挪到离线介质。
+
+**不买 Apple Developer 会员也可以**：那就别配任何 `APPLE_*`（保持现状）—— 流水线会明确告警
+产物未签名，README 里也写着首次打开需右键「打开」。这是一条**有明确提示**的已知状态，
+不是静默失败，所以 C–F 是**可选项**而非发版阻塞项（自动更新只依赖 minisign 验签）。
+
+**待办**：① 6 个凭据本身的**申领**（付费会员 + Apple 账号登录，脚本替代不了）与配置；
+② 预发布 tag 的端到端核验；③ 安装说明的口径同步 —— 见 §2.5 C–F
 （配置完成前，流水线仍会告警产物未签名）。
 
 ### 8.11 集成测试的 Redis 版本矩阵
