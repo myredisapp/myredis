@@ -1,7 +1,8 @@
 # 开发进度与问题记录
 
 > 本文档用于跟踪「麦地缓存」开发进度、已决策事项、已知缺口与待办事项。随开发持续更新。
-> 最近更新：2026-09-22，状态：**v0.0.12 已发布；根目录 `README.md` 已补齐**（含官网 myredis.cn 与界面截图，
+> 最近更新：2026-09-22，状态：**v0.0.16 已发布**（v0.0.13 起自动更新链路在线：每个正式 Release 带
+> `latest.json` + `.sig`）；**根目录 `README.md` 已补齐**（含官网 myredis.cn 与界面截图，
 > 截图素材在 `docs/screenshots/`，由 `frontend/index.html` + mock `__TAURI_INTERNALS__.invoke`  harness 渲染截取）。
 > §2.1 的功能缺口已清空；**§2.2 全部清空**（两个 P1：超时配置接线、`rediss://` 友好提示；四个 P2：
 > 分页与虚拟滚动、`list_keys` 的 N+1、阻塞 IO、死代码 —— 本轮另修掉一个导出竞态）。
@@ -11,6 +12,10 @@
 > **2026-09-22 续：§2 新增 §2.5「风险收敛与发布运维」** —— 把 §4 的两个开放项（#5 更新签名私钥备份、
 > #6 macOS 签名公证凭据）与已关闭项的三处残余风险拆成 9 项待办（A–F 发布链路、G–I 残余风险）；
 > 以运维动作与口径对齐为主，带代码改动的只有 B / G / I 三项。
+> **2026-09-22 续（§2.5 P1 的 A / B 完成）**：私钥的备份 / 恢复流程落到 §8.9（自检判据三个方向实测），
+> 轮换加冻结闸门（交互输入 `ROTATE` 或 `ALLOW_ROTATE=1`）并写进 §3；**冻结已真实成立**
+> （v0.0.13–v0.0.16 已带着当前公钥发布，自动更新已在线），旧文案「现在轮换是安全的」等已改正。
+> 顺带解决上一提交误提交进本文档的三处 stash 冲突标记（见 §5 与 §4 #4）。
 >
 > 相关文档分工：
 > - **本文件** —— 开发视角的进度、缺口与待办（含内部实现细节）。
@@ -27,16 +32,12 @@
 | v0.1.0 | 开发中 | 后端骨架（错误类型、连接池、连接 CRUD、持久化）+ PING |
 | v0.2.x | 已发布 | 用户名鉴权、测试连接按钮、TTL 输入、侧栏折叠与拖拽调宽 |
 | v0.0.x | 已发布 | 集群支持、MOVED 报错转可操作建议、UI 优化、应用图标、CI 三平台出包 |
-<<<<<<< Updated upstream
-| 当前 HEAD | 开发中 | 核心链路完整；**§2 待办已全部清空**（含 §2.4 的四个 P1 与五个 P2）；剩余为工程改进（前端 JS 模块化，见 §4 #4） |
-=======
-| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**，前端 JS 模块化也已落地（见 §4 #4）；**§2.5 新开 9 项风险收敛待办**（发布链路 A–F + 残余风险 G–I，以运维动作为主） |
->>>>>>> Stashed changes
+| 当前 HEAD | 开发中 | 核心链路完整；**§2.1–§2.4 已全部清空**；**§2.5 新开 9 项风险收敛待办**（发布链路 A / B 已完成，C–F 待运维执行，残余风险 G–I 待做）。前端 JS 模块化在 `feat/2.4-frontend-split` 分支（PR #6）已完成、**尚未合入 main**，见 §4 #4 |
 
 > ⚠️ **版本号的两个来源**：`src-tauri/Cargo.toml` 与 `src-tauri/tauri.conf.json` 里写的是 `0.1.0`（占位），
 > 实际发布版本由 CI 从 git tag 反写（`.github/scripts/set-version.mjs`，见 §8.5）。
 > 因此「源码里的版本号」不等于「用户手上的版本号」，改版本请打 tag，不要手改这两个文件。
-> 最新 tag 为 `v0.0.12`。
+> 最新 tag 为 `v0.0.16`（v0.0.13 起带自动更新清单与签名）。
 
 技术栈：Tauri 2 + Rust 2021 + `redis` 0.25（`tokio-comp` / `connection-manager` / `cluster` / `cluster-async`）
 + tokio + sysinfo 0.39 + 原生 JS 前端（`frontend/index.html` 3389 行 + `frontend/styles.css` 2051 行，**无构建步骤**）。
@@ -457,7 +458,7 @@
 
 #### P1（发布链路：决定用户「装得上、更得到」）
 
-- [ ] ⬜ **A｜更新签名私钥的离线备份与可恢复性自检**（§4 #5）
+- [x] ✅ **A｜更新签名私钥的离线备份与可恢复性自检**（§4 #5）
   - 现状：私钥只有两处 —— CI secret `TAURI_SIGNING_PRIVATE_KEY`（+ 密码）与本地
     `~/.tauri/myredis-updater.key`（`.pub` 在同目录），两边同源，**没有独立备份**；
     私钥内容与密码缺一不可（密码忘了 = 私钥作废 = 之后再也发不出自动更新，见 §8.9）。
@@ -468,8 +469,16 @@
     「密码能不能解开私钥」与「是不是与配置里的公钥配对（key id 比对）」，正是客户端验签的同一判据。
   - 产出：§8.9 补一节「私钥恢复步骤」（换机 / 换人怎么恢复、恢复后如何自检），把现在那句
     「务必备份私钥文件」从提醒变成可照做的流程。
+  - **落地（2026-09-22）**：§8.9 新增「私钥的备份与恢复」小节 —— 要备份的四样东西（私钥文件 /
+    密码 / 公钥 / key id 标签，当前 key id `0F42026F5094334C`）、怎么存（离线 + 密码不跟私钥同放）、
+    换机换人的恢复四步（复制到临时路径 → 跑自检 → 按输出处置 → 装回本地与 CI）、恢复后以「发一次版」
+    作端到端验收。自检判据**三个方向都实测过**：给不出密码 → `Wrong password for that key`（exit 1，
+    证明这份判据不是摆设、且密码与私钥缺一不可）；换上另一把私钥 → 打印两边 key id 并判定不配对
+    （exit 1，证明「拿错备份」会被抓住）；私钥 + 密码 + 配置三者匹配 → 通过（exit 0）。
+  - ⏳ **剩下的人工动作**（脚本 / 文档替代不了）：把私钥文件与密码真正放到离线介质并在那里写下 key id。
+    §4 #5 状态因此标为「已缓解（离线副本待人工执行）」。
 
-- [ ] ⬜ **B｜轮换冻结：加交互确认并写进决策表**（§4 #5）
+- [x] ✅ **B｜轮换冻结：加交互确认并写进决策表**（§4 #5）
   - 现状：`scripts/rotate-signing-key.sh` 能把「重新生成密钥对 → 换公钥 → 覆盖两个 secret → 自检」
     整条流程做完，但「**已经发过带旧公钥的版本之后就不能再轮换**」这条约束只是脚本头部的一段注释
     （第 12–15 行）与 §8.9 的引用块 —— 跑脚本时没有任何拦截，手滑一次就是全体老用户收不到更新。
@@ -478,6 +487,18 @@
     §3「明确不支持」表加一行「更新签名密钥轮换」= ❌（v0.0.13 起冻结，除非接受老用户手动重装一次），
     与 §8.9 的警告块互链。
   - 验收：直接跑脚本会被拦下（不生成新密钥、不动 secret）；带放行开关时才走完 flow。
+  - **落地（2026-09-22）**：脚本开头新增「轮换冻结闸门」，在任何改动之前打印当前公钥 key id 与
+    **哪些 tag 已经带着公钥发布**（扫本地 `git tag` 各版本的 `tauri.conf.json`，离线且确定性；
+    能连 gh 时再合并线上 Release 的 tag 兜底，本地缺 tag 会告警），然后要求在终端输入 `ROTATE`
+    或非交互地传 `ALLOW_ROTATE=1`，否则直接退出。§3 加「更新签名密钥轮换 ❌」一行并与 §8.9 互链；
+    §8.9 的警告块改成冻结口径并写明闸门行为。
+  - **注意：冻结不是假设，已经成立** —— v0.0.13 / v0.0.14 / v0.0.15 / v0.0.16 四个正式版都带着
+    当前公钥（`0F42026F5094334C`）发布，线上 `latest.json` 与 `.sig` 俱全（实测该地址 200 / version 0.0.16）。
+    旧文案「v0.0.12 及更早……现在轮换是安全的」已按此改正。
+  - **验收实测**（四种路径，全部用 `KEY_PATH` / `CONFIG_PATH` 指向临时文件 + `SKIP_GH=1`，
+    真实配置与 secret 全程未被触碰）：① 非交互且不传开关 → 拦下、exit 1、无新密钥、配置字节不变；
+    ② 交互终端答非 `ROTATE` → 中止、exit 1、无新密钥；③ 交互输入 `ROTATE` → 走完 flow、exit 0；
+    ④ `ALLOW_ROTATE=1` → 走完 flow（生成新密钥 → 改写公钥并打印新旧 key id → 自检通过）、exit 0。
 
 - [ ] ⬜ **C｜准备 Apple 签名 / 公证凭据**（§4 #6 第 1 步）
   - 前置：Apple Developer Program 会员（付费，Developer ID 证书的签发前提）。
@@ -566,6 +587,7 @@
 | 跨 slot 的多 key 操作 | ❌ | `MGET` / `DEL` / `RENAME` / `COPY` 跨 slot 属 Redis 集群固有限制，不做拆分重试；2026-09-22 起 `CROSSSLOT` 报错会**转写成可操作提示**（同 hash tag 或逐条执行，见 `error.rs`），而不是透传英文原文 |
 | 集群下 `SELECT` 切库 | ❌ | 集群只有 db0，前端隐藏选择器、后端返回明确错误 |
 | 实时命令监控（Monitor） | ✅ | **2026-09-22 起支持**（见 §2.4）：底部面板「实时监控」标签页，独立连接、批量推送、可按原文过滤；**集群模式不支持**（MONITOR 是节点级命令，请单机直连目标节点） |
+| 更新签名密钥轮换 | ❌ | **v0.0.13 起冻结**（v0.0.12 及更早没有更新模块）：公钥编译进安装包，v0.0.13–v0.0.16 已带着当前公钥（key id `0F42026F5094334C`）发布，换私钥 = 这些用户永远收不到自动更新，只能手动重装一次。除非明确接受这个代价，否则不轮换；`rotate-signing-key.sh` 加了冻结闸门（打印已发布的 tag + 要求 `ROTATE` 确认或 `ALLOW_ROTATE=1`），私钥只做备份 / 恢复。见 §8.9 |
 | 引入前端框架 / 构建工具 | ❌ | 坚持原生 JS 单文件（见 `PROJECT_PLAN.md` §9.5） |
 
 ---
@@ -577,20 +599,15 @@
 | 1 | ~~密码明文存 `connections.json`~~ | **已解决** | 2026-09-22 改存系统密钥链（keyring crate）：`save_all` 转存 keychain、文件不落密码，存量明文首次加载自动迁移；密钥链不可用（CI / headless）自动降级回明文落盘（§2.4 P1） |
 | 2 | ~~超时值是否暴露给用户配置~~ | **已解决** | 2026-09-22 起连接对话框可配「建连超时 / 命令超时」（秒，写入连接配置随连接持久化，`Connection::effective_timeout` 按连接覆盖池默认值；缓存键不变 —— `connect` 每次都用当时配置重开句柄覆盖条目）。默认仍 5s / 10s（`config.rs`）；大 key 整表读取超时可按连接调大（§2.4 P1）。Key 列表 TYPE/TTL 走 pipeline，整页共用一个命令预算（不按条数叠加） |
 | 3 | ~~兼容 Redis 6.0 以下~~ | **已加门禁** | 目标为 Redis 2.8+；避免使用仅新版本才有的参数，`CLIENT SETINFO` 等需容错或降级。2026-09-22 起 CI 跑**版本矩阵**（6.0 + 7.0）且带版本门，新功能（如 `COPY`）按版本降级并有对应集成断言（§2.4） |
-<<<<<<< Updated upstream
-| 4 | 前端 `frontend/index.html` 单文件 3389 行（+ `styles.css` 2051 行） | 已评估 | 2026-09-22 评估：11 天从 3307 涨到 5429 行，触发条件成立 → 该拆；方案为**浏览器原生 ES 模块**（不用打包器），分 4 阶段渐进拆分。第一步（样式外置）已落地，JS 模块化待单独一轮 + 前端冒烟脚本；见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md) |
-| 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件 |
-| 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名 |
-=======
-| 4 | ~~前端单文件过大~~ | **已解决** | 2026-09-22 两轮落地：样式外置后把 3042 行内联 JS 拆成 19 个 ES 模块（每个 ≤400 行），`index.html` 只剩 345 行骨架；共享状态收进 `js/state.js`，回归网 `scripts/frontend-smoke.mjs`（17 场景）已接进 CI，并在真实 WKWebView 里验证过模块加载。见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md) |
-| 5 | 更新签名私钥丢失 | 已知风险 | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。务必备份私钥文件。待办见 §2.5 A / B |
+| 4 | ~~前端单文件过大~~ | **已完成，待合入** | 2026-09-22 评估确认该拆（11 天从 3307 涨到 5429 行），方案为**浏览器原生 ES 模块**（不用打包器，见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)）：样式外置为 `frontend/styles.css`（已合入 main）→ 3042 行内联 JS 拆成 19 个模块（每个 ≤400 行，`index.html` 只留 345 行骨架，共享状态收进 `js/state.js`）+ 回归网 `scripts/frontend-smoke.mjs` / `frontend-smoke-mock.js`（17 场景）接进 CI。**模块化部分在 `feat/2.4-frontend-split` 分支（PR #6，待合入）**；合入后即可按 §2.5 I 给三条模块约定加脚本校验 |
+| 5 | 更新签名私钥丢失 | **已缓解（离线副本待人工执行）** | 私钥只在 CI secret（`TAURI_SIGNING_PRIVATE_KEY`）与本地 `~/.tauri/myredis-updater.key`。**丢失或轮换后，已装旧版本的应用将永远收不到自动更新**（客户端只认配置里那份公钥），只能让用户手动重装。2026-09-22：备份 / 恢复 / 自检流程见 §8.9，轮换自 v0.0.13 起冻结（§3）；**私钥与密码的离线副本仍须人工放好** |
 | 6 | macOS 构建未做代码签名 / 公证 | **已接线，待配凭据** | 替换 `.app` 由 Tauri 自己完成并只认 minisign 验签，不依赖 Apple 签名；但首次安装仍会被 Gatekeeper 拦（需右键打开）。2026-09-22 起流水线已接签名 + 公证（凭据成组校验，构建后复核 `codesign` / `spctl` / `stapler`，见 §8.10）：**把 6 个 `APPLE_*` secret 配进仓库即生效**；未配时发版日志会明确告警产物未签名。待办见 §2.5 C–F |
 
-> **上表开放项已拆成待办**（2026-09-22）：#5 → §2.5 A（离线备份 + 恢复自检）/ B（轮换冻结 + 交互确认）；
+> **上表开放项已拆成待办**（2026-09-22）：#5 → §2.5 A（离线备份 + 恢复自检）/ B（轮换冻结 + 交互确认），两项已完成；
 > #6 → §2.5 C（备 Apple 凭据）/ D（配 6 个 secret）/ E（预发布 tag 端到端核验）/ F（安装说明口径）。
-> 已关闭的 #1 / #3 / #4 各留了一处残余风险，对应 §2.5 G（密钥链降级提示）/ H（版本下限口径）/
-> I（前端模块纪律校验）。本节因此不再新增行动项 —— 有新风险先加一行，再拆到 §2.5。
->>>>>>> Stashed changes
+> 已关闭的 #1 / #3 各留了一处残余风险，对应 §2.5 G（密钥链降级提示）/ H（版本下限口径）；
+> #4 的残余风险 I（前端模块纪律校验）校验的是模块化产物，随 PR #6 合入才落地。
+> 本节因此不再新增行动项 —— 有新风险先加一行，再拆到 §2.5。
 
 ---
 
@@ -598,11 +615,9 @@
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
-<<<<<<< Updated upstream
-=======
+| 2026-09-22 | — | **§2.5 P1 的 A / B 完成（发布链路：私钥可恢复、轮换已冻结）**：① **A 私钥备份与恢复** —— §8.9 新增「私钥的备份与恢复」小节：要备份的四样东西（私钥文件 `~/.tauri/myredis-updater.key` 单行 base64 / 密码 / `.pub` / key id 标签，当前 key id `0F42026F5094334C`）、离线存放与「密码不与私钥同放」、换机换人的恢复四步（复制到临时路径 → `TAURI_SIGNING_PRIVATE_KEY_PATH=<备份> node .github/scripts/check-signing-key.mjs` 自检 → 按三种输出处置 → 装回本地与 CI）、以发一次版作端到端验收；自检判据**三个方向实测**（给不出密码 → `Wrong password for that key`；换上另一把私钥 → 打印两边 key id 判定不配对；三者匹配 → 通过）。② **B 轮换冻结** —— `rotate-signing-key.sh` 在任何改动之前打印当前公钥 key id 与「哪些 tag 已带公钥发布」（扫本地 tag 各版本 `tauri.conf.json`，gh 可用时再合并线上 Release 兜底），要求交互输入 `ROTATE` 或非交互传 `ALLOW_ROTATE=1`，否则退出且**不生成密钥 / 不改配置 / 不碰 secret**；§3 加「更新签名密钥轮换 ❌（v0.0.13 起冻结）」并与 §8.9 互链，§8.9 警告块改冻结口径。**冻结已真实成立**：v0.0.13–v0.0.16 四个正式版都带当前公钥发布、线上 `latest.json` 与 `.sig` 俱全（实测该地址 200 / `version 0.0.16`），故一并改正三处陈旧文案 —— 脚本头部「现在轮换是安全的」、§8.9「v0.0.12 发布之后不要再换」、以及「发版之前检查更新一定是失败的」（改为：v0.0.13+ 用户能正常收到更新，只有 v0.0.12 及更早需手动装一次）。验收：闸门四条路径实测（非交互拦下 exit 1 / 交互答非 `ROTATE` 中止 exit 1 / 输入 `ROTATE` 走完 exit 0 / `ALLOW_ROTATE=1` 走完 exit 0），全部用临时 `KEY_PATH` + `CONFIG_PATH` + `SKIP_GH=1`，真实配置与 secret 全程未被触碰。另：上一提交误提交进本文档的**三处 stash 冲突标记**已按 main 的真实状态解决 —— 前端模块化那部分明确标注为 `feat/2.4-frontend-split` 分支（PR #6）待合入，而非「已落地」；`main` 上 `frontend/index.html` 仍是单文件 |
 | 2026-09-22 | — | **新增 §2.5「风险收敛与发布运维」**：把 §4 的两个开放项拆成 6 项发布链路待办 —— A 私钥离线备份 + 从备份真签自检（`TAURI_SIGNING_PRIVATE_KEY_PATH=... node .github/scripts/check-signing-key.mjs`，验「密码能解开 + 与配置里公钥配对」）、B 轮换冻结（加交互放行开关 + §3 决策表加一行）、C 备 6 个 Apple 凭据、D 配进仓库、E 用预发布 tag 端到端核验（`--prerelease` 不占 `latest`，`verify-macos-signing.sh` 全绿 + 干净 macOS 首装不再右键打开）、F 安装说明口径同步；另补已关闭项的三处残余风险 —— G 密钥链降级时给用户可见提示、H Redis 版本下限口径与实测对齐（文档写 2.8+ 但只跑过 6.0 / 7.0）、I 前端模块纪律加脚本校验（行数上限 / `__TAURI_INTERNALS__` 白名单 / 循环 import）。规划前逐条核对过现状：`rotate-signing-key.sh` 的轮换约束目前只是脚本头部注释、无拦截；`storage.rs::save_all` 丢掉 `store_password` 的返回值，降级落盘对前端不可见；前端三条约定无脚本把关（`__TAURI_INTERNALS__` 现仅出现在 `js/api.js` 与冒烟替身中，符合约定）。同轮刷新头部「最近更新」、状态总览的「§2 待办已清空」表述，并在 §4 表下加拆解指引 |
-| 2026-09-22 | — | **§2.4 遗留的「前端单文件拆分」全部落地（§4 #4 关闭，§2 最后一项工程债清空）**：先把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`（17 个场景、真实点击路径、Tauri 后端替身的返回结构与 `commands/*` 的 serde 输出逐字段对齐、事件按 `__TAURI_INTERNALS__.runCallback` 的生产路径投递；不引 node_modules，只用 Node 22 内置 `fetch`/`WebSocket` 说 CDP + 系统已装的 Chrome），再把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个浏览器原生 ES 模块（每模块 ≤400 行；`index.html` 3389 → 345 行，只留结构骨架 + `<script type="module" src="./js/main.js">`）：api / util / ui / state / theme / layout / terminal / monitor / collections / keyops / detail / keys / addkey / conn-form / server-status / connections / import-export / updater / main。跨模块状态收进 `js/state.js`（`currentConn` / `onlineConns` / `selectedKey` / `KEY_DATA` / `allKeys` 只暴露读写函数，分页游标、监控会话、更新进度等单功能状态留在各自模块）；详情区改数据要重绘 Key 树这类反向依赖走 `state.js` 的 `onKeysChanged` 订阅（`main.js` 装配），依赖整体单向、无循环 import；顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$` 与 `renderServerInfo` 里未使用的 `diskEl`。验证：冒烟 17/17 场景通过（零未捕获异常、零 `console.error`），CI 新增 `frontend-smoke` job（失败上传截图 + summary.json）；**真实 WKWebView** 用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议（同样的 `Content-Type` / `Access-Control-Allow-Origin`）加载页面，19 个模块全部以 `text/javascript` 正常加载、页面零错误，并重建 debug 包启动应用确认模块图执行（WebKit LocalStorage 启动即被写入 `myredis.layout`）；拆分前后对内联 JS 逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 / 走通知重绘 / 删死代码），无功能逻辑改写；冒烟网在过程中抓出一个同名遮蔽 bug（`const isOnline = isOnline(conn.id)` 引发 TDZ，界面会白屏）。评估与模块清单见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)。顺带修复本地构建环境：`.cargo-home` 里 tauri 2.11.5 的 `src/manager/webview.rs` 曾被改成引用不存在的 `frontendview/`（该目录在本版本叫 `webview/`），从 crates.io 原包还原后本地 `cargo build` 才能过（该缓存目录已在 .gitignore 里，不影响 CI） |
->>>>>>> Stashed changes
+| 2026-09-22 | — | **§2.4 遗留的「前端单文件拆分」完成（在 `feat/2.4-frontend-split` 分支，PR #6 待合入）**：先把回归网固化成 `scripts/frontend-smoke.mjs` + `scripts/frontend-smoke-mock.js`（17 个场景、真实点击路径、Tauri 后端替身的返回结构与 `commands/*` 的 serde 输出逐字段对齐、事件按 `__TAURI_INTERNALS__.runCallback` 的生产路径投递；不引 node_modules，只用 Node 22 内置 `fetch`/`WebSocket` 说 CDP + 系统已装的 Chrome），再把 3042 行内联 JS 拆成 `frontend/js/` 下 19 个浏览器原生 ES 模块（每模块 ≤400 行；`index.html` 3389 → 345 行，只留结构骨架 + `<script type="module" src="./js/main.js">`）：api / util / ui / state / theme / layout / terminal / monitor / collections / keyops / detail / keys / addkey / conn-form / server-status / connections / import-export / updater / main。跨模块状态收进 `js/state.js`（`currentConn` / `onlineConns` / `selectedKey` / `KEY_DATA` / `allKeys` 只暴露读写函数，分页游标、监控会话、更新进度等单功能状态留在各自模块）；详情区改数据要重绘 Key 树这类反向依赖走 `state.js` 的 `onKeysChanged` 订阅（`main.js` 装配），依赖整体单向、无循环 import；顺手删掉确认无引用的 `flattenKeys` / `expandedFolders` / `$$` 与 `renderServerInfo` 里未使用的 `diskEl`。验证：冒烟 17/17 场景通过（零未捕获异常、零 `console.error`），CI 新增 `frontend-smoke` job（失败上传截图 + summary.json）；**真实 WKWebView** 用 `WKURLSchemeHandler` 复刻 `tauri://localhost` 的资源协议（同样的 `Content-Type` / `Access-Control-Allow-Origin`）加载页面，19 个模块全部以 `text/javascript` 正常加载、页面零错误，并重建 debug 包启动应用确认模块图执行（WebKit LocalStorage 启动即被写入 `myredis.layout`）；拆分前后对内联 JS 逐行归一化比对，差异仅为三类有意改动（改用 state 读写函数 / 走通知重绘 / 删死代码），无功能逻辑改写；冒烟网在过程中抓出一个同名遮蔽 bug（`const isOnline = isOnline(conn.id)` 引发 TDZ，界面会白屏）。评估与模块清单见 [`docs/frontend-split-evaluation.md`](docs/frontend-split-evaluation.md)。顺带修复本地构建环境：`.cargo-home` 里 tauri 2.11.5 的 `src/manager/webview.rs` 曾被改成引用不存在的 `frontendview/`（该目录在本版本叫 `webview/`），从 crates.io 原包还原后本地 `cargo build` 才能过（该缓存目录已在 .gitignore 里，不影响 CI）。**注意：以上拆分与冒烟 job 目前只在分支上，main 尚未合入** |
 | 2026-09-22 | — | **§2.4 五个 P2 全部完成（§2 待办清空）**：① **Monitor 实时命令监控** —— 新增 `commands/monitor.rs`：专用连接 + 后台任务读 `MONITOR` 流，成批（500 行 / 120 ms 先到先推）emit 给前端，缓冲超 2000 行丢最旧并如实上报；`MonitorLine::parse` 按字节还原 `sdscatrepr` 转义（中文 / 引号 / 换行逐字还原）；`MonitorState` 管会话（同连接唯一、`Notify` 停止、断开连接一并收掉、会话序号防「停止后立刻重启」误摘）；集群不支持（节点级命令，按钮置灰）、只读连接可用；前端底部面板加「终端 / 实时监控」双标签（开始停止 / 过滤器 / 自动滚动 / 清空 / 行数计数）。② **Key 重命名 / 复制** —— `rename_key`（默认 `RENAMENX`，勾选才覆盖）/ `copy_key`（`COPY [REPLACE]`，6.2+，返回 0 时用一次 pipeline 区分「源不存在 / 目标已存在」），`CROSSSLOT` 转写成同 hash tag 的可操作提示，前端详情区两个按钮 + 共用对话框 + 按版本置灰。③ **Redis 版本矩阵** —— `start-test-redis.sh` 加版本门与端口预检，`ci.yml` 跑 22.04（6.0）/ 24.04（7.0）两档，release 门禁固定 6.0。④ **前端拆分评估** —— 数据 + 方案 + 分阶段计划见 `docs/frontend-split-evaluation.md`；本轮先把样式外置为 `frontend/styles.css`（index.html 5429 → 3389 行）。⑤ **macOS 签名 / 公证接线** —— `setup-macos-signing.sh`（凭据成组校验，半配即失败）+ `verify-macos-signing.sh`（codesign / spctl / stapler 复核），接进 `release.yml`，`APPLE_*` secret 一配即生效。验证：`cargo fmt --check` / `clippy -D warnings` 干净，`--include-ignored --test-threads=1` 全量 127 条通过（新增 monitor 9 单测 + 1 集成、rename/copy 5 单测 + 2 集成、CROSSSLOT 1 单测）；新增用例在 Redis 8.10.1 与 Docker 6.0.16 上双版本实测；界面用 headless 渲染核对了监控（未开始 / 监控中 / 过滤 / 集群禁用）与重命名复制（弹窗 / 版本置灰）六个状态 |
 | 2026-09-22 | — | **§2.4 四个 P1 全部完成**：① **TLS（`rediss://`）** —— `Connection` 加 `tls` / `tls_insecure`，redis-rs `tokio-rustls-comp` + `tls-rustls-insecure` feature，`check_supported_scheme` 改为返回剥前缀主机（未开 TLS 给「去勾 TLS」提示，三入口统一），`AppError::TlsNotSupported` 删除，前端加两个开关；openssl 自签起 6390 实测：跳过校验连通、校验模式拒自签（新增 2 条 #[ignore] 集成用例）。② **Stream** —— `get_stream` / `stream_add_entry` / `stream_del_entry`（XRANGE 分页 200 + XADD/XDEL），导入导出补 stream（XADD 保留原始 entry id；XRANGE 嵌套应答手工解析，redis-rs `Vec<元组>` 只支持扁平键值对），前端详情区 + 翻页 + 徽章配色。③ **超时可配** —— `connect_timeout_secs` / `command_timeout_secs` 入 `Connection` 随连接持久化，`effective_timeout` 覆盖池默认（缓存键不变），前端两个可选项。④ **密码密钥链** —— `keyring` 转存（服务 `maidi-cache` / 账号 conn.id），存量明文首载自动迁移，密钥链不可用自动降级明文落盘，删连接清条目。验证：`cargo test` 76 单测 + `--ignored --test-threads=1` 全量（含集群 6 条、TLS 2 条、stream 2 条、密钥链 3 条）全绿，`clippy -D warnings` / `fmt --check` 干净；§3（TLS 改 ✅）/ §4（#1 #2 关闭）/ §1.1 / `web/docs/index.html` / `PROJECT_PLAN.md` 已同步 |
 | 2026-09-22 | — | **新增 §2.4「下一阶段开发功能」**：§2.1–§2.3 全部清空后按 §3 决策与 §4 风险排定下一阶段 —— P1：TLS（`rediss://`，需先改 §3 决策）、Stream 类型（详情区 + 导入导出）、超时可配（含大 key 读取策略）、密码密钥链；P2：Monitor、macOS 公证、前端拆分评估、Redis 6.x 兼容回归、Key 重命名/复制 |
@@ -836,19 +851,83 @@ Linux 仍刻意留在 `ubuntu-22.04`：产物会继承构建机的 glibc 版本�
 私钥在 GitHub secret `TAURI_SIGNING_PRIVATE_KEY`，其密码在 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`，
 本地副本 `~/.tauri/myredis-updater.key`（`.pub` 在同目录）。
 
-**轮换密钥**用 `bash scripts/rotate-signing-key.sh`：交互式输入密码（不进命令历史）→ 重新生成密钥对
-→ 把新公钥写回 `tauri.conf.json`（打印新旧 key id）→ 用 stdin 覆盖两个 CI secret → 跑一次签名自检。
-它同时支持 `KEY_PATH` / `CONFIG_PATH` / `SKIP_GH=1` / `SKIP_GENERATE=1`（自己 `tauri signer generate`
-之后接着换公钥与 secret）。
+**轮换密钥（已冻结，见下）**用 `bash scripts/rotate-signing-key.sh`：交互式输入密码（不进命令历史）→
+重新生成密钥对 → 把新公钥写回 `tauri.conf.json`（打印新旧 key id）→ 用 stdin 覆盖两个 CI secret →
+跑一次签名自检。它同时支持 `KEY_PATH` / `CONFIG_PATH` / `SKIP_GH=1` / `SKIP_GENERATE=1`
+（自己 `tauri signer generate` 之后接着换公钥与 secret）。
 
-> ⚠️ 轮换的前提是**还没有任何客户端带着旧公钥发出去**。公钥是编译进安装包的，旧公钥一旦随包发布，
-> 换私钥就等于那些用户再也收不到自动更新（只能手动重装）。v0.0.13 发布之后不要再换密钥 ——
-> 除非接受「老用户手动重装一次」。
+> ⛔ **轮换自 v0.0.13 起冻结**（v0.0.12 及更早没有更新模块）。公钥是编译进安装包的，而
+> v0.0.13 / v0.0.14 / v0.0.15 / v0.0.16 四个正式版已经带着当前这把公钥（key id `0F42026F5094334C`）
+> 发出去、清单与 `.sig` 也在线上 —— 换私钥就等于这些客户端**永远收不到自动更新**，只能让用户手动重装一次。
+> 决策见 §3「明确不支持」表。
+>
+> 脚本自己也拦这道：动手之前先打印当前公钥 key id 与「哪些 tag 已经带着公钥发布」
+> （扫本地 tag，能连 gh 时再合并线上 Release 的 tag 兜底），然后要么在终端输入 `ROTATE`，
+> 要么非交互地传 `ALLOW_ROTATE=1`，否则直接退出 —— **被拦下时不生成密钥、不改配置、不碰 secret**。
+
+#### 私钥的备份与恢复（§2.5 A）
+
+私钥只有两处：CI secret `TAURI_SIGNING_PRIVATE_KEY`（+ 密码）与本地 `~/.tauri/myredis-updater.key`
+（`.pub` 在同目录）。两边同源，**没有独立备份就等于一把都没有** —— secret 被删、换账号、仓库迁移，
+都会一起没；而私钥一丢，已装 v0.0.13+ 的用户再也收不到自动更新。
+
+**要备份什么**（缺一不可）：
+
+| 东西 | 位置 / 样子 | 为什么 |
+|------|------|------|
+| 私钥文件 | `~/.tauri/myredis-updater.key`：单行 base64（本机 348 字节，无换行），解出来是 `untrusted comment: rsign encrypted secret key` | 签名用的就是它 |
+| 密码 | 只有你知道，存进密码管理器 | 忘了 = 私钥作废（解不开），实测报 `Wrong password for that key` |
+| 公钥 | `~/.tauri/myredis-updater.key.pub` | 便于对照 key id；`tauri.conf.json` 里那份就是它的原文 |
+| key id 标签 | 当前是 `0F42026F5094334C` | 恢复时一眼看出这份备份是不是「线上客户端认的那把」 |
+
+**怎么存**：私钥文件与密码都要备份到离线介质（至少一份不在开发机上），在备份处写下 key id；
+不要进仓库、不要贴聊天记录 / issue / 日志。两者别放进同一个文件 —— 分开两处存放，
+任一处单独泄露都不足以签出可用的更新包。
+
+**恢复（换机 / 换人）**：
+
+1. 先把备份里的私钥复制到新机器的**临时路径**（先别覆盖 `~/.tauri/`，要用自检验一遍再落位）：
+
+   ```bash
+   cp /Volumes/<备份介质>/myredis-updater.key /tmp/restored.key
+   ```
+
+2. 在**仓库根目录**跑自检。它真签一次，判定「密码能不能解开私钥」与「是不是与 `tauri.conf.json`
+   里的公钥配对（key id 比对）」—— 这正是客户端验签的同一判据。密码从终端读进来，不进命令历史：
+
+   ```bash
+   printf '私钥密码: '; read -rs TAURI_SIGNING_PRIVATE_KEY_PASSWORD; echo   # -s 不回显，且 bash / zsh 都认
+   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+   TAURI_SIGNING_PRIVATE_KEY_PATH=/tmp/restored.key node .github/scripts/check-signing-key.mjs
+   ```
+
+3. 三种结果对应三件事：
+
+   | 输出 | 含义 | 怎么办 |
+   |------|------|------|
+   | `==> 签名私钥可用，且与公钥配对（key id 0F42026F5094334C）` | 备份是好的，密码也对 | 继续下一步 |
+   | `… Wrong password for that key` | 密码错或没给 | 回去找密码 —— 私钥与密码是**两份**，缺一份这备份就没用 |
+   | `私钥与公钥不配对：签名私钥 key id = X…，公钥 key id = …` | 恢复的不是线上那把（拿错备份，或拿的是轮换前的旧钥） | 换正确的备份；旧钥签出来的包客户端一律验不过，别往下走 |
+
+4. 自检通过后装回两个地方：
+   - 本地：覆盖 `~/.tauri/myredis-updater.key`（`.pub` 一并放好）；
+   - CI：`gh secret set TAURI_SIGNING_PRIVATE_KEY --repo myredisapp/myredis < /tmp/restored.key` 与
+     `gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo myredisapp/myredis`
+     （私钥从 stdin 送、密码在提示处输入，都不进命令历史 / 参数列表）；
+   - 装完把临时副本删掉：`rm /tmp/restored.key`。
+
+5. 端到端验收是**发一次版**：流水线第一步就跑同一个 `check-signing-key.mjs`（§8.8），
+   CI 那边没配对会当场失败。本地自检只证明「你手上这份能用」。
+
+**真丢了（备份也没了）**：没有任何办法让已装 v0.0.13+ 的用户收到更新。只能生成一把新密钥，
+并接受「老用户手动重装一次」（§3 的轮换冻结条款），再走 `rotate-signing-key.sh`（带 `ALLOW_ROTATE=1`）。
+所以这件事要在没丢之前做掉 —— 上面的备份 + 自检就是为了让「有备份」这句话可验证。
 
 另一个必须记住的细节：tauri 要求 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 这个变量**存在**。
 空值 = 无密码；完全缺失则会去交互式索要密码（CI 里会卡住）。所以工作流里显式传了这个 secret，
 `check-signing-key.mjs` 也会兜底给子进程补一个值。
-私钥**内容**与**密码**都要备份：密码忘了 = 私钥作废 = 之后再也发不出自动更新。
+私钥**内容**与**密码**都要备份（照 §8.9「私钥的备份与恢复」做，并由自检验证备份可用）：
+密码忘了 = 私钥作废 = 之后再也发不出自动更新。
 
 `check-deploy-env` 会检查这个私钥「是否存在」（见该脚本第 2 步）。但「存在」不等于「可用」：
 私钥/密码配错时 `tauri build` 依然成功，只是产出的 `.sig` 客户端验不过（或干脆没有 `.sig`），
@@ -902,11 +981,11 @@ npm 版 `@tauri-apps/cli`（CI 装的就是它）自带 `signer` 子命令，所
 
 命令链路（检查 / 后台下载 / 轮询进度 / 安装重启）见 §1.7 与 `src-tauri/src/commands/update.rs`。
 
-**发版之前「检查更新」一定是失败的**：清单是发布阶段的产物，而 `releases/latest/download/latest.json`
-读的是**最新那个 Release 的附件**。所以只要最新 Release 还是在启用自动更新（v0.0.12 及更早）之前打的，
-这个地址就返回 404，界面上会提示「更新服务没有返回版本清单（当前最新发布可能还没附带 latest.json）」——
-这不是客户端 bug，打一个带清单的新 tag 即可（见 §8.8）。同理，装了 v0.0.12 及更早版本的用户没有更新模块，
-无法自动升上来，得手动装一次带自动更新的版本。
+**清单是发布阶段的产物**：`releases/latest/download/latest.json` 读的是**最新那个正式 Release 的附件**，
+所以清单还没随包发布时这个地址会是 404，界面上提示「更新服务没有返回版本清单（当前最新发布可能还没附带
+latest.json）」—— 那不是客户端 bug，打一个带清单的新 tag 即可（见 §8.8）。v0.0.13 起每个正式 Release 都带清单
+（当前最新 v0.0.16，实测该地址返回 200、`version 0.0.16`、4 个平台键），**装了 v0.0.13+ 的用户能正常收到自动更新**；
+只有 v0.0.12 及更早的用户没有更新模块，无法自动升上来，得手动装一次带自动更新的版本。
 
 **本地演练（不发版也能看完整流程）**：`bash scripts/update-dryrun.sh` 会本地造一份已签名的占位安装包
 与同构的 `latest.json`（版本号默认取当前版本 +1），起一个本地 HTTP 服务当更新源，并打印让开发版指向它的命令：
@@ -922,7 +1001,8 @@ cargo tauri dev --config '{"plugins":{"updater":{"endpoints":["http://127.0.0.1:
 注意演练包是占位文件（内容随意、只用来验签），**不要点「立即重启」**：开发版不是 `.app` 包，
 插件会把 `current_exe` 的父目录（`target/debug`）当成安装目标。
 
-**待办**：私钥与密码的离线备份、恢复步骤落地、轮换冻结的交互确认见 §2.5 A / B。
+**待办**：只差「私钥与密码的离线副本」这一件人工动作（备份 / 恢复 / 自检流程与轮换冻结闸门均已完成，
+见上文「私钥的备份与恢复」与 §2.5 A / B）。
 
 ### 8.10 macOS 代码签名与公证（`APPLE_*` 凭据）
 

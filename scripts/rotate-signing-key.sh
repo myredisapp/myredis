@@ -9,13 +9,17 @@
 # 想完全避开这点，就自己跑 `tauri signer generate -w ~/.tauri/myredis-updater.key`
 # 按提示交互输入，然后回来跑本脚本的 `SKIP_GENERATE=1` 分支。
 #
-# ⚠️ 什么时候可以轮换：只有在**还没有任何客户端带着旧公钥发出去**之前。
+# ⛔ 轮换是**冻结**的：只有在「还没有任何客户端带着旧公钥发出去」之前才可以换。
 # 客户端的公钥是编译进安装包的（tauri.conf.json → plugins.updater.pubkey），
 # 旧公钥一旦随安装包发出去，换私钥就等于那些用户再也收不到自动更新（只能手动重装）。
-# 本项目 v0.0.12 及更早都还没有更新模块，所以现在轮换是安全的；**v0.0.13 发布后就不要再换**。
+# 本项目 **v0.0.13 起已有正式版带着公钥发布**（v0.0.12 及更早没有更新模块），
+# 所以脚本在动手之前先过一道闸门：打印当前公钥的 key id 与「哪些版本已经带着它发出去了」，
+# 交互路径要输入 ROTATE 确认，非交互路径必须显式放行（ALLOW_ROTATE=1）。
+# 决策口径见 DEVELOPMENT.md §3「明确不支持」表与 §8.9 的恢复 / 轮换说明。
 #
 # 用法：
 #   bash scripts/rotate-signing-key.sh
+#     ALLOW_ROTATE=1             显式放行轮换（非交互路径必须给；交互路径可输入 ROTATE 代替）
 #     UPDATER_KEY_PASSWORD=xxx   不交互，直接用这个密码（自动化用）
 #     SKIP_GENERATE=1            只做「换公钥 + 换 secret + 自检」，不重新生成密钥
 #     SKIP_GH=1                  不动 CI secret（本地演练用）
@@ -30,6 +34,110 @@ CONFIG="${CONFIG_PATH:-$ROOT/src-tauri/tauri.conf.json}"
 die() { echo "✗ $*" >&2; exit 1; }
 
 [ -f "$CONFIG" ] || die "找不到配置文件 $CONFIG"
+
+# ---------------------------------------------------------------------------
+# 轮换冻结闸门：动手之前先说清「旧公钥是不是已经发出去了」
+# ---------------------------------------------------------------------------
+# 判据不靠人记：扫本地 tag 里各版本的 tauri.conf.json 有没有带上公钥（离线、确定性），
+# 能连上 gh 时再合并线上 Release 的 tag（本地 tag 可能没 fetch 全）。
+# 闸门在任何改动之前，被拦下时不会生成密钥、不会改配置、不会碰 secret。
+gate="$(CONFIG="$CONFIG" ROOT="$ROOT" node -e '
+  const { execFileSync, spawnSync } = require("node:child_process");
+  const fs = require("node:fs");
+  // minisign 的公钥载荷是 算法[2] | key id[8] | …，key id 是明文；配置与 .pub 里存的
+  // 都是「minisign 原文的 base64」，所以要解开两层才拿得到 key id
+  const keyIdOf = (payload) => (payload.length < 10
+    ? ""
+    : [...payload.subarray(2, 10)].reverse().map((byte) => byte.toString(16).padStart(2, "0")).join("").toUpperCase());
+  const payloadOf = (text) => {
+    const line = text
+      .split("\n")
+      .map((each) => each.trim())
+      .filter(Boolean)
+      .find((each) => !each.startsWith("untrusted comment") && !each.startsWith("trusted comment"));
+    return line ? Buffer.from(line, "base64") : Buffer.alloc(0);
+  };
+  const keyIdOfConfig = (pubkey) => (pubkey ? keyIdOf(payloadOf(Buffer.from(pubkey, "base64").toString("utf8"))) : "");
+  const keyIdOfJson = (json) => {
+    try { return keyIdOfConfig(JSON.parse(json).plugins?.updater?.pubkey ?? ""); } catch { return ""; }
+  };
+
+  const current = keyIdOfJson(fs.readFileSync(process.env.CONFIG, "utf8"));
+
+  let localTags = [];
+  let localError = "";
+  try {
+    localTags = execFileSync("git", ["-C", process.env.ROOT, "tag", "--list", "--sort=v:refname"], { encoding: "utf8" })
+      .split("\n").map((each) => each.trim()).filter(Boolean);
+  } catch (err) { localError = err.message.split("\n")[0]; }
+
+  const shipped = [];
+  for (const tag of localTags) {
+    let json = "";
+    try {
+      json = execFileSync("git", ["-C", process.env.ROOT, "show", `${tag}:src-tauri/tauri.conf.json`], { encoding: "utf8" });
+    } catch { continue; }
+    const keyId = keyIdOfJson(json);
+    if (keyId) shipped.push(`${tag}[${keyId}]`);
+  }
+
+  const gh = spawnSync("gh", ["release", "list", "--limit", "100", "--json", "tagName", "-q", ".[].tagName"],
+    { cwd: process.env.ROOT, encoding: "utf8", timeout: 20000 });
+  const ghTags = gh.status === 0
+    ? String(gh.stdout ?? "").split("\n").map((each) => each.trim()).filter(Boolean)
+    : [];
+  const ghUnchecked = ghTags.filter((tag) => !localTags.includes(tag));
+
+  console.log(current);
+  console.log(shipped.join(", "));
+  console.log(shipped[0] ?? "");
+  console.log(gh.status === 0 ? "gh" : "no-gh");
+  console.log(ghUnchecked.join(", "));
+  console.log(localError);
+')" || die "冻结闸门自己跑失败了（读不出公钥/版本信息），已中止"
+
+current_id="$(printf '%s\n' "$gate" | sed -n '1p')"
+shipped_tags="$(printf '%s\n' "$gate" | sed -n '2p')"
+first_shipped="$(printf '%s\n' "$gate" | sed -n '3p')"
+gh_state="$(printf '%s\n' "$gate" | sed -n '4p')"
+gh_unchecked="$(printf '%s\n' "$gate" | sed -n '5p')"
+git_error="$(printf '%s\n' "$gate" | sed -n '6p')"
+
+echo "• 当前公钥 key id（${CONFIG}）：${current_id:-（解不出，配置里可能还没有公钥）}"
+if [ -n "$shipped_tags" ]; then
+  echo "  ⛔ 已经有版本带着公钥发出去了：$shipped_tags"
+  echo "     最早从 ${first_shipped%%\[*} 起 —— 这些客户端只认 key id ${current_id:-（解不出）}，轮换后它们"
+  echo "     **永远收不到自动更新**（只能让用户手动重装一次）。"
+else
+  echo "  ✓ 本地 tag 里没有发现「已带公钥发布」的版本"
+fi
+if [ -n "$git_error" ]; then
+  echo "  ⚠️ 读本地 tag 失败（${git_error}）—— 上面的判据不成立，请自己核对已发布版本"
+fi
+if [ "$gh_state" = "gh" ]; then
+  if [ -n "$gh_unchecked" ]; then
+    echo "  ⚠️ 线上还有本地没有的 tag（无法核对是否带公钥）：$gh_unchecked"
+  else
+    echo "  ✓ 顺带核对了线上 Release：没有本地缺的 tag"
+  fi
+else
+  echo "  ⚠️ gh 不可用或未登录，只按本地 tag 判断 —— 请自己确认线上有没有已发布版本"
+fi
+
+if [ "${ALLOW_ROTATE:-}" = "1" ]; then
+  echo "• ALLOW_ROTATE=1：放行轮换（视为你已确认接受「老用户手动重装一次」的后果）"
+elif [ -t 0 ]; then
+  echo "• 确认点：上面这些版本确实已经发到用户手上了吗？轮换不可撤回。"
+  # read 在 EOF（Ctrl-D）时返回非零，而 set -e 会让脚本在这里直接退出、连中止原因都不打印，
+  # 所以显式吞掉它的返回值，一律走下面这句 die
+  rotate_confirm=""
+  read -r -p "  确认轮换请输入 ROTATE（其它任何输入都会中止）: " rotate_confirm || true
+  [ "$rotate_confirm" = "ROTATE" ] || die "已中止：没有生成密钥、没有改配置、没有动 secret"
+  unset rotate_confirm
+  echo "• 已确认，继续"
+else
+  die "非交互运行且未放行，已拦下（没有生成密钥、没有改配置、没有动 secret）。确认要轮换请加 ALLOW_ROTATE=1 重跑"
+fi
 
 # ---------------------------------------------------------------------------
 # 密码
@@ -142,8 +250,12 @@ cat <<EOF
 接下来必须做的事：
   1. 提交 tauri.conf.json —— CI 用的是仓库里的公钥，不提交就等于「用新私钥签、让客户端按旧公钥验」，发版必被拦下；
        git add src-tauri/tauri.conf.json && git commit -m "chore: 轮换自动更新签名密钥"
-  2. 把私钥与密码另存一份到安全的地方（密码忘了 = 私钥作废 = 之后再也发不出自动更新）：
+  2. 把私钥与密码另存一份到安全的地方（密码忘了 = 私钥作废 = 之后再也发不出自动更新），
+     旧的离线副本这次要一并作废、换成新私钥：
        私钥：$KEY
        密码：只有你知道，请存入密码管理器
-  3. 发布 v0.0.13（见 DEVELOPMENT.md §8.8/§8.9）：CI 会先校验这对密钥，再出带 latest.json 的 Release。
+       备份 / 恢复 / 自检流程见 DEVELOPMENT.md §8.9「私钥的备份与恢复」
+  3. 打一个新 tag 发版（见 DEVELOPMENT.md §8.8/§8.9）：CI 会先校验这对密钥，再出带 latest.json 的 Release。
+  4. 已经装过旧版本的客户端只认旧公钥，自动更新会静默失败 —— 得让那些用户手动重装一次
+     （这就是轮换的代价，也是闸门要拦在前面的原因）。
 EOF
