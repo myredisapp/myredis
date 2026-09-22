@@ -250,7 +250,16 @@ jobs:
           TAG="$GITHUB_REF_NAME"
           # v0.2.0-beta.1 这类 tag 自动标记为预发布
           PRERELEASE=""
-          case "$TAG" in *-*) PRERELEASE="--prerelease" ;; esac
+          NOTES_ARGS=()
+          case "$TAG" in
+            *-*)
+              PRERELEASE="--prerelease"
+              # 预发布是内部验证用的（§2.5 E）：正文前挂一句醒目提示，
+              # 免得 Releases 列表 / 搜索 / 下载页把它当成可用版本。
+              # --notes 的内容会被**前置**到 --generate-notes 的结果之前
+              NOTES_ARGS=(--notes "⚠️ 内部验证用：这是一个预发布（tag 带 -），用于核验签名 / 公证与打包链路，请下载正式版使用。")
+              ;;
+          esac
 
           find dist -type f -print
           ASSETS=()
@@ -270,7 +279,7 @@ jobs:
               --title "$TAG" \
               --generate-notes \
               --verify-tag \
-              $PRERELEASE
+              $PRERELEASE "${NOTES_ARGS[@]}"
           fi
 
       # 更新清单最后生成：它要引用刚上传的安装包名，notes 又取自刚生成的 Release 正文。
@@ -326,9 +335,14 @@ jobs:
 
   # Release 建好后把官网静态页推到服务器。web/ 下都是自包含单文件
   # （图标等资源全部内联），首页与 docs/ 子目录一并上传即可。
+  #
+  # 预发布**不部署**：下面的「注入版本号」会把当前 tag 写进 web/index.html 的版本号与下载直链，
+  # 预发布 tag 会让线上下载页把 beta 当可用版本（版本号显示 beta、直链指向 beta 产物）——
+  # §2.5 E 要的正是「预发布只用来验签名 / 打包链路，不污染用户侧」。正式 tag 照旧部署。
   deploy-web:
     name: 发布网站静态页面
     needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
 
     steps:
