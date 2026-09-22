@@ -190,7 +190,7 @@ pub async fn export_keys_inner(
                         .into_iter()
                         .map(|(id, flat)| {
                             let obj: serde_json::Map<String, serde_json::Value> = flat
-                                .chunks_exact(2)
+                                .as_chunks::<2>().0.iter()
                                 .map(|pair| {
                                     (pair[0].clone(), serde_json::Value::String(pair[1].clone()))
                                 })

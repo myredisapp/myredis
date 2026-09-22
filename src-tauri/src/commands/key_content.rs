@@ -251,7 +251,9 @@ pub(crate) fn parse_xrange_entries(
 
 /// 扁平字段串两两配成字段列表；奇数长度说明服务器应答异常，丢掉落单的。
 fn pair_fields(flat: Vec<String>) -> Vec<StreamField> {
-    flat.chunks_exact(2)
+    flat.as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| StreamField {
             field: pair[0].clone(),
             value: pair[1].clone(),
