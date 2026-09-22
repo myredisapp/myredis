@@ -27,6 +27,8 @@ jobs:
   # 质量门禁：与 ci.yml 同一个 composite action（fmt / clippy / 含 #[ignore] 的全量测试，
   # 测试环境由 action 内部拉起单机 + 三节点集群）。放在构建矩阵之前，代码有问题就别
   # 浪费三平台几十分钟的编译时间。日常推分支由 ci.yml 提前拦截，这里是发版前的兜底。
+  # 这里只跑发行版基线（6.0）那一档：发版门禁求「最保守的环境也全绿」，
+  # 完整版本矩阵（6.0 + 7.x）在 ci.yml 的 quality job 里跑，见 DEVELOPMENT.md §2.4。
   quality:
     name: 质量门禁（fmt / clippy / 全量测试）
     runs-on: ubuntu-22.04
@@ -34,6 +36,8 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: ./.github/actions/rust-quality
+        with:
+          redis-version: '6.0'
 
   # fail-fast 前置闸门：在多平台构建矩阵之前校验签名私钥与部署环境，让缺失/配错的
   # 凭据在几秒内失败，而不是等几十分钟构建跑完才暴露。与 quality 并行跑：
@@ -171,6 +175,20 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: node .github/scripts/check-signing-key.mjs
 
+      # macOS 代码签名与公证凭据（§2.4）。凭据齐全时写进 $GITHUB_ENV 供 tauri build 使用，
+      # 缺一份就失败（半配的凭据会让产物「悄悄没签名」，见脚本注释）；一份都没有则告警放行
+      - name: 配置 macOS 签名 / 公证凭据
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash .github/scripts/setup-macos-signing.sh
+
       # bundles 的值必须加引号：Windows runner 的默认 shell 是 PowerShell，
       # 未加引号的 nsis,msi 会被它当成数组、展开成一个参数 "nsis msi" 传给 tauri，报 invalid value。
       #
@@ -179,11 +197,19 @@ jobs:
       # 密码来自 secret TAURI_SIGNING_PRIVATE_KEY_PASSWORD（换密钥/换密码见
       # scripts/rotate-signing-key.sh）。tauri 要求这个变量**存在**：空值按无密码处理，
       # 变量缺失则会去交互式索要密码，在 CI 里卡住。
+      # macOS 上凭据齐全时，tauri 顺带完成导入证书 → 签名 → 公证 → staple（无需额外步骤）。
       - name: 构建并打包（含更新包签名）
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: tauri build --target ${{ matrix.target }} --bundles "${{ matrix.bundles }}"
+
+      # 配了凭据就必须真的签上 / 公证到：tauri 在没有凭据时是「静默不签名」，
+      # 那种失败只会在用户侧表现为「首次打开被 Gatekeeper 拦」，这里把它变成构建期失败
+      - name: 校验 macOS 签名与公证
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash .github/scripts/verify-macos-signing.sh "src-tauri/target/${{ matrix.target }}/release/bundle"
 
       # tauri 按 productName 命名安装包（macOS / Windows 是中文「麦地缓存」，Linux 是 maidi-cache），
       # 发布出来既不统一也不好认，上传前统一改成 myredis-<tag>-<platform>.<ext>。

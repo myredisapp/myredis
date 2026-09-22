@@ -3,6 +3,14 @@ description: |
   cargo fmt --check / cargo clippy -D warnings / 全量测试（含 #[ignore] 集成用例）。
   集成用例需要本机 Redis（6379）、TLS Redis（6390，自签名）与三节点集群
   （7001 起），动作内部负责拉起（见 .github/scripts/start-test-redis.sh）。只支持 Linux runner。
+inputs:
+  redis-version:
+    description: |
+      期望的 Redis 版本前缀（如 `6.0` / `7.`）。版本矩阵用它把「这一轮跑的是哪个 Redis」
+      钉死：镜像换了 Redis 版本时门禁直接失败，而不是悄悄换版本跑（见 DEVELOPMENT.md §2.4）。
+      留空表示不校验版本。
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -29,9 +37,11 @@ runs:
 
     # 默认用例不依赖 Redis，但反正要起 #[ignore] 组（含单机与集群用例），
     # 一次 --include-ignored 全跑。集群用例共享同一 keyspace，串行跑才稳定
-    # （见 DEVELOPMENT.md §2.3）
+    # （见 DEVELOPMENT.md §2.3 / §2.4：REDIS_VERSION_EXPECT 做版本门）
     - name: 启动测试用 Redis（单机 + 三节点集群）
       shell: bash
+      env:
+        REDIS_VERSION_EXPECT: ${{ inputs.redis-version }}
       run: bash .github/scripts/start-test-redis.sh
 
     - name: cargo fmt --check

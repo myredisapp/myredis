@@ -5,6 +5,7 @@
 use serde::Serialize;
 use tauri::State;
 
+use crate::commands::monitor::MonitorState;
 use crate::connection_pool::{ConnInfo, Pool};
 use crate::models::Connection;
 use crate::AppState;
@@ -16,8 +17,16 @@ pub async fn connect(pool: State<'_, Pool>, conn: Connection) -> Result<ConnInfo
 }
 
 /// 断开一个 Redis 连接。
+///
+/// 该连接上若正在实时监控（MONITOR），一并停止：监控用的是独立连接，
+/// 不跟着池条目走，不显式收掉就会一直读下去。
 #[tauri::command]
-pub async fn disconnect(pool: State<'_, Pool>, conn_id: String) -> Result<bool, String> {
+pub async fn disconnect(
+    pool: State<'_, Pool>,
+    monitors: State<'_, MonitorState>,
+    conn_id: String,
+) -> Result<bool, String> {
+    monitors.stop_on_disconnect(&conn_id);
     Ok(pool.disconnect(&conn_id))
 }
 
@@ -52,12 +61,15 @@ pub async fn save_connection(
 
 /// 删除一个连接配置，返回是否删除成功。
 ///
-/// 密钥链里对应的密码条目一并删除（尽力而为：密钥链不可用时无条目可删）。
+/// 密钥链里对应的密码条目一并删除（尽力而为：密钥链不可用时无条目可删）；
+/// 该连接上正在进行的实时监控也一并停止。
 #[tauri::command]
 pub async fn delete_connection(
     state: State<'_, AppState>,
+    monitors: State<'_, MonitorState>,
     conn_id: String,
 ) -> Result<bool, String> {
+    monitors.stop_on_disconnect(&conn_id);
     let repo = state.repo();
     let mut all = repo.load_async().await.map_err(|e| e.to_string())?;
     let before = all.len();

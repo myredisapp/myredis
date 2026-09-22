@@ -2242,6 +2242,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 name = "maidi-cache"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "keyring",
  "percent-encoding",
  "redis",

@@ -5,1849 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>麦地缓存</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
-    <style>
-        /* ========== 深秋（暗色金，默认） ========== */
-        :root,
-        [data-theme="autumn"] {
-            --bg-primary: #0d0b08;
-            --bg-secondary: #1a150e;
-            --bg-tertiary: #261f16;
-            --bg-hover: #33291e;
-            --bg-active: #403528;
-            --bg-input: #0d0b08;
-            --border-color: #4a3a2a;
-            --text-primary: #f5e6d3;
-            --text-secondary: #c4a88a;
-            --text-muted: #7a6550;
-            --accent: #f5b342;          /* 金黄色主色 */
-            --accent-hover: #d4902a;
-            --accent-dim: rgba(245, 179, 66, 0.18);
-            --green: #7cb84b;
-            --blue: #6a9fd8;
-            --yellow: #f5b342;
-            --purple: #b392d0;
-            --radius: 8px;
-            --shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
-            --font: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            --sidebar-width: 270px;
-            --tree-width: 320px;
-            --terminal-height: 200px;
-            --header-height: 52px;
-            color-scheme: dark;
-        }
-
-        /* ========== 初秋（亮金色） ========== */
-        [data-theme="golden"] {
-            --bg-primary: #fdf8ee;
-            --bg-secondary: #fffaf0;
-            --bg-tertiary: #fdf1d7;
-            --bg-hover: #f7e6c3;
-            --bg-active: #f0d9a8;
-            --bg-input: #fdf8ee;
-            --border-color: #e5c98f;
-            --text-primary: #3d2f14;
-            --text-secondary: #6b5622;
-            --text-muted: #a08a4e;
-            --accent: #d99a1b;          /* 暖金主色 */
-            --accent-hover: #b87f12;
-            --accent-dim: rgba(217, 154, 27, 0.16);
-            --green: #5f9e3a;
-            --blue: #4c7fc0;
-            --yellow: #d9a514;
-            --purple: #9a6fc4;
-            --radius: 8px;
-            --shadow: 0 8px 32px rgba(140, 100, 30, 0.25);
-            color-scheme: light;
-        }
-
-        /* ========== 春天（清新绿） ========== */
-        [data-theme="spring"] {
-            --bg-primary: #f2f8f1;
-            --bg-secondary: #f9fcf8;
-            --bg-tertiary: #e9f4e6;
-            ﻿--bg-hover: #dcefd5;
-            --bg-active: #cde6c4;
-            --bg-input: #f9fcf8;
-            --border-color: #b5d8ab;
-            --text-primary: #1e3320;
-            --text-secondary: #44664b;
-            --text-muted: #7b9b80;
-            --accent: #4caf50;          /* 春芽绿主色 */
-            --accent-hover: #3d9440;
-            --accent-dim: rgba(76, 175, 80, 0.15);
-            --green: #4caf50;
-            --blue: #66bb6a;
-            --yellow: #d4a017;
-            --purple: #9ccc65;
-            --radius: 8px;
-            --shadow: 0 8px 32px rgba(76, 130, 70, 0.18);
-            color-scheme: light;
-        }
-
-        /* ========== 夏天（晴空蓝） ========== */
-        [data-theme="summer"] {
-            --bg-primary: #eef6fd;
-            --bg-secondary: #f7fbff;
-            --bg-tertiary: #e3f0fc;
-            --bg-hover: #d0e6fa;
-            --bg-active: #bcdbf8;
-            --bg-input: #f4faff;
-            --border-color: #a8cdec;
-            --text-primary: #0f2b42;
-            --text-secondary: #2f5f8a;
-            --text-muted: #6f96b8;
-            --accent: #22a6f2;          /* 夏日晴空蓝主色 */
-            --accent-hover: #1687cc;
-            --accent-dim: rgba(34, 166, 242, 0.15);
-            --green: #2ecc9a;
-            --blue: #22a6f2;
-            --yellow: #ffc93c;
-            --purple: #9b6cc4;
-            --radius: 8px;
-            --shadow: 0 8px 32px rgba(34, 110, 170, 0.16);
-            color-scheme: light;
-        }
-
-        /* ========== 冬至：明亮模式 ========== */
-        [data-theme="winter"] {
-            --bg-primary: #f5f6fa;
-            --bg-secondary: #ffffff;
-            --bg-tertiary: #f0f2f8;
-            --bg-hover: #e7ebf5;
-            --bg-active: #dbe2f0;
-            --bg-input: #ffffff;
-            --border-color: #d3d9e5;
-            --text-primary: #1c2333;
-            --text-secondary: #455069;
-            --text-muted: #8a93a6;
-            --accent: #2563eb;          /* 冬日晴空蓝 */
-            --accent-hover: #1d4fd8;
-            --accent-dim: rgba(37, 99, 235, 0.12);
-            --green: #2f9e5f;
-            --blue: #3b82f6;
-            --yellow: #d99a14;
-            --purple: #8b5cf6;
-            --radius: 8px;
-            --shadow: 0 8px 32px rgba(31, 41, 72, 0.14);
-            color-scheme: light;
-        }
-
-        /* ========== 全局重置 ========== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: var(--font);
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .app-window {
-            width: 100vw;
-            height: 100vh;
-            background: var(--bg-secondary);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: relative;
-        }
-
-        /* ========== 标题栏 ========== */
-        .titlebar {
-            height: var(--header-height);
-            min-height: var(--header-height);
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            padding: 0 18px;
-            gap: 16px;
-            user-select: none;
-            flex-shrink: 0;
-        }
-        .titlebar .sidebar-toggle {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-            flex-shrink: 0;
-        }
-        .titlebar .sidebar-toggle:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .titlebar .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-weight: 600;
-            font-size: 17px;
-            color: var(--text-primary);
-        }
-        .titlebar .logo i {
-            color: var(--accent);
-            font-size: 22px;
-            text-shadow: 0 0 8px rgba(245, 179, 66, 0.3);
-        }
-        .titlebar .logo .logo-mark {
-            width: 26px;
-            height: 26px;
-            display: block;
-            filter: drop-shadow(0 0 6px rgba(245, 179, 66, 0.25));
-        }
-        .titlebar .logo span {
-            background: var(--accent-dim);
-            color: var(--accent);
-            font-size: 10px;
-            font-weight: 700;
-            padding: 0 10px;
-            border-radius: 4px;
-            letter-spacing: 0.5px;
-            border: 1px solid rgba(245, 179, 66, 0.2);
-        }
-        .titlebar .connection-status {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-left: 20px;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        .titlebar .connection-status .dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--green);
-            display: inline-block;
-            animation: pulse-dot 2s infinite;
-        }
-        .titlebar .connection-status .dot.disconnected {
-            background: var(--text-muted);
-            animation: none;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-        .titlebar .spacer {
-            flex: 1;
-        }
-        .titlebar .actions {
-            display: flex;
-            gap: 6px;
-        }
-        .titlebar .actions button {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            width: 32px;
-            height: 32px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-        .titlebar .actions button:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .titlebar .actions button.primary {
-            background: var(--accent);
-            color: #1a150e;
-            width: auto;
-            padding: 0 18px;
-            gap: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            border-radius: 6px;
-        }
-        .titlebar .actions button.primary:hover {
-            background: var(--accent-hover);
-            color: #0d0b08;
-        }
-        .titlebar .window-controls {
-            display: flex;
-            gap: 4px;
-            margin-left: 12px;
-        }
-        .titlebar .window-controls span {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            display: block;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        .titlebar .window-controls span:hover {
-            opacity: 0.7;
-        }
-        .titlebar .window-controls .close { background: #ff5f57; }
-        .titlebar .window-controls .min { background: #ffbd2e; }
-        .titlebar .window-controls .max { background: #28c840; }
-
-        /* ========== 主题切换下拉 ========== */
-        .theme-dropdown {
-            position: relative;
-            margin-right: 8px;
-        }
-        .theme-dropdown .ghost-btn {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            width: 34px;
-            height: 32px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-        .theme-dropdown .ghost-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-            border-color: var(--accent);
-        }
-        .theme-dropdown .theme-menu {
-            position: absolute;
-            top: calc(var(--header-height) - 12px);
-            right: 0;
-            min-width: 150px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            box-shadow: var(--shadow);
-            padding: 6px;
-            z-index: 1000;
-            display: none;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .theme-dropdown .theme-menu.open { display: flex; }
-        .theme-dropdown .theme-menu-title {
-            font-size: 11px;
-            color: var(--text-muted);
-            padding: 4px 8px 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .theme-dropdown .theme-option {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 13px;
-            white-space: nowrap;
-            transition: background 0.15s, color 0.15s;
-        }
-        .theme-dropdown .theme-option:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .theme-dropdown .theme-option.active {
-            background: var(--accent-dim);
-            color: var(--accent);
-            font-weight: 600;
-        }
-        .theme-dropdown .theme-swatch {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            flex-shrink: 0;
-            display: inline-block;
-        }
-
-        /* ========== 主体布局 ========== */
-        .app-body {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        /* ========== 左侧边栏 ========== */
-        .sidebar {
-            width: var(--sidebar-width);
-            min-width: 180px;
-            max-width: 480px;
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            flex-shrink: 0;
-            transition: width 0.2s ease, min-width 0.2s ease;
-        }
-        /* 折叠态：窄图标栏，仅保留连接图标列 */
-        .sidebar.collapsed {
-            width: 52px;
-            min-width: 52px;
-            max-width: 52px;
-        }
-        .sidebar.collapsed .section-title,
-        .sidebar.collapsed .connection-item .info,
-        .sidebar.collapsed .connection-item .badge,
-        .sidebar.collapsed .connection-item .dropdown-container,
-        .sidebar.collapsed .sidebar-footer {
-            display: none;
-        }
-        .sidebar.collapsed .connection-item {
-            justify-content: center;
-            padding: 8px 6px;
-        }
-        /* 窄栏中仅保留连接图标，作为可点击的连接标识 */
-        .sidebar.collapsed .connection-item .icon {
-            display: flex;
-        }
-        .sidebar.collapsed .connection-item.active {
-            border-left-width: 3px;
-        }
-        .sidebar.collapsed .add-connection {
-            margin: 0 8px 12px;
-            font-size: 0;
-            gap: 0;
-        }
-        .sidebar.collapsed .add-connection i {
-            font-size: 16px;
-        }
-        .sidebar .section-title {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 14px 16px 8px;
-        }
-        .connection-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0 8px 8px;
-        }
-        .connection-list::-webkit-scrollbar {
-            width: 4px;
-        }
-        .connection-list::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-        .connection-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            border-radius: var(--radius);
-            cursor: pointer;
-            transition: all 0.15s;
-            position: relative;
-        }
-        .connection-item:hover {
-            background: var(--bg-hover);
-        }
-        .connection-item.active {
-            background: var(--bg-active);
-            border-left: 3px solid var(--accent);
-        }
-        /* 连接图标：仅在侧栏折叠为窄栏时显示（展开态由名称与状态徽章承担） */
-        .connection-item .icon {
-            display: none;
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
-            background: var(--bg-tertiary);
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            color: var(--accent);
-            flex-shrink: 0;
-        }
-        .connection-item .info {
-            flex: 1;
-            min-width: 0;
-        }
-        .connection-item .info .name {
-            font-size: 13px;
-            font-weight: 500;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .connection-item .info .host {
-            font-size: 11px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .connection-item .badge {
-            font-size: 10px;
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            padding: 1px 8px;
-            border-radius: 10px;
-            flex-shrink: 0;
-        }
-        .connection-item .badge.online {
-            background: rgba(124, 184, 75, 0.2);
-            color: var(--green);
-        }
-        .connection-item .actions {
-            display: flex;
-            align-items: center;
-            gap: 2px;
-        }
-        .connection-item .dropdown-container .actions {
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-        .connection-item:hover .dropdown-container .actions {
-            opacity: 1;
-        }
-        .connection-item .icon-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 12px;
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            flex-shrink: 0;
-        }
-        .connection-item .icon-btn:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .dropdown-container {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-        }
-        .conn-dropdown-menu {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            min-width: 130px;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            box-shadow: var(--shadow);
-            padding: 4px;
-            z-index: 1000;
-            display: none;
-        }
-        .conn-dropdown-menu.show {
-            display: block;
-        }
-        .conn-dropdown-menu .dd-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            padding: 7px 10px;
-            border: none;
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 12px;
-            cursor: pointer;
-            border-radius: 4px;
-            text-align: left;
-            white-space: nowrap;
-        }
-        .conn-dropdown-menu .dd-item:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .conn-dropdown-menu .dd-item.danger {
-            color: #e06c75;
-        }
-        .conn-dropdown-menu .dd-item.danger:hover {
-            background: rgba(224, 108, 117, 0.12);
-            color: #e06c75;
-        }
-
-        .add-connection {
-            margin: 0 12px 12px;
-            padding: 8px;
-            border: 1px dashed var(--border-color);
-            border-radius: var(--radius);
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.2s;
-            background: transparent;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-        .add-connection:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
-
-        /* 连接配置的导入 / 导出：与「添加连接」同宽的两个小按钮 */
-        .conn-io-actions {
-            display: flex;
-            gap: 8px;
-            margin: 0 12px 12px;
-        }
-        .conn-io-actions button {
-            flex: 1;
-            padding: 6px 8px;
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 12px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 5px;
-            transition: all 0.2s;
-        }
-        .conn-io-actions button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
-        /* 折叠态：只留图标 */
-        .sidebar.collapsed .conn-io-actions {
-            margin: 0 8px 12px;
-            gap: 4px;
-        }
-        .sidebar.collapsed .conn-io-actions button {
-            font-size: 0;
-            gap: 0;
-            padding: 6px 4px;
-        }
-        .sidebar.collapsed .conn-io-actions button i {
-            font-size: 13px;
-        }
-
-        .sidebar-footer {
-            border-top: 1px solid var(--border-color);
-            padding: 12px 16px;
-            flex-shrink: 0;
-        }
-        .db-selector {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-        .db-selector label {
-            font-size: 12px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-        .db-selector select {
-            background: var(--bg-input);
-            color: var(--text-primary);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 4px 8px;
-            font-size: 12px;
-            outline: none;
-            cursor: pointer;
-            flex: 1;
-        }
-        .db-selector select:focus {
-            border-color: var(--accent);
-        }
-        .server-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 4px 12px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .server-stats .stat-item {
-            display: flex;
-            justify-content: space-between;
-        }
-        .server-stats .stat-item .val {
-            color: var(--text-primary);
-            font-weight: 500;
-        }
-
-        /* ========== 主内容区 ========== */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            background: var(--bg-primary);
-        }
-
-        .toolbar {
-            height: 44px;
-            min-height: 44px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            padding: 0 16px;
-            gap: 12px;
-            flex-shrink: 0;
-        }
-        .toolbar .search-box {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 0 10px;
-            transition: border 0.2s;
-            max-width: 400px;
-        }
-        .toolbar .search-box:focus-within {
-            border-color: var(--accent);
-        }
-        .toolbar .search-box i {
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-        .toolbar .search-box input {
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            padding: 6px 10px;
-            font-size: 13px;
-            outline: none;
-            width: 100%;
-        }
-        .toolbar .search-box input::placeholder {
-            color: var(--text-muted);
-        }
-        .toolbar .search-box .sep-btn {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            background: transparent;
-            border: 1px solid var(--border-color);
-            border-radius: 5px;
-            color: var(--text-secondary);
-            padding: 2px 8px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.15s;
-            margin-right: 4px;
-            white-space: nowrap;
-        }
-        .toolbar .search-box .sep-btn:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
-        .toolbar .search-box .sep-btn code {
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            font-weight: 700;
-            color: var(--accent);
-            font-size: 13px;
-        }
-        .toolbar .toolbar-actions {
-            display: flex;
-            gap: 4px;
-        }
-        .toolbar .toolbar-actions button {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            padding: 6px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.15s;
-        }
-        .toolbar .toolbar-actions button:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .toolbar .toolbar-actions button.primary {
-            background: var(--accent);
-            color: #1a150e;
-        }
-        .toolbar .toolbar-actions button.primary:hover {
-            background: var(--accent-hover);
-        }
-        /* ---- 数据库选择器（位于搜索框左侧） ---- */
-        .toolbar .key-db-selector {
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 0 8px;
-            height: 31px;
-            transition: border 0.2s;
-        }
-        .toolbar .key-db-selector:focus-within {
-            border-color: var(--accent);
-        }
-        .toolbar .key-db-selector > i {
-            color: var(--text-muted);
-            font-size: 13px;
-            display: none; /* 小屏隐藏图标，紧凑显示 */
-        }
-        .toolbar .key-db-selector select {
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            font-size: 13px;
-            outline: none;
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            background: transparent;
-        }
-        .toolbar .key-db-selector select:disabled {
-            color: var(--text-muted);
-            cursor: not-allowed;
-            opacity: .6;
-        }
-
-        /* ---- 数据浏览区 ---- */
-        .data-panel {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .key-tree {
-            width: var(--tree-width);
-            min-width: 180px;
-            max-width: 480px;
-            background: var(--bg-secondary);
-            border-right: 1px solid var(--border-color);
-            overflow-y: auto;
-            padding: 6px 0;
-            flex-shrink: 0;
-            position: relative;
-        }
-
-        /* ---- 模块边界拖拽手柄 ---- */
-        .splitter {
-            flex-shrink: 0;
-            position: relative;
-            z-index: 5;
-            background: transparent;
-            transition: background 0.15s;
-            touch-action: none;
-        }
-        .splitter::before {
-            content: '';
-            position: absolute;
-            background: var(--border-color);
-            transition: background 0.15s;
-        }
-        .splitter-v {
-            width: 5px;
-            cursor: col-resize;
-        }
-        .splitter-v::before {
-            left: 2px;
-            top: 0;
-            bottom: 0;
-            width: 1px;
-        }
-        .splitter-h {
-            height: 5px;
-            cursor: row-resize;
-        }
-        .splitter-h::before {
-            top: 2px;
-            left: 0;
-            right: 0;
-            height: 1px;
-        }
-        .splitter:hover::before,
-        .splitter.dragging::before {
-            background: var(--accent);
-        }
-        .splitter:hover,
-        .splitter.dragging {
-            background: var(--accent-dim);
-        }
-        .splitter.hidden {
-            display: none;
-        }
-        .no-transition {
-            transition: none !important;
-        }
-        body.resizing-h,
-        body.resizing-h * {
-            cursor: col-resize !important;
-            user-select: none !important;
-        }
-        body.resizing-v,
-        body.resizing-v * {
-            cursor: row-resize !important;
-            user-select: none !important;
-        }
-        .key-tree::-webkit-scrollbar {
-            width: 4px;
-        }
-        .key-tree::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-
-        /* ---- Key 列表虚拟滚动 ----
-           占位层撑出总高度，实际只渲染视口内的行；
-           行高与 JS 的 KEY_ROW_HEIGHT 保持一致。 */
-        .vt-spacer {
-            position: relative;
-            width: 100%;
-        }
-        .vt-row {
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 28px;
-        }
-        .vt-row > .tree-node {
-            height: 100%;
-        }
-        .vt-row .node-label {
-            height: 100%;
-            box-sizing: border-box;
-            margin: 0 6px;
-        }
-        /* 底部状态条：常驻显示已加载数量与「滚动加载更多」提示 */
-        .vt-status {
-            position: sticky;
-            bottom: 0;
-            padding: 5px 10px;
-            font-size: 11px;
-            text-align: center;
-            color: var(--text-muted);
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-        }
-        .vt-status .vt-more {
-            border: none;
-            background: none;
-            padding: 0 2px;
-            color: var(--accent);
-            font-size: 11px;
-            font-family: inherit;
-            cursor: pointer;
-            text-decoration: underline;
-        }
-
-        .tree-node {
-            cursor: pointer;
-            user-select: none;
-            transition: background 0.1s;
-        }
-        .tree-node .node-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px 4px 8px;
-            font-size: 13px;
-            border-radius: 4px;
-            margin: 1px 6px;
-            transition: all 0.1s;
-            position: relative;
-        }
-        .tree-node .node-label:hover {
-            background: var(--bg-hover);
-        }
-        .tree-node .node-label .toggle {
-            width: 18px;
-            font-size: 10px;
-            color: var(--text-muted);
-            text-align: center;
-            flex-shrink: 0;
-            transition: transform 0.2s;
-        }
-        .tree-node .node-label .toggle.open {
-            transform: rotate(90deg);
-        }
-        .tree-node .node-label .icon-folder {
-            color: var(--yellow);
-            font-size: 14px;
-        }
-        .tree-node .node-label .icon-key {
-            color: var(--blue);
-            font-size: 12px;
-        }
-        .tree-node .node-label .key-name {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-weight: 400;
-        }
-        .tree-node .node-label .key-type {
-            font-size: 10px;
-            color: var(--text-muted);
-            background: var(--bg-tertiary);
-            padding: 0 6px;
-            border-radius: 3px;
-            flex-shrink: 0;
-            font-weight: 500;
-            text-transform: uppercase;
-        }
-        .tree-node .node-label .key-type.string { color: var(--green); }
-        .tree-node .node-label .key-type.hash { color: var(--yellow); }
-        .tree-node .node-label .key-type.list { color: var(--blue); }
-        .tree-node .node-label .key-type.set { color: var(--purple); }
-        .tree-node .node-label .key-type.zset { color: #e8a94a; }
-        .tree-node .node-label .key-type.stream { color: #4ec9b0; }
-        .tree-node .node-label .key-size {
-            font-size: 10px;
-            color: var(--text-muted);
-            flex-shrink: 0;
-        }
-        .tree-node .node-label.active {
-            background: var(--bg-active);
-            border-left: 3px solid var(--accent);
-            margin-left: 3px;
-        }
-        .tree-node .children {
-            padding-left: 16px;
-            overflow: hidden;
-        }
-        .tree-node .children.collapsed {
-            display: none;
-        }
-
-        /* 右侧 Key 详情 */
-        .key-detail {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px 24px;
-            background: var(--bg-primary);
-            display: flex;
-            flex-direction: column;
-        }
-        .key-detail::-webkit-scrollbar {
-            width: 4px;
-        }
-        .key-detail::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-
-        .detail-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            flex-shrink: 0;
-        }
-        .detail-header .key-title {
-            font-size: 20px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .detail-header .key-title .type-badge {
-            font-size: 12px;
-            font-weight: 500;
-            padding: 2px 14px;
-            border-radius: 12px;
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-        }
-        .detail-header .key-title .type-badge.string { color: var(--green); background: rgba(124, 184, 75, 0.15); }
-        .detail-header .key-title .type-badge.hash { color: var(--yellow); background: rgba(245, 179, 66, 0.15); }
-        .detail-header .key-title .type-badge.list { color: var(--blue); background: rgba(106, 159, 216, 0.15); }
-        .detail-header .key-title .type-badge.set { color: var(--purple); background: rgba(179, 146, 208, 0.15); }
-        .detail-header .key-title .type-badge.zset { color: #e8a94a; background: rgba(232, 169, 74, 0.15); }
-        .detail-header .key-title .type-badge.stream { color: #4ec9b0; background: rgba(78, 201, 176, 0.15); }
-        .detail-header .ttl {
-            font-size: 13px;
-            color: var(--text-secondary);
-            background: var(--bg-tertiary);
-            padding: 4px 14px;
-            border-radius: 12px;
-        }
-        .detail-header .ttl i {
-            margin-right: 4px;
-        }
-        .detail-header .ttl input {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            color: var(--text-primary);
-            padding: 2px 8px;
-            font-size: 13px;
-            width: 80px;
-            outline: none;
-        }
-        .detail-header .ttl input:focus {
-            border-color: var(--accent);
-        }
-        .detail-header .ttl input:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .detail-header .detail-actions {
-            margin-left: auto;
-            display: flex;
-            gap: 6px;
-        }
-        .detail-header .detail-actions button {
-            background: var(--bg-tertiary);
-            border: none;
-            color: var(--text-secondary);
-            padding: 6px 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.15s;
-        }
-        .detail-header .detail-actions button:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .detail-header .detail-actions button.danger:hover {
-            background: rgba(245, 179, 66, 0.2);
-            color: var(--accent);
-        }
-        .detail-header .detail-actions button.primary {
-            background: var(--accent);
-            color: #1a150e;
-        }
-        .detail-header .detail-actions button.primary:hover {
-            background: var(--accent-hover);
-        }
-        .detail-header .detail-actions button:disabled,
-        .detail-header .detail-actions button:disabled:hover {
-            cursor: not-allowed;
-        }
-
-        .detail-body {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            overflow: hidden;
-            flex: 1;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        .detail-body .value-editor {
-            padding: 16px 20px;
-            flex: 1;
-            min-height: 0;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .detail-body .value-editor textarea {
-            width: 100%;
-            flex: 1;
-            min-height: 120px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            padding: 12px;
-            font-size: 14px;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            resize: vertical;
-            outline: none;
-            transition: border 0.2s;
-            display: block;
-        }
-        .detail-body .value-editor textarea:focus {
-            border-color: var(--accent);
-        }
-        .detail-body .value-editor .editor-toolbar {
-            display: flex;
-            justify-content: flex-end;
-            gap: 6px;
-            flex-shrink: 0;
-        }
-        .detail-body .value-editor .editor-toolbar button {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            padding: 4px 12px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.15s;
-        }
-        .detail-body .value-editor .editor-toolbar button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
-        /* 集合类型（Hash / List / Set / ZSet）字段级编辑表格 */
-        .detail-body .value-editor .coll-view {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-        .detail-body .value-editor .coll-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 4px 10px;
-            font-size: 13px;
-        }
-        .detail-body .value-editor .coll-row .idx {
-            color: var(--text-muted);
-            font-size: 11px;
-            width: 36px;
-            flex-shrink: 0;
-            text-align: right;
-        }
-        .detail-body .value-editor .coll-row .coll-key {
-            color: var(--text-secondary);
-            font-weight: 500;
-            flex-shrink: 0;
-            max-width: 220px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .detail-body .value-editor .coll-input {
-            background: transparent;
-            border: none;
-            border-bottom: 1px solid transparent;
-            color: var(--text-primary);
-            font-size: 13px;
-            padding: 3px 2px;
-            outline: none;
-            min-width: 60px;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        }
-        .detail-body .value-editor .coll-input:focus {
-            border-bottom-color: var(--accent);
-        }
-        .detail-body .value-editor .coll-input.grow {
-            flex: 1;
-            min-width: 0;
-        }
-        .detail-body .value-editor .coll-stream-fields {
-            display: block;
-            overflow-x: auto;
-            white-space: nowrap;
-            font-family: monospace;
-            font-size: 12px;
-            line-height: 1.6;
-        }
-        .detail-body .value-editor .coll-stream-fields b { color: var(--accent); }
-        .detail-body .value-editor .coll-input.coll-score {
-            width: 90px;
-            flex-shrink: 0;
-        }
-        .detail-body .value-editor .coll-btn {
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            width: 26px;
-            height: 24px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            transition: all 0.15s;
-        }
-        .detail-body .value-editor .coll-btn:hover:not(:disabled) {
-            border-color: var(--accent);
-            color: var(--accent);
-            background: var(--accent-dim);
-        }
-        .detail-body .value-editor .coll-btn.danger:hover:not(:disabled) {
-            border-color: #e06c75;
-            color: #e06c75;
-            background: rgba(224, 108, 117, 0.12);
-        }
-        .detail-body .value-editor .coll-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-        .detail-body .value-editor .coll-add {
-            border-style: dashed;
-        }
-        .detail-body .value-editor .coll-empty {
-            color: var(--text-muted);
-            text-align: center;
-            padding: 12px;
-        }
-        .detail-body .value-footer {
-            padding: 10px 20px;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .detail-body .value-footer .info {
-            display: flex;
-            gap: 16px;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            color: var(--text-muted);
-            text-align: center;
-        }
-        .empty-state i {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.4;
-            color: var(--accent);
-        }
-        .empty-state .empty-state-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 20%;
-            margin-bottom: 16px;
-            opacity: 0.9;
-        }
-        .empty-state h3 {
-            font-size: 16px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-        .empty-state p {
-            font-size: 13px;
-            max-width: 300px;
-        }
-
-        /* ========== 终端面板 ========== */
-        .terminal-panel {
-            height: var(--terminal-height);
-            min-height: 100px;
-            max-height: 50vh;
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            transition: all 0.25s ease;
-            overflow: hidden;
-        }
-        .terminal-panel.collapsed {
-            height: 36px;
-            min-height: 36px;
-        }
-        .terminal-panel .terminal-header {
-            height: 36px;
-            min-height: 36px;
-            display: flex;
-            align-items: center;
-            padding: 0 16px;
-            gap: 12px;
-            background: var(--bg-tertiary);
-            border-bottom: 1px solid var(--border-color);
-            cursor: pointer;
-            flex-shrink: 0;
-        }
-        .terminal-panel .terminal-header .term-label {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .terminal-panel .terminal-header .term-label i {
-            color: var(--accent);
-        }
-        .terminal-panel .terminal-header .spacer {
-            flex: 1;
-        }
-        .terminal-panel .terminal-header .term-actions {
-            display: flex;
-            gap: 4px;
-        }
-        .terminal-panel .terminal-header .term-actions button {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            transition: all 0.15s;
-        }
-        .terminal-panel .terminal-header .term-actions button:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .terminal-panel .terminal-body {
-            flex: 1;
-            overflow-y: auto;
-            padding: 8px 16px;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            font-size: 13px;
-            background: var(--bg-secondary);
-            display: flex;
-            flex-direction: column;
-        }
-        .terminal-panel .terminal-body::-webkit-scrollbar {
-            width: 4px;
-        }
-        .terminal-panel .terminal-body::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-        .terminal-panel .terminal-body .line {
-            padding: 2px 0;
-            display: flex;
-            gap: 12px;
-            line-height: 1.6;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-        .terminal-panel .terminal-body .line .prompt {
-            color: var(--accent);
-            flex-shrink: 0;
-            font-weight: 500;
-        }
-        .terminal-panel .terminal-body .line .cmd {
-            color: var(--text-primary);
-        }
-        .terminal-panel .terminal-body .line .output {
-            color: var(--text-secondary);
-        }
-        .terminal-panel .terminal-body .line .output.error {
-            color: #e5734b;
-        }
-        .terminal-panel .terminal-body .line .output.ok {
-            color: var(--green);
-        }
-        .terminal-panel .terminal-input-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 16px 8px;
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border-color);
-            flex-shrink: 0;
-        }
-        .terminal-panel .terminal-input-row .prompt-label {
-            color: var(--accent);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            font-weight: 500;
-            flex-shrink: 0;
-        }
-        .terminal-panel .terminal-input-row input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: var(--text-primary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            outline: none;
-            padding: 4px 0;
-        }
-        .terminal-panel .terminal-input-row input::placeholder {
-            color: var(--text-muted);
-        }
-        .terminal-panel .terminal-input-row button {
-            background: var(--accent);
-            border: none;
-            color: #1a150e;
-            padding: 4px 18px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            transition: background 0.15s;
-            flex-shrink: 0;
-        }
-        .terminal-panel .terminal-input-row button:hover {
-            background: var(--accent-hover);
-        }
-
-        /* ========== 连接对话框 ========== */
-        .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(4px);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            animation: fadeIn 0.2s ease;
-        }
-        .modal-overlay.open {
-            display: flex;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.96); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .modal {
-            background: var(--bg-secondary);
-            border-radius: 12px;
-            padding: 30px 34px;
-            width: 520px;
-            max-width: 94vw;
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow);
-        }
-        .modal .modal-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .modal .modal-title i {
-            color: var(--accent);
-        }
-        .modal .modal-title .logo-mark {
-            width: 22px;
-            height: 22px;
-            flex-shrink: 0;
-            filter: drop-shadow(0 0 5px rgba(245, 179, 66, 0.25));
-        }
-        .modal .form-group {
-            margin-bottom: 16px;
-        }
-        .modal .form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-        .modal .form-group input[type="checkbox"] {
-            width: 14px !important;
-            height: 14px;
-            padding: 0;
-            margin: 0;
-            border: none;
-            flex: 0 0 auto;
-        }
-        .modal .form-group input,
-        .modal .form-group select {
-            width: 100%;
-            padding: 8px 12px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 14px;
-            outline: none;
-            transition: border 0.2s;
-        }
-        .modal .form-group input:focus,
-        .modal .form-group select:focus {
-            border-color: var(--accent);
-        }
-        .modal .form-row {
-            display: flex;
-            gap: 12px;
-            flex-wrap: nowrap;
-        }
-        .modal .form-row .form-group {
-            flex: 1;
-            min-width: 0;
-        }
-        .modal .form-row .checkbox-label {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            cursor: pointer;
-            color: var(--text-primary);
-            font-size: 14px;
-            user-select: none;
-        }
-        .modal .modal-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 20px;
-            justify-content: flex-end;
-        }
-        .modal .modal-actions .spacer {
-            flex: 1;
-        }
-        .modal .modal-actions button {
-            padding: 8px 24px;
-            border-radius: 6px;
-            border: none;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .modal .modal-actions button.secondary {
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-        }
-        .modal .modal-actions button.secondary:hover {
-            background: var(--bg-hover);
-            color: var(--text-primary);
-        }
-        .modal .modal-actions button.primary {
-            background: var(--accent);
-            color: #1a150e;
-        }
-        .modal .modal-actions button.primary:hover {
-            background: var(--accent-hover);
-        }
-        #testStatus {
-            font-size: 13px;
-            margin-left: 8px;
-            align-self: center;
-            min-height: 20px;
-        }
-        #testStatus.success {
-            color: var(--green);
-        }
-        #testStatus.error {
-            color: #e06c75;
-        }
-
-        /* ========== 响应式微调 ========== */
-        @media (max-width: 1100px) {
-            :root {
-                --sidebar-width: 200px;
-                --tree-width: 260px;
-            }
-            .app-window {
-                max-width: 100vw;
-                max-height: 100vh;
-                border-radius: 0;
-                height: 100vh;
-            }
-        }
-        @media (max-width: 780px) {
-            :root {
-                --sidebar-width: 0px;
-                --tree-width: 0px;
-            }
-            .sidebar { display: none; }
-            .key-tree { display: none; }
-            /* 模块已隐藏，其边界手柄一并隐藏（终端手柄仍可用） */
-            .splitter-v { display: none; }
-            .data-panel { flex-direction: column; }
-            .detail-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            .detail-header .detail-actions {
-                margin-left: 0;
-                width: 100%;
-                flex-wrap: wrap;
-            }
-            .titlebar .connection-status {
-                display: none;
-            }
-        }
-
-        .highlight {
-            background: var(--accent-dim) !important;
-        }
-
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
-        }
-
-        /* Toast 提示（沿用金黄色的强调） */
-        .toast-notification {
-            border-left-color: var(--accent) !important;
-        }
-
-        /* ========== 静默更新 ========== */
-        /* 进度条是 app-window 的最后一个 flex 子项（排在终端面板之下），
-           展开时把上方主体略微顶起，而不是浮在上面遮住终端输入框 */
-        .update-bar {
-            flex-shrink: 0;
-            height: 0;
-            overflow: hidden;
-            position: relative;
-            background: var(--bg-tertiary);
-            transition: height 0.2s ease;
-        }
-        .update-bar.open {
-            height: 34px;
-            border-top: 1px solid var(--border-color);
-        }
-        /* 填充条铺在最底层，右缘露出的底色就是「还没下完」的部分 */
-        .update-bar-fill {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            width: 0;
-            background: var(--accent-dim);
-            border-right: 1px solid var(--accent);
-            transition: width 0.2s linear;
-        }
-        .update-bar.done .update-bar-fill {
-            background: rgba(124, 184, 75, 0.18);
-            border-right-color: var(--green);
-        }
-        .update-bar.failed .update-bar-fill {
-            background: rgba(229, 72, 77, 0.16);
-            border-right-color: var(--danger, #e5484d);
-        }
-        /* 服务端没给总量时算不出百分比，改成来回扫的动画表示「还在下」 */
-        .update-bar.indeterminate .update-bar-fill {
-            width: 40%;
-            animation: updateSweep 1.4s ease-in-out infinite;
-        }
-        @keyframes updateSweep {
-            0% { transform: translateX(-105%); }
-            100% { transform: translateX(255%); }
-        }
-        .update-bar-inner {
-            position: relative;
-            height: 34px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0 14px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-        }
-        .update-bar-inner .update-bar-spacer {
-            flex: 1;
-        }
-        .update-bar-pct {
-            color: var(--text-primary);
-            font-variant-numeric: tabular-nums;
-        }
-        .update-bar-inner button {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            border-radius: 6px;
-            padding: 2px 10px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .update-bar-inner button:hover {
-            background: var(--bg-hover);
-        }
-        .update-bar-inner button.primary {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #1a150e;
-            font-weight: 600;
-        }
-        .update-bar-inner button.primary:hover {
-            background: var(--accent-hover);
-        }
-
-        /* 标题栏更新入口：默认不占位，只有查到新版本才显示（见 checkUpdate） */
-        #btnCheckUpdate {
-            position: relative;
-            display: none;
-        }
-        #btnCheckUpdate.show {
-            display: flex;
-        }
-        /* 有可用新版本时点亮红点 */
-        .update-dot {
-            display: none;
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--danger, #e5484d);
-        }
-        .update-dot.show {
-            display: block;
-        }
-
-        /* 更新弹窗里的更新说明：保留换行、限量滚动 */
-        .update-notes {
-            margin: 10px 0 0;
-            padding: 10px 12px;
-            max-height: 190px;
-            overflow-y: auto;
-            background: var(--bg-primary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            font-size: 12px;
-            line-height: 1.7;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-    </style>
+    <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
 
@@ -1978,13 +136,17 @@
         </div>
         <div class="splitter splitter-h" id="splitterTerminal"></div>
 
-        <!-- ===== 终端面板 ===== -->
+        <!-- ===== 底部面板：终端 / 实时监控（共用同一块可拖拽、可折叠的区域） ===== -->
         <div class="terminal-panel" id="terminalPanel">
             <div class="terminal-header" id="terminalToggle">
-                <div class="term-label"><i class="fas fa-terminal"></i> 终端</div>
+                <div class="term-tabs">
+                    <button class="term-tab active" id="tabTerminal" title="内置终端"><i class="fas fa-terminal"></i> 终端</button>
+                    <button class="term-tab" id="tabMonitor" title="实时显示服务器上执行的命令（MONITOR）"><i class="fas fa-satellite-dish"></i> 实时监控</button>
+                </div>
                 <div class="spacer"></div>
                 <div class="term-actions">
                     <button id="termClear" title="清空终端"><i class="fas fa-eraser"></i></button>
+                    <button id="monitorClear" class="monitor-only" title="清空监控输出"><i class="fas fa-eraser"></i></button>
                     <button id="termToggleBtn" title="折叠/展开"><i class="fas fa-chevron-down" id="termChevron"></i></button>
                 </div>
             </div>
@@ -1996,6 +158,26 @@
                 <span class="prompt-label">redis&gt;</span>
                 <input type="text" id="terminalInput" placeholder="输入 Redis 命令 ..." autofocus />
                 <button id="terminalSend">执行</button>
+            </div>
+            <div class="monitor-view" id="monitorView">
+                <div class="monitor-toolbar">
+                    <button class="primary" id="monitorToggle" disabled><i class="fas fa-play"></i> 开始监控</button>
+                    <span class="monitor-state" id="monitorState"><i class="fas fa-circle-info"></i> 未开始</span>
+                    <div class="spacer"></div>
+                    <label class="monitor-filter" title="按原文过滤（不区分大小写的包含匹配）">
+                        <i class="fas fa-filter"></i>
+                        <input type="text" id="monitorFilter" placeholder="过滤 key / 命令 / 客户端 ..." />
+                    </label>
+                    <label class="monitor-follow" title="新命令到达时自动滚到底部"><input type="checkbox" id="monitorFollow" checked /><span>自动滚动</span></label>
+                    <span class="monitor-count" id="monitorCount">0 行</span>
+                </div>
+                <div class="monitor-body" id="monitorBody">
+                    <div class="monitor-empty">
+                        点「开始监控」后，这里实时显示服务器上执行的每条命令（<code>MONITOR</code>）。<br />
+                        监控用的是独立连接，不影响 Key 列表 / 终端的正常使用；<br />
+                        集群模式不支持（MONITOR 是节点级命令），请用「单机」模式直连要观察的节点。
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -2102,6 +284,30 @@
             <div class="modal-actions">
                 <button class="secondary" id="addKeyCancel">取消</button>
                 <button class="primary" id="addKeySave">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Key 重命名 / 复制（共用一个对话框） ===== -->
+    <div class="modal-overlay" id="keyOpModal">
+        <div class="modal">
+            <div class="modal-title"><svg class="logo-mark" aria-label="麦地 Key 操作 Logo"><use href="#md-logo-mark" /></svg> <span id="keyOpTitle">重命名 Key</span></div>
+            <div class="form-group">
+                <label>源 Key</label>
+                <input type="text" id="keyOpSource" disabled />
+            </div>
+            <div class="form-group">
+                <label>目标 Key 名称</label>
+                <input type="text" id="keyOpDest" placeholder="请输入目标 Key 名称" />
+                <small id="keyOpHint" style="color: var(--text-muted); font-size: 12px;"></small>
+            </div>
+            <div class="form-group">
+                <label class="checkbox-label"><input type="checkbox" id="keyOpOverwrite" /><span>覆盖已存在的目标 Key</span></label>
+                <small id="keyOpOverwriteHint" style="color: var(--text-muted); font-size: 12px;"></small>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary" id="keyOpCancel">取消</button>
+                <button class="primary" id="keyOpConfirm">确定</button>
             </div>
         </div>
     </div>
@@ -2255,6 +461,12 @@
             const termToggleBtn = $('#termToggleBtn');
             const termChevron = $('#termChevron');
             const terminalPanel = $('#terminalPanel');
+            const monitorBody = $('#monitorBody');
+            const monitorToggleBtn = $('#monitorToggle');
+            const monitorStateEl = $('#monitorState');
+            const monitorCountEl = $('#monitorCount');
+            const monitorFilterInput = $('#monitorFilter');
+            const monitorFollowBox = $('#monitorFollow');
             const statusDot = $('#statusDot');
             const statusLabel = $('#statusLabel');
             const keySearch = $('#keySearch');
@@ -2542,6 +754,10 @@
                                     selectedKey = null;
                                     renderKeyTree();
                                     renderDetail();
+                                    // 断开时后端会停掉该连接的监控：界面同步复位
+                                    monitorSession = { connId: null, running: false, notice: '', noticeError: false };
+                                    resetMonitorOutput('未连接。连接 Redis 后可开始监控');
+                                    syncMonitorControls();
                                 }
                                 renderConnections();
                                 updateStatus();
@@ -2560,6 +776,10 @@
                                     onlineConns.delete(id);
                                     if (currentConn && currentConn.id === id) {
                                         currentConn = null;
+                                        // 删除连接时后端也会停掉该连接的监控（密钥链条目同理）
+                                        monitorSession = { connId: null, running: false, notice: '', noticeError: false };
+                                        resetMonitorOutput('未连接。连接 Redis 后可开始监控');
+                                        syncMonitorControls();
                                     }
                                     return loadConnections();
                                 }).catch(err => {
@@ -2704,6 +924,9 @@
 
             function switchConnection(conn) {
                 if (!conn) return;
+                // 上一个连接若正在监控，先停掉：监控只跟随当前连接展示，
+                // 留在后台跑既看不到又白占一条服务器连接
+                stopMonitorForOtherConn(conn.id);
                 // 初始化逻辑数据库编号（旧连接配置可能没有 db 字段）
                 if (conn.db === undefined || conn.db === null) conn.db = 0;
                 currentConn = conn;
@@ -2716,6 +939,10 @@
                 selectedKey = null;
                 renderKeyTree();
                 renderDetail();
+                // 监控输出属于上一个连接，一并清掉并复位状态
+                monitorSession = { connId: null, running: false, notice: '', noticeError: false };
+                resetMonitorOutput('点「开始监控」后，这里会实时显示服务器上执行的每条命令（MONITOR）');
+                syncMonitorControls();
                 refreshDbSelector();
                 connectTo(conn).then((info) => {
                     if (info) {
@@ -2726,6 +953,8 @@
                         renderConnections();
                         updateStatus();
                         refreshDbSelector();
+                        // 以连接时取回的版本信息刷新一次监控按钮（集群模式不支持监控）
+                        syncMonitorControls();
                         const mem = info.usedMemory ? formatAppBytes(Number(info.usedMemory)) : '-';
                         const days = info.uptimeSeconds > 0 ? Math.floor(info.uptimeSeconds / 86400) : 0;
                         const hrs = info.uptimeSeconds > 0 ? Math.floor((info.uptimeSeconds % 86400) / 3600) : 0;
@@ -3154,6 +1383,9 @@
                 const ttl = item.ttl !== undefined ? item.ttl : -1;
                 // 只读连接（已连接且配置为只读）时，禁用「保存」按钮
                 const readonlyConn = !!(currentConn && currentConn.online && currentConn.readonly);
+                // 复制走 COPY，需要 Redis 6.2+；版本取自连接时拿到的 INFO
+                const serverVersion = (currentConn && currentConn.info && currentConn.info.redisVersion) || '';
+                const copySupported = serverSupportsCopy();
 
                 const valueActions = buildValueEditorActions(typeClass);
 
@@ -3204,6 +1436,8 @@
                         <span class="ttl"><i class="far fa-clock"></i> <input type="number" id="detailTtl" value="${ttl}" title="TTL（秒），-1 表示永不过期"${ttlDisabled} /></span>
                         <div class="detail-actions">
                             <button class="primary" id="detailSave"${readonlyConn ? ' disabled' : ''} data-orig-title="保存修改" title="${readonlyConn ? '只读连接，禁止写操作' : '保存修改'}"><i class="fas fa-save"></i> 保存</button>
+                            <button id="detailRename"${readonlyConn ? ' disabled' : ''} title="${readonlyConn ? '只读连接，禁止写操作' : '重命名该 Key（RENAME，含 TTL 一起移动）'}"><i class="fas fa-i-cursor"></i> 重命名</button>
+                            <button id="detailCopyKey"${readonlyConn || !copySupported ? ' disabled' : ''} title="${readonlyConn ? '只读连接，禁止写操作' : (copySupported ? '复制该 Key（COPY，同库内）' : 'COPY 需要 Redis 6.2 及以上版本，当前 ' + (serverVersion || '未知版本'))}"><i class="fas fa-clone"></i> 复制</button>
                             <button id="detailRefresh"><i class="fas fa-sync-alt"></i> 刷新</button>
                             <button class="danger" id="detailDelete"><i class="fas fa-trash-alt"></i> 删除</button>
                         </div>
@@ -3297,6 +1531,14 @@
                         renderDetail();
                         appendTerminal(`刷新 Key "${selectedKey}"`, '');
                     });
+                }
+                const renameBtn = document.getElementById('detailRename');
+                if (renameBtn) {
+                    renameBtn.addEventListener('click', () => openKeyOpModal('rename'));
+                }
+                const copyKeyBtn = document.getElementById('detailCopyKey');
+                if (copyKeyBtn) {
+                    copyKeyBtn.addEventListener('click', () => openKeyOpModal('copy'));
                 }
                 const deleteBtn = document.getElementById('detailDelete');
                 if (deleteBtn) {
@@ -3724,6 +1966,399 @@
                     });
             }
 
+            // ---------- 实时监控（MONITOR） ----------
+            // 显示上限：长时间盯着高 QPS 实例时 DOM 行数必须有界（超出的从最旧的行开始丢）
+            const MONITOR_MAX_ROWS = 2000;
+            // 已收到的监控行（过滤、重绘都基于这份数据，因此它同样受上限约束）
+            let monitorLines = [];
+            // 因显示上限 / 后端缓冲上限被省略的行数
+            let monitorOmitted = 0;
+            // 当前监控会话：connId 是会话所属连接，notice 是最近一次结束原因 / 启动失败原因
+            let monitorSession = { connId: null, running: false, notice: '', noticeError: false };
+            // 程序触发的滚动不参与「用户滚上去就暂停跟随」的判断
+            let monitorAutoScroll = false;
+
+            // 监控视图的占位提示（无匹配行、已清空时显示）
+            function ensureMonitorPlaceholder(text) {
+                if (monitorBody.querySelector('.mon-empty-node')) return;
+                const el = document.createElement('div');
+                el.className = 'monitor-empty mon-empty-node';
+                el.textContent = text;
+                monitorBody.appendChild(el);
+            }
+
+            function removeMonitorPlaceholder() {
+                const el = monitorBody.querySelector('.mon-empty-node');
+                if (el) el.remove();
+            }
+
+            function setMonitorState(text, kind) {
+                monitorStateEl.className = 'monitor-state' + (kind ? ' ' + kind : '');
+                const icon = kind === 'running' ? 'fa-circle-play' : (kind === 'error' ? 'fa-triangle-exclamation' : 'fa-circle-info');
+                monitorStateEl.innerHTML = `<i class="fas ${icon}"></i> ${escapeHtml(text)}`;
+            }
+
+            // 服务器时间戳（秒.微秒）→ 本机时区的 HH:MM:SS.mmm（完整值在行的 title 里）
+            function formatMonitorTime(raw) {
+                const dot = raw.indexOf('.');
+                const seconds = parseFloat(dot > 0 ? raw.slice(0, dot) : raw);
+                if (!isFinite(seconds)) return raw;
+                const d = new Date(seconds * 1000);
+                const pad = n => String(n).padStart(2, '0');
+                const ms = dot > 0 ? raw.slice(dot + 1, dot + 4) : '000';
+                return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${ms}`;
+            }
+
+            // 一行监控输出的 DOM（time / 客户端 / db / 命令 / 参数）
+            function buildMonitorRow(line) {
+                const row = document.createElement('div');
+                row.className = 'mon-row';
+                row.title = line.raw;
+                const cell = (cls, text) => {
+                    const span = document.createElement('span');
+                    span.className = cls;
+                    span.textContent = text;
+                    return span;
+                };
+                row.appendChild(cell('mon-time', formatMonitorTime(line.time)));
+                row.appendChild(cell('mon-client', line.client));
+                row.appendChild(cell('mon-db', 'db' + line.db));
+                row.appendChild(cell('mon-cmd', line.command));
+                row.appendChild(cell('mon-args', (line.args || []).join(' ')));
+                return row;
+            }
+
+            // 过滤条件：对**原始行**做不区分大小写的包含匹配（key / 命令 / 客户端都能命中）
+            function monitorLineMatches(line) {
+                const term = monitorFilterInput.value.trim().toLowerCase();
+                if (!term) return true;
+                return String(line.raw || '').toLowerCase().includes(term);
+            }
+
+            function updateMonitorCount() {
+                const total = monitorLines.length + monitorOmitted;
+                const shown = monitorFilterInput.value.trim()
+                    ? monitorLines.filter(monitorLineMatches).length
+                    : monitorLines.length;
+                const omitted = monitorOmitted > 0 ? `（已省略 ${monitorOmitted} 行）` : '';
+                monitorCountEl.textContent = `已显示 ${shown} / ${total} 行${omitted}`;
+            }
+
+            function scrollMonitorToBottom() {
+                monitorAutoScroll = true;
+                monitorBody.scrollTop = monitorBody.scrollHeight;
+                requestAnimationFrame(() => { monitorAutoScroll = false; });
+            }
+
+            // 按当前过滤条件整体重绘（切过滤、清空后调用）
+            function renderMonitor(emptyText) {
+                monitorBody.innerHTML = '';
+                const matched = monitorLines.filter(monitorLineMatches);
+                if (matched.length === 0) {
+                    ensureMonitorPlaceholder(emptyText || '没有匹配的命令');
+                } else {
+                    const fragment = document.createDocumentFragment();
+                    matched.forEach(line => fragment.appendChild(buildMonitorRow(line)));
+                    monitorBody.appendChild(fragment);
+                }
+                updateMonitorCount();
+                if (monitorFollowBox.checked) scrollMonitorToBottom();
+            }
+
+            // 追加一批行：只动新增的 DOM（2000 行时整块重绘太贵）
+            function appendMonitorLines(lines, dropped) {
+                if (dropped > 0) monitorOmitted += dropped;
+                const fragment = document.createDocumentFragment();
+                for (const line of lines) {
+                    monitorLines.push(line);
+                    if (!monitorLineMatches(line)) continue;
+                    fragment.appendChild(buildMonitorRow(line));
+                }
+                if (fragment.childNodes.length > 0) {
+                    removeMonitorPlaceholder();
+                    monitorBody.appendChild(fragment);
+                }
+                // 超出上限：最旧的行从数据与 DOM 里一起丢掉（DOM 节点跟着数据走，
+                // 因此这里不需要按过滤后的行数另算一次）
+                const excess = monitorLines.length - MONITOR_MAX_ROWS;
+                if (excess > 0) {
+                    monitorLines = monitorLines.slice(excess);
+                    monitorOmitted += excess;
+                    renderMonitor('没有匹配的命令');
+                    return;
+                }
+                if (monitorBody.childNodes.length === 0) ensureMonitorPlaceholder('没有匹配的命令');
+                updateMonitorCount();
+                if (monitorFollowBox.checked) scrollMonitorToBottom();
+            }
+
+            // 清空监控输出（开始新会话、切连接、点清空时调用）
+            function resetMonitorOutput(emptyText) {
+                monitorLines = [];
+                monitorOmitted = 0;
+                monitorBody.innerHTML = '';
+                ensureMonitorPlaceholder(emptyText || '监控中…新命令会实时出现在这里');
+                updateMonitorCount();
+            }
+
+            // 本界面记录的会话是否就属于当前连接
+            function monitorOwnsCurrentConn() {
+                return !!(currentConn && currentConn.id && monitorSession.connId === currentConn.id);
+            }
+
+            // 按连接状态与会话状态刷新按钮 / 状态文案
+            function syncMonitorControls() {
+                const online = !!(currentConn && currentConn.id && currentConn.online);
+                const cluster = !!(currentConn && currentConn.type === 'cluster');
+                const running = monitorOwnsCurrentConn() && monitorSession.running;
+
+                monitorToggleBtn.disabled = !online || cluster;
+                monitorToggleBtn.title = !online
+                    ? '请先连接 Redis 服务器'
+                    : (cluster ? '集群模式不支持实时监控（MONITOR 是节点级命令），请用单机模式直连要观察的节点' : '');
+                monitorToggleBtn.innerHTML = running
+                    ? '<i class="fas fa-stop"></i> 停止监控'
+                    : '<i class="fas fa-play"></i> 开始监控';
+                monitorToggleBtn.classList.toggle('primary', !running);
+
+                if (running) {
+                    setMonitorState('监控中', 'running');
+                } else if (monitorOwnsCurrentConn() && monitorSession.notice) {
+                    setMonitorState(monitorSession.notice, monitorSession.noticeError ? 'error' : '');
+                } else if (!online) {
+                    setMonitorState('未连接', '');
+                } else if (cluster) {
+                    setMonitorState('集群模式不支持', '');
+                } else {
+                    setMonitorState('未开始', '');
+                }
+            }
+
+            // 开始 / 停止监控（同一个按钮）
+            function toggleMonitor() {
+                if (!currentConn || !currentConn.id || !currentConn.online) {
+                    showToast('请先连接 Redis 服务器', 'error');
+                    return;
+                }
+                const connId = currentConn.id;
+                const running = monitorOwnsCurrentConn() && monitorSession.running;
+                monitorToggleBtn.disabled = true;
+                const done = () => {
+                    monitorToggleBtn.disabled = false;
+                    syncMonitorControls();
+                };
+
+                if (running) {
+                    // 停止：不发「已停止」通知，结束后端会推 monitor:end（stoppedByUser）
+                    invoke('stop_monitor', { connId })
+                        .then((stopped) => {
+                            monitorSession.running = false;
+                            monitorSession.notice = '已停止监控';
+                            monitorSession.noticeError = false;
+                            appendTerminal(stopped ? '已停止实时监控' : '监控会话已自行结束（连接可能已断开）', stopped ? '' : 'error');
+                        })
+                        .catch(err => {
+                            monitorSession.notice = '停止失败: ' + err;
+                            monitorSession.noticeError = true;
+                            showToast('停止监控失败: ' + err, 'error');
+                        })
+                        .finally(done);
+                    return;
+                }
+
+                // 开始：先清空上一段输出，避免新旧会话的行混在一起
+                resetMonitorOutput('监控中…新命令会实时出现在这里');
+                monitorSession = { connId, running: false, notice: '', noticeError: false };
+                invoke('start_monitor', { connId })
+                    .then(() => {
+                        monitorSession = { connId, running: true, notice: '', noticeError: false };
+                        appendTerminal(`开始监控 ${connId} 上执行的命令（MONITOR）`, 'ok');
+                        showToast('已开始实时监控', 'success');
+                    })
+                    .catch(err => {
+                        monitorSession = { connId, running: false, notice: '启动失败: ' + err, noticeError: true };
+                        ensureMonitorPlaceholder('启动失败: ' + err);
+                        showToast('开始监控失败: ' + err, 'error');
+                    })
+                    .finally(done);
+            }
+
+            // 以**后端**为准恢复会话状态（切回监控标签、刚连上时调用）：
+            // 界面刷新或切走再切回来时，后端可能仍在监控
+            function refreshMonitorStatus() {
+                if (!currentConn || !currentConn.id || !currentConn.online) {
+                    syncMonitorControls();
+                    return Promise.resolve();
+                }
+                const connId = currentConn.id;
+                return invoke('monitor_status', { connId })
+                    .then((running) => {
+                        if (!currentConn || currentConn.id !== connId) return;
+                        // 后端在跑但界面没有这份会话（例如刷新过界面）：接上它，别让按钮说谎
+                        if (running && !monitorOwnsCurrentConn()) {
+                            monitorSession = { connId, running: true, notice: '', noticeError: false };
+                        } else if (!running && monitorOwnsCurrentConn()) {
+                            monitorSession.running = false;
+                        }
+                        syncMonitorControls();
+                    })
+                    .catch(() => { syncMonitorControls(); });
+            }
+
+            // 后端推来的一批监控行
+            function handleMonitorLines(event) {
+                const payload = event && event.payload;
+                if (!payload || !currentConn || payload.connId !== currentConn.id) return;
+                if (!monitorOwnsCurrentConn()) return;
+                appendMonitorLines(payload.lines || [], payload.dropped || 0);
+            }
+
+            // 监控结束（用户停止 / 连接断开 / 读流中断）
+            function handleMonitorEnd(event) {
+                const payload = event && event.payload;
+                if (!payload || !monitorOwnsCurrentConn() || payload.connId !== monitorSession.connId) return;
+                monitorSession.running = false;
+                monitorSession.notice = payload.reason || (payload.stoppedByUser ? '已停止监控' : '监控已结束');
+                monitorSession.noticeError = !payload.stoppedByUser;
+                appendTerminal('监控结束: ' + monitorSession.notice, payload.stoppedByUser ? '' : 'error');
+                if (!payload.stoppedByUser) showToast('监控已结束: ' + monitorSession.notice, 'error');
+                syncMonitorControls();
+            }
+
+            // 切到别的连接前，把还在跑的监控会话停掉
+            //（后端会推 monitor:end，但那时界面已复位，事件会被忽略 —— 正是我们要的）
+            function stopMonitorForOtherConn(nextConnId) {
+                if (!monitorSession.running || !monitorSession.connId) return;
+                if (monitorSession.connId === nextConnId) return;
+                invoke('stop_monitor', { connId: monitorSession.connId })
+                    .catch(err => console.warn('停止上一个连接的监控失败:', err));
+            }
+
+            // 切换底部面板的标签页（终端 / 实时监控）
+            function setBottomTab(tab) {
+                const isMonitor = tab === 'monitor';
+                terminalPanel.classList.toggle('monitor-active', isMonitor);
+                $('#tabTerminal').classList.toggle('active', !isMonitor);
+                $('#tabMonitor').classList.toggle('active', isMonitor);
+                if (!isMonitor) return;
+                // 折叠状态下切到监控看不出内容，顺手展开
+                if (terminalCollapsed) setTerminalCollapsed(false);
+                syncMonitorControls();
+                refreshMonitorStatus();
+            }
+
+            // ---------- Key 重命名 / 复制 ----------
+            let keyOpMode = 'rename';
+
+            // 服务器是否支持 COPY（Redis 6.2+）。
+            // 版本信息来自连接时的 INFO；拿不到版本就不拦（交给后端给明确提示），
+            // 免得因为一次 INFO 失败把功能整个锁死。
+            function serverSupportsCopy() {
+                const version = currentConn && currentConn.info && currentConn.info.redisVersion;
+                if (!version) return true;
+                const parts = String(version).split('.').map(n => parseInt(n, 10));
+                const major = isNaN(parts[0]) ? 0 : parts[0];
+                const minor = isNaN(parts[1]) ? 0 : parts[1];
+                return major > 6 || (major === 6 && minor >= 2);
+            }
+
+            function openKeyOpModal(mode) {
+                if (!selectedKey) {
+                    showToast('请先选择一个 Key', 'error');
+                    return;
+                }
+                if (!currentConn || !currentConn.online) {
+                    showToast('请先连接 Redis 服务器', 'error');
+                    return;
+                }
+                if (currentConn.readonly) {
+                    showToast('只读连接，禁止写操作', 'error');
+                    return;
+                }
+                if (mode === 'copy' && !serverSupportsCopy()) {
+                    const version = (currentConn.info && currentConn.info.redisVersion) || '未知版本';
+                    showToast(`COPY 需要 Redis 6.2 及以上版本（当前 ${version}）`, 'error');
+                    return;
+                }
+
+                keyOpMode = mode;
+                const isRename = mode === 'rename';
+                document.getElementById('keyOpTitle').textContent = isRename ? '重命名 Key' : '复制 Key';
+                document.getElementById('keyOpSource').value = selectedKey;
+                const destInput = document.getElementById('keyOpDest');
+                destInput.value = isRename ? selectedKey : selectedKey + ':copy';
+                document.getElementById('keyOpOverwrite').checked = false;
+                document.getElementById('keyOpHint').textContent = isRename
+                    ? '重命名是原地移动：源 Key 不复存在，TTL 一起带走'
+                    : '复制到同一个库：源 Key 保持不变（COPY，需要 Redis 6.2+）';
+                document.getElementById('keyOpOverwriteHint').textContent = isRename
+                    ? '不勾选：目标已存在时报错、不做任何修改（RENAMENX）；勾选：目标被覆盖（数据不可恢复）'
+                    : '不勾选：目标已存在时报错、不做任何修改；勾选：加 REPLACE 覆盖目标';
+                document.getElementById('keyOpConfirm').textContent = isRename ? '重命名' : '复制';
+                document.getElementById('keyOpModal').classList.add('open');
+                destInput.focus();
+                destInput.select();
+            }
+
+            function closeKeyOpModal() {
+                document.getElementById('keyOpModal').classList.remove('open');
+            }
+
+            function submitKeyOp() {
+                const source = selectedKey;
+                const dest = document.getElementById('keyOpDest').value.trim();
+                if (!dest) {
+                    showToast('请输入目标 Key 名称', 'error');
+                    document.getElementById('keyOpDest').focus();
+                    return;
+                }
+                const overwrite = document.getElementById('keyOpOverwrite').checked;
+                const isRename = keyOpMode === 'rename';
+                const confirmBtn = document.getElementById('keyOpConfirm');
+                confirmBtn.disabled = true;
+
+                invoke(isRename ? 'rename_key' : 'copy_key', {
+                    connId: currentConn.id,
+                    key: source,
+                    newKey: dest,
+                    overwrite: overwrite,
+                }).then(() => {
+                    closeKeyOpModal();
+                    const type = (KEY_DATA[source] && KEY_DATA[source].type) || 'string';
+                    const ttl = (KEY_DATA[source] && KEY_DATA[source].ttl !== undefined) ? KEY_DATA[source].ttl : -1;
+                    if (isRename) {
+                        // 本地跟着搬：重扫列表会丢掉已加载的分页与滚动位置，
+                        // 而且目标名未必落在已加载的页里
+                        removeKeyEntry(source);
+                        upsertKeyEntry(dest, type, ttl);
+                        selectedKey = dest;
+                        appendTerminal(`RENAME ${source} ${dest} → OK`, 'ok');
+                        showToast(`已重命名为 "${dest}"`, 'success');
+                    } else {
+                        upsertKeyEntry(dest, type, ttl);
+                        appendTerminal(`COPY ${source} ${dest}${overwrite ? ' REPLACE' : ''} → OK`, 'ok');
+                        showToast(`已复制为 "${dest}"`, 'success');
+                    }
+                    renderKeyTree();
+                    renderDetail();
+                }).catch((err) => {
+                    // 目标已存在是「可继续」的错误：把提示留在对话框里，用户勾上覆盖再来一次
+                    showToast((isRename ? '重命名失败: ' : '复制失败: ') + err, 'error');
+                    appendTerminal(`${isRename ? 'RENAME' : 'COPY'} ${source} → ${dest} 失败: ${err}`, 'error');
+                }).finally(() => {
+                    confirmBtn.disabled = false;
+                });
+            }
+
+            document.getElementById('keyOpCancel').addEventListener('click', closeKeyOpModal);
+            document.getElementById('keyOpConfirm').addEventListener('click', submitKeyOp);
+            document.getElementById('keyOpDest').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submitKeyOp();
+            });
+            document.getElementById('keyOpModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('keyOpModal')) closeKeyOpModal();
+            });
+
             // ---------- 模态框 ----------
             let editingConnId = null;
 
@@ -4016,6 +2651,39 @@
                 terminalBody.innerHTML = `
                     <div class="line"><span class="prompt">></span><span class="output ok">终端已清空</span></div>
                 `;
+            });
+
+            // ---------- 实时监控的交互 ----------
+            // 标签页在标题栏里，而标题栏整体是「折叠/展开」的点击区，
+            // 因此这里要拦掉冒泡（与折叠按钮同样的处理）
+            $('#tabTerminal').addEventListener('click', (e) => {
+                e.stopPropagation();
+                setBottomTab('terminal');
+            });
+            $('#tabMonitor').addEventListener('click', (e) => {
+                e.stopPropagation();
+                setBottomTab('monitor');
+            });
+            monitorToggleBtn.addEventListener('click', toggleMonitor);
+            document.getElementById('monitorClear').addEventListener('click', () => {
+                resetMonitorOutput('已清空。继续监控中，新命令会实时出现');
+            });
+            monitorFilterInput.addEventListener('input', () => {
+                renderMonitor('没有匹配的命令');
+            });
+            monitorFollowBox.addEventListener('change', () => {
+                if (monitorFollowBox.checked) scrollMonitorToBottom();
+            });
+            // 用户往上翻看历史时自动暂停跟随（滚回底部再自动恢复）：
+            // 否则新行进来会把正在看的内容顶走
+            monitorBody.addEventListener('scroll', () => {
+                if (monitorAutoScroll) return;
+                const atBottom = monitorBody.scrollHeight - monitorBody.scrollTop - monitorBody.clientHeight < 24;
+                if (!atBottom && monitorFollowBox.checked) {
+                    monitorFollowBox.checked = false;
+                } else if (atBottom && !monitorFollowBox.checked) {
+                    monitorFollowBox.checked = true;
+                }
             });
 
             // 搜索下推到后端 SCAN：输入停顿后再重扫，避免每敲一个字符就扫一遍 keyspace
@@ -4688,25 +3356,31 @@
                 document.documentElement.setAttribute('data-theme', saved);
             } catch (e) {}
 
-            // ==================== 原生「设置」菜单 ====================
-            // 菜单项在 macOS 侧点击后 emit 事件，这里复用标题栏同一套逻辑，
-            // 让菜单与标题栏不会出现两套主题状态。
-            function listenMenu(event, handler) {
+            // ==================== 后端事件 ====================
+            // 菜单项、实时监控等事件都由后端 emit，这里复用同一套回调注册
+            //（`plugin:event|listen`，target: Any）。
+            function listenEvent(event, handler) {
                 const internals = window.__TAURI_INTERNALS__;
                 if (!internals || !internals.transformCallback) return;
                 const id = internals.transformCallback(handler);
                 invoke('plugin:event|listen', { event, target: { kind: 'Any' }, handler: id })
-                    .catch(err => console.warn('监听菜单事件失败:', event, err));
+                    .catch(err => console.warn('事件监听注册失败:', event, err));
             }
 
-            listenMenu('menu:set-theme', (e) => {
+            listenEvent('menu:set-theme', (e) => {
                 const name = e && e.payload;
                 applyTheme(name);
                 try { localStorage.setItem(THEME_KEY, name); } catch (err) {}
                 updateThemeMenu(name);
             });
 
-            listenMenu('menu:check-update', () => checkUpdate(false));
+            listenEvent('menu:check-update', () => checkUpdate(false));
+
+            // 实时监控：成批的命令行 + 结束通知（见 src-tauri/src/commands/monitor.rs）
+            listenEvent('monitor:lines', handleMonitorLines);
+            listenEvent('monitor:end', handleMonitorEnd);
+            // 首屏就把监控按钮摆到正确状态（未连接时禁用）
+            syncMonitorControls();
 
         })();
     </script>

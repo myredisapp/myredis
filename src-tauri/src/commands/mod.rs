@@ -6,6 +6,7 @@ pub mod connection;
 pub mod import_export;
 pub mod key;
 pub mod key_content;
+pub mod monitor;
 pub mod server;
 pub mod terminal;
 pub mod update;

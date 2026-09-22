@@ -55,6 +55,8 @@ pub fn run() {
             app.manage(AppState::new(config_dir));
             // 连接池作为独立的状态，便于命令按需借用；超时取自全局配置（§6 第 3 条）
             app.manage(Pool::with_timeout(AppConfig::default().conn_timeout));
+            // 实时监控（MONITOR）会话表：每连接一条独立连接，见 `commands::monitor`
+            app.manage(commands::monitor::MonitorState::default());
             // 更新状态：后台下载的进度与已下好的安装包都放这里，供三个更新命令共享
             app.manage(commands::update::UpdateState::default());
             Ok(())
@@ -75,6 +77,8 @@ pub fn run() {
             commands::key::set_key,
             commands::key::del_key,
             commands::key::get_string,
+            commands::key::rename_key,
+            commands::key::copy_key,
             commands::key_content::get_hash,
             commands::key_content::get_list,
             commands::key_content::get_set,
@@ -93,6 +97,9 @@ pub fn run() {
             commands::key_content::zset_add_member,
             commands::key_content::zset_del_member,
             commands::terminal::execute_command,
+            commands::monitor::start_monitor,
+            commands::monitor::stop_monitor,
+            commands::monitor::monitor_status,
             commands::import_export::export_keys,
             commands::import_export::import_keys,
             commands::update::check_update,

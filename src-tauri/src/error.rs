@@ -97,6 +97,14 @@ pub fn command_error_message(err: &redis::RedisError, direct: Option<&Connection
                 "该 key 的哈希槽（slot {slot}）由集群节点 {owner} 负责{direct_hint}，数据未写入任何节点。若要让该 key 写入 {owner}，请单机模式直连该节点；如需操作集群中的任意 key，请使用「集群模式」建立连接"
             )
         }
+        ErrorKind::CrossSlot => {
+            // 集群里一条命令涉及多个 key、而这些 key 又不在同一个哈希槽时服务端回 CROSSSLOT。
+            // 典型场景：重命名 / 复制的源与目标不同槽、批量删除跨槽的 key。
+            "该命令里的多个 key 不在同一个哈希槽（slot），集群模式下无法跨 slot 操作，命令未执行。\
+             可让这些 key 使用相同的 hash tag（如 user:{1001}:name 与 user:{1001}:email 会落在同一个槽），\
+             或拆成逐条命令执行"
+                .to_string()
+        }
         _ => err.to_string(),
     }
 }
@@ -206,6 +214,20 @@ mod tests {
     fn other_errors_pass_through() {
         let err = redis::RedisError::from((redis::ErrorKind::TypeError, "WRONGTYPE message"));
         assert_eq!(command_error_message(&err, None), err.to_string());
+    }
+
+    /// 跨 slot 的多 key 命令：给出「hash tag / 逐条执行」这样能照做的建议。
+    #[test]
+    fn cross_slot_error_explains_hash_tags() {
+        let err = redis::RedisError::from((
+            redis::ErrorKind::CrossSlot,
+            "An error was signalled by the server",
+            "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+        ));
+        let msg = command_error_message(&err, None);
+        assert!(msg.contains("哈希槽"), "应说明是槽不一致: {msg}");
+        assert!(msg.contains("hash tag"), "应给出 hash tag 方案: {msg}");
+        assert!(msg.contains("未执行"), "应说明命令没有执行: {msg}");
     }
 
     /// 命令层现在拿到的是 [`AppError`]：Redis 报错仍要转写，客户端侧错误直接取文案。

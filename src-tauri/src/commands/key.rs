@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use crate::config::ConnectionTimeout;
 use crate::connection_pool::{Conn, Pool, PooledConn};
-use crate::error::command_error_text;
+use crate::error::{command_error_text, AppError};
 use crate::models::{ConnType, Connection};
 
 /// 列表中的单个 key。
@@ -542,11 +542,13 @@ async fn set_key_inner(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_set_cmd, format_cluster_cursor, list_keys_inner, parse_cluster_cursor,
-        parse_master_addrs, set_key_inner, to_match_pattern, ClusterCursor, KeyEntry,
+        build_copy_cmd, build_rename_cmd, build_set_cmd, format_cluster_cursor, key_op_error_text,
+        list_keys_inner, parse_cluster_cursor, parse_master_addrs, set_key_inner, to_match_pattern,
+        validate_dest_key, ClusterCursor, KeyEntry,
     };
     use crate::config::ConnectionTimeout;
     use crate::connection_pool::Pool;
+    use crate::error::{command_error_text, AppError};
     use crate::models::{ConnType, Connection};
     use std::collections::HashMap;
     use std::io::{BufRead, BufReader, Write};
@@ -798,6 +800,74 @@ mod tests {
         assert_eq!(
             cmd.get_packed_command(),
             b"*5\r\n$3\r\nSET\r\n$5\r\nmykey\r\n$7\r\nmyvalue\r\n$2\r\nEX\r\n$2\r\n10\r\n"
+        );
+    }
+
+    /// 重命名：默认走 `RENAMENX`（不覆盖），显式覆盖才走 `RENAME`。
+    #[test]
+    fn build_rename_cmd_switches_between_rename_and_renamenx() {
+        assert_eq!(
+            String::from_utf8_lossy(&build_rename_cmd("old", "new", false).get_packed_command()),
+            "*3\r\n$8\r\nRENAMENX\r\n$3\r\nold\r\n$3\r\nnew\r\n"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&build_rename_cmd("old", "new", true).get_packed_command()),
+            "*3\r\n$6\r\nRENAME\r\n$3\r\nold\r\n$3\r\nnew\r\n"
+        );
+    }
+
+    /// 复制：`REPLACE` 只在显式覆盖时追加（COPY 需要 Redis 6.2+）。
+    #[test]
+    fn build_copy_cmd_appends_replace_only_when_overwriting() {
+        assert_eq!(
+            String::from_utf8_lossy(&build_copy_cmd("src", "dst", false).get_packed_command()),
+            "*3\r\n$4\r\nCOPY\r\n$3\r\nsrc\r\n$3\r\ndst\r\n"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&build_copy_cmd("src", "dst", true).get_packed_command()),
+            "*4\r\n$4\r\nCOPY\r\n$3\r\nsrc\r\n$3\r\ndst\r\n$7\r\nREPLACE\r\n"
+        );
+    }
+
+    /// 目标 Key 名：去掉首尾空白后不能为空。
+    #[test]
+    fn validate_dest_key_trims_and_rejects_empty() {
+        assert_eq!(validate_dest_key("  user:2  "), Ok("user:2"));
+        assert!(validate_dest_key("").is_err());
+        assert!(validate_dest_key("   ").is_err());
+        assert!(validate_dest_key("\t\n").is_err());
+    }
+
+    /// 三类需要说人话的报错：源不存在、旧版本没有 COPY、其余透传。
+    #[test]
+    fn key_op_errors_become_actionable_messages() {
+        let missing = AppError::Redis(redis::RedisError::from((
+            redis::ErrorKind::ResponseError,
+            "An error was signalled by the server",
+            "ERR no such key".to_string(),
+        )));
+        let msg = key_op_error_text(&missing, None, "user:1");
+        assert!(msg.contains("user:1"), "应点名源 key: {msg}");
+        assert!(msg.contains("刷新"), "应提示刷新列表: {msg}");
+
+        let no_copy = AppError::Redis(redis::RedisError::from((
+            redis::ErrorKind::ResponseError,
+            "An error was signalled by the server",
+            "ERR unknown command `copy`, with args beginning with: `a`, `b`, ".to_string(),
+        )));
+        let msg = key_op_error_text(&no_copy, None, "a");
+        assert!(msg.contains("6.2"), "应说明版本要求: {msg}");
+        assert!(msg.contains("重命名"), "应给出降级做法: {msg}");
+
+        // 其它错误原样透传（不做过度转写）
+        let other = AppError::Redis(redis::RedisError::from((
+            redis::ErrorKind::ResponseError,
+            "An error was signalled by the server",
+            "ERR value is not an integer".to_string(),
+        )));
+        assert_eq!(
+            key_op_error_text(&other, None, "a"),
+            command_error_text(&other, None)
         );
     }
 
@@ -1207,4 +1277,168 @@ pub async fn get_string(
         .await
         .map_err(|e| command_error_text(&e, Some(&conn_cfg)))?;
     Ok(val)
+}
+
+/// 校验目标 Key 名（重命名 / 复制共用）。
+///
+/// 首尾空白会被去掉（从别处复制来的名字常带空白，直接当 key 用几乎总是错的）；
+/// 去掉后为空则报错。
+fn validate_dest_key(dest: &str) -> Result<&str, String> {
+    let trimmed = dest.trim();
+    if trimmed.is_empty() {
+        return Err("目标 Key 名称不能为空".into());
+    }
+    Ok(trimmed)
+}
+
+/// 构造重命名命令：`overwrite` 为 `false` 时用 `RENAMENX`（目标已存在则不覆盖）。
+///
+/// `RENAMENX` 自 Redis 1.0 就有，无需版本探测；覆盖走 `RENAME`（源 key 不存在时两者都报错）。
+fn build_rename_cmd(key: &str, new_key: &str, overwrite: bool) -> redis::Cmd {
+    let name = if overwrite { "RENAME" } else { "RENAMENX" };
+    let mut cmd = redis::cmd(name);
+    cmd.arg(key).arg(new_key);
+    cmd
+}
+
+/// 构造复制命令：`COPY key new_key [REPLACE]`（需要 Redis 6.2+，见 [`key_op_error_text`]）。
+fn build_copy_cmd(key: &str, new_key: &str, overwrite: bool) -> redis::Cmd {
+    let mut cmd = redis::cmd("COPY");
+    cmd.arg(key).arg(new_key);
+    if overwrite {
+        cmd.arg("REPLACE");
+    }
+    cmd
+}
+
+/// 重命名 / 复制的错误转写：把最常见的几种报错换成能直接照做的提示。
+///
+/// - 源 key 不存在（可能刚被别的客户端删掉）：提示刷新列表，而不是丢一句 `no such key`；
+/// - 旧版本不认识 `COPY`（6.2 以下）：这个项目支持 Redis 2.8+，所以必须说清降级做法；
+/// - 集群里两个 key 不在同一个 slot：`CROSSSLOT` 的处理在 [`command_error_text`] 里；
+/// - 其余原样透传。
+fn key_op_error_text(err: &AppError, direct: Option<&Connection>, source: &str) -> String {
+    if let AppError::Redis(redis_err) = err {
+        let raw = redis_err.to_string();
+        if raw.contains("no such key") {
+            return format!(
+                "源 Key「{source}」不存在（可能已被删除或已过期），请刷新 Key 列表后重试"
+            );
+        }
+        if raw.contains("unknown command") && raw.to_ascii_uppercase().contains("COPY") {
+            return "当前 Redis 服务器不支持 COPY 命令（6.2 及以上才提供）：可改用「重命名」或导出 / 导入来搬数据，或升级服务器版本".into();
+        }
+    }
+    command_error_text(err, direct)
+}
+
+/// `COPY` 没有执行（返回 0）时给出具体原因。
+///
+/// `COPY` 对「源 key 不存在」和「目标 key 已存在（未加 REPLACE）」返回的都是 0，
+/// 只说一句「复制失败」用户没法判断，所以这里用**一次 pipeline** 查清两者，
+/// 再给一句能照做的提示。
+async fn copy_not_applied_message(con: &mut PooledConn, source: &str, dest: &str) -> String {
+    let mut pipe = redis::pipe();
+    pipe.cmd("EXISTS").arg(source).cmd("EXISTS").arg(dest);
+    // 查询本身失败（连接抖动 / 集群跨 slot）时退回通用文案，不把错误再套一层
+    let exists: Vec<i64> = con.query_pipeline(&pipe).await.unwrap_or_default();
+    let source_exists = exists.first().copied().unwrap_or(1) != 0;
+    let dest_exists = exists.get(1).copied().unwrap_or(0) != 0;
+
+    match (source_exists, dest_exists) {
+        (false, _) => format!("源 Key「{source}」不存在（可能已被删除或已过期），请刷新 Key 列表后重试"),
+        (true, true) => format!(
+            "目标 Key「{dest}」已存在，复制默认不覆盖：勾选「覆盖已存在的目标 Key」（REPLACE）后重试"
+        ),
+        (true, false) => "复制未执行：源 Key 与目标 Key 在操作期间发生了变化，请刷新后重试".into(),
+    }
+}
+
+/// 重命名一个 key（`RENAME` / `RENAMENX`）。
+///
+/// `overwrite` 为 `false`（默认）时走 `RENAMENX`：目标已存在就**不覆盖**并给出明确提示。
+/// RENAME 覆盖掉的目标数据不可恢复，所以覆盖必须是用户显式勾选的动作。
+#[tauri::command]
+pub async fn rename_key(
+    pool: tauri::State<'_, Pool>,
+    conn_id: String,
+    key: String,
+    new_key: String,
+    overwrite: bool,
+) -> Result<(), String> {
+    rename_key_inner(&pool, &conn_id, &key, &new_key, overwrite).await
+}
+
+/// [`rename_key`] 的核心实现，抽成独立函数以便集成测试直接调用。
+pub async fn rename_key_inner(
+    pool: &Pool,
+    conn_id: &str,
+    key: &str,
+    new_key: &str,
+    overwrite: bool,
+) -> Result<(), String> {
+    let dest = validate_dest_key(new_key)?;
+    // 改成一个同名 key：Redis 3.2 起 RENAME k k 是合法的空操作，这里直接当成功返回，
+    // 免得 RENAMENX 因为「目标已存在（就是它自己）」报一句让人困惑的提示
+    if dest == key {
+        return Ok(());
+    }
+
+    pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
+    let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
+    let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
+
+    // RENAME 回 `+OK`、RENAMENX 回整数，统一按 Value 收：只有 RENAMENX 的 0 需要额外解释
+    let value: redis::Value = con
+        .query(&build_rename_cmd(key, dest, overwrite))
+        .await
+        .map_err(|e| key_op_error_text(&e, Some(&conn_cfg), key))?;
+    if matches!(value, redis::Value::Int(0)) {
+        return Err(format!(
+            "目标 Key「{dest}」已存在。重命名会覆盖它的原有数据，请勾选「覆盖已存在的目标 Key」后重试"
+        ));
+    }
+    Ok(())
+}
+
+/// 复制一个 key（`COPY`，需要 Redis 6.2+）。
+///
+/// 与原 key 在同一个库内：`COPY` 的 `DB` 选项在集群模式下不被允许，而跨库复制在终端里
+/// 一条 `COPY src dst DB n` 就能做，因此界面只提供同库复制。
+#[tauri::command]
+pub async fn copy_key(
+    pool: tauri::State<'_, Pool>,
+    conn_id: String,
+    key: String,
+    new_key: String,
+    overwrite: bool,
+) -> Result<(), String> {
+    copy_key_inner(&pool, &conn_id, &key, &new_key, overwrite).await
+}
+
+/// [`copy_key`] 的核心实现，抽成独立函数以便集成测试直接调用。
+pub async fn copy_key_inner(
+    pool: &Pool,
+    conn_id: &str,
+    key: &str,
+    new_key: &str,
+    overwrite: bool,
+) -> Result<(), String> {
+    let dest = validate_dest_key(new_key)?;
+    if dest == key {
+        return Err("目标 Key 与源 Key 同名，无需复制".into());
+    }
+
+    pool.ensure_writable(conn_id).map_err(|e| e.to_string())?;
+    let conn_cfg = pool.get(conn_id).map_err(|e| e.to_string())?;
+    let mut con = pool.conn(conn_id).map_err(|e| e.to_string())?;
+
+    let value: i64 = con
+        .query(&build_copy_cmd(key, dest, overwrite))
+        .await
+        .map_err(|e| key_op_error_text(&e, Some(&conn_cfg), key))?;
+    if value == 0 {
+        return Err(copy_not_applied_message(&mut con, key, dest).await);
+    }
+    Ok(())
 }

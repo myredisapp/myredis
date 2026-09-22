@@ -2,7 +2,12 @@
 # 拉起测试用 Redis 环境：单机（6379）+ TLS 单机（6390，自签名证书）+
 # 三主节点集群（7001-7003，无副本）。
 # 这是 src-tauri/tests 里 #[ignore] 集成用例的前置条件（见 DEVELOPMENT.md §2.3 / §7）。
-# 已在 CI（ubuntu-22.04）与本地（macOS + homebrew redis）验证。
+# 已在 CI（ubuntu-22.04 / 24.04）与本地（macOS + homebrew redis）验证。
+#
+# 环境变量：
+#   REDIS_VERSION_EXPECT  版本门（版本前缀，如 `6.0` / `7.`）。CI 的版本矩阵用它把
+#                         「这一轮跑的是哪个 Redis」钉死：runner 镜像换代换了 Redis 版本时
+#                         测试直接失败，而不是悄悄在别的版本上跑（见 DEVELOPMENT.md §2.4）。
 set -euo pipefail
 
 # GitHub ubuntu runner 预装了 redis-server，但不做这个假设：缺了就装
@@ -10,6 +15,42 @@ if ! command -v redis-server >/dev/null 2>&1; then
   sudo apt-get update
   sudo apt-get install -y redis-server
 fi
+
+# 端口上已有 Redis 在跑时：CI 里直接关掉（runner 是一次性环境，多半是镜像预装的服务，
+# 或上一步 apt 装完后自启的服务 —— 不清掉下面的 daemonize 会因端口占用失败），
+# 本地则停下来让人自己处理：绝不静默关掉开发者本机正在用的实例。
+ensure_port_free() {
+  local port=$1
+  redis-cli -p "$port" ping >/dev/null 2>&1 || return 0
+  if [ -n "${CI:-}" ]; then
+    echo "• $port 上已有 Redis（镜像预装 / apt 装完自启），先关掉它再拉起测试实例"
+    redis-cli -p "$port" shutdown nosave >/dev/null 2>&1 || true
+    return 0
+  fi
+  echo "✗ $port 上已有 Redis 在跑。本脚本要自己拉起测试实例，请先停掉它" >&2
+  echo "  （brew services stop redis，或 redis-cli -p $port shutdown）" >&2
+  exit 1
+}
+
+# 版本门（可选）：以 redis-server 自己的版本输出为准
+redis_server_version() {
+  redis-server --version | sed -n 's/.*v=\([0-9][0-9.]*\).*/\1/p'
+}
+
+if [ -n "${REDIS_VERSION_EXPECT:-}" ]; then
+  actual_version="$(redis_server_version)"
+  case "$actual_version" in
+    "${REDIS_VERSION_EXPECT}"*)
+      echo "• 版本门通过：redis-server ${actual_version}（期望前缀 ${REDIS_VERSION_EXPECT}）"
+      ;;
+    *)
+      echo "::error::期望 Redis ${REDIS_VERSION_EXPECT}.x，实际是 ${actual_version:-未知版本}。runner 镜像或 apt 源换了版本，请确认测试矩阵是否要跟着调整" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+ensure_port_free 6379
 
 # 单机：测试连接写死 127.0.0.1:6379
 redis-server --port 6379 --daemonize yes --save '' --appendonly no
@@ -26,6 +67,10 @@ start_cluster_node() {
     --cluster-node-timeout 3000 \
     --dir "$(mktemp -d)"
 }
+
+for port in 7001 7002 7003; do
+  ensure_port_free "$port"
+done
 
 start_cluster_node 7001
 start_cluster_node 7002
@@ -93,4 +138,6 @@ done
 redis-cli -p 7001 cluster info | grep -q '^cluster_state:ok' \
   || { echo "::error::集群未进入 ok 态"; exit 1; }
 
+# 把实际版本打进日志：排查「只有某个版本红」的问题时，第一眼就要看到它
+echo "测试环境就绪 —— $(redis-server --version)，$(redis-cli --version)"
 echo "单机 $(redis-cli -p 6379 ping)，集群入口 $(redis-cli -p 7001 cluster info | grep ^cluster_state)"
